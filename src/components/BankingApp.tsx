@@ -9,7 +9,6 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { ServiceWorkerRegister } from "./ServiceWorkerRegister";
 import { AuthScreen } from "./AuthScreen";
-import { NanobotPreview } from "./NanobotPreview";
 import type { BankStatement } from "@/lib/banking-report";
 import styles from "./BankingApp.module.css";
 
@@ -40,7 +39,6 @@ type PreparedTransfer = {
 export function BankingApp() {
   const [data, setData] = useState<Bootstrap | null>(null);
   const [tab, setTab] = useState<Tab>("home");
-  const [agentMode, setAgentMode] = useState<"original" | "nanobot">("original");
   const [loading, setLoading] = useState(true);
   const [authRequired, setAuthRequired] = useState(false);
   const [error, setError] = useState("");
@@ -137,13 +135,7 @@ export function BankingApp() {
   if (loading && !data && !authRequired) return <main className={styles.stage}><div className={styles.splash}><span>B</span><p>正在连接银行核心</p></div></main>;
   if (authRequired) return <AuthScreen onAuthenticated={load} />;
 
-  const logout = async () => { await fetch("/api/auth/logout", { method: "POST" }); setData(null); setChats([]); conversationId.current = ""; setAgentMode("original"); setAuthRequired(true); };
-  const openNanobotOperation = async (id: string) => {
-    const response = await fetch(`/api/v1/operations/${encodeURIComponent(id)}`);
-    const result = await response.json();
-    if (!response.ok || result.status !== "AWAITING_AUTH") throw new Error("操作当前不可授权，请刷新状态");
-    setPrepared(result); setDialog("transfer");
-  };
+  const logout = async () => { await fetch("/api/auth/logout", { method: "POST" }); setData(null); setChats([]); conversationId.current = ""; setAuthRequired(true); };
   const closeTransfer = () => { setDialog(null); setPrepared(null); setMfaCode(""); if (location.search) history.replaceState(null, "", location.pathname); };
 
   return <main className={styles.stage}>
@@ -155,15 +147,13 @@ export function BankingApp() {
         <button className={styles.iconButton} aria-label="通知"><Bell size={20} strokeWidth={1.8} /><i /></button>
       </header>
       {error && <div className={styles.connectionError}><span>{error}</span><button onClick={load}><RefreshCw size={15} />重试</button></div>}
-      {tab === "agent" && <div className={styles.agentSwitch} aria-label="选择 AI 助手"><button aria-pressed={agentMode === "original"} onClick={() => setAgentMode("original")}>原版助手</button><button aria-pressed={agentMode === "nanobot"} onClick={() => setAgentMode("nanobot")}>Nanobot</button></div>}
-      <div className={`${styles.viewport} ${tab === "agent" && agentMode === "nanobot" ? styles.nanobotViewport : ""}`} ref={viewportRef}>
+      <div className={styles.viewport} ref={viewportRef}>
         {tab === "home" && <HomeView data={data} loading={loading} visible={balanceVisible} toggleVisible={() => setBalanceVisible(!balanceVisible)} onOpenAgent={() => setTab("agent")} onDeposit={() => setDialog("deposit")} onTransfer={() => setDialog("transfer")} />}
-        {tab === "agent" && agentMode === "nanobot" && <NanobotPreview onAuthorize={openNanobotOperation} />}
-        {tab === "agent" && agentMode === "original" && <AgentView chats={chats} sending={sending} coreConnected={!error} aiStatus={data?.ai ?? { configured: false, model: null }} onPrompt={send} onCommit={commit} onCancel={cancelAgentOperation} bottomRef={bottomRef} />}
+        {tab === "agent" && <AgentView chats={chats} sending={sending} coreConnected={!error} aiStatus={data?.ai ?? { configured: false, model: null }} onPrompt={send} onCommit={commit} onCancel={cancelAgentOperation} bottomRef={bottomRef} />}
         {tab === "activity" && <ActivityView data={data} />}
         {tab === "cards" && <CardsView data={data} onCreate={() => setDialog("card")} onLocked={load} />}
       </div>
-      {tab === "agent" && agentMode === "original" && <form className={styles.composer} onSubmit={onSubmit}><input value={input} onChange={(event) => setInput(event.target.value)} placeholder="说出你想办理的业务…" aria-label="向银行 Agent 发送消息" /><button type="submit" disabled={!input.trim() || sending} aria-label="发送"><Send size={18} /></button></form>}
+      {tab === "agent" && <form className={styles.composer} onSubmit={onSubmit}><input value={input} onChange={(event) => setInput(event.target.value)} placeholder="说出你想办理的业务…" aria-label="向银行 Agent 发送消息" /><button type="submit" disabled={!input.trim() || sending} aria-label="发送"><Send size={18} /></button></form>}
       <nav className={styles.nav} aria-label="主导航">
         <NavButton active={tab === "home"} label="首页" icon={<House size={21} />} onClick={() => setTab("home")} />
         <NavButton active={tab === "agent"} label="AI 助手" icon={<Sparkles size={21} />} onClick={() => setTab("agent")} />
@@ -210,7 +200,7 @@ function AgentView({ chats, sending, coreConnected, aiStatus, onPrompt, onCommit
   const ready = coreConnected && aiStatus.configured;
   const statusText = !coreConnected ? "银行核心未连接" : aiStatus.configured ? `${aiStatus.model} · 核心已连接` : "真实 AI 模型未配置";
   return <div className={styles.agentView}><div className={styles.agentHeading}><div className={styles.agentOrb}><Sparkles size={21} /></div><div><h1>BankPilot</h1><p><i data-offline={!ready || undefined} /> {statusText}</p></div></div>
-    {chats.length === 0 && <a className={styles.channelEntry} href="/channels"><span><Image src="/brands/qq.svg" alt="" width={21} height={21} /><Image src="/brands/wecom.svg" alt="" width={23} height={21} /></span>连接微信 / QQ / 企业微信<ChevronRight size={17} /></a>}
+    {chats.length === 0 && <a className={styles.channelEntry} href="/channels"><span><Image src="/brands/qq.svg" alt="" width={21} height={21} /><Image src="/brands/wecom.svg" alt="" width={23} height={21} /></span>连接 QQ / 企业微信<ChevronRight size={17} /></a>}
     <div className={styles.promptRail}>{prompts.map((prompt) => <button key={prompt} onClick={() => onPrompt(prompt)}>{prompt}</button>)}</div>
     <div className={styles.messages}>{chats.map((item) => item.role === "user" ? <div className={styles.userMessage} key={item.id}>{item.text}</div> : <div className={styles.agentMessage} key={item.id}><div className={styles.miniOrb}><Sparkles size={13} /></div><div className={styles.messageContent}>{item.reply?.ai && <span className={styles.aiProof}>AI · {item.reply.ai.model} · {Math.round(item.reply.ai.confidence * 100)}%</span>}<p>{item.text}</p>{item.reply?.data && <ReplyData reply={item.reply} />}{item.reply?.operation && <OperationCard item={item} operation={item.reply.operation} onCommit={() => onCommit(item.id, item.reply!.operation!, item.reply!.taskId)} onCancel={() => onCancel(item.id, item.reply!.taskId)} />}</div></div>)}
       {sending && <div className={styles.agentMessage}><div className={styles.miniOrb}><Sparkles size={13} /></div><div className={styles.typing}><i /><i /><i /></div></div>}<div ref={bottomRef} />
@@ -309,7 +299,7 @@ function CardModal({ account, busy, setBusy, close, done }: { account: Account; 
 }
 
 function ProfileModal({ data, close, logout }: { data: Bootstrap; close: () => void; logout: () => Promise<void> }) {
-  return <ModalShell eyebrow="当前账户" title={data.customer.display_name} close={close}><div className={styles.profileRows}><div><span>手机号</span><b>{data.customer.phone}</b></div><div><span>收款方式</span><b>姓名或手机号</b></div><div><span>账户号</span><b>{data.accounts[0]?.account_no ?? "—"}</b></div></div><a className={styles.developerLink} href="/security"><ShieldCheck size={17} /><span><b>安全中心</b><small>{data.customer.mfa_configured ? "强验证已开启" : "设置高风险操作验证"}</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/channels"><Link2 size={17} /><span><b>消息渠道</b><small>微信、QQ 与企业微信</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/developers"><Sparkles size={17} /><span><b>外部 Agent</b><small>令牌与 MCP 接入</small></span><ChevronRight size={17} /></a><button className={styles.logoutButton} onClick={logout}><LogOut size={17} />退出登录</button></ModalShell>;
+  return <ModalShell eyebrow="当前账户" title={data.customer.display_name} close={close}><div className={styles.profileRows}><div><span>手机号</span><b>{data.customer.phone}</b></div><div><span>收款方式</span><b>姓名或手机号</b></div><div><span>账户号</span><b>{data.accounts[0]?.account_no ?? "—"}</b></div></div><a className={styles.developerLink} href="/security"><ShieldCheck size={17} /><span><b>安全中心</b><small>{data.customer.mfa_configured ? "强验证已开启" : "设置高风险操作验证"}</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/channels"><Link2 size={17} /><span><b>消息渠道</b><small>QQ 与企业微信</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/developers"><Sparkles size={17} /><span><b>外部 Agent</b><small>令牌与 MCP 接入</small></span><ChevronRight size={17} /></a><button className={styles.logoutButton} onClick={logout}><LogOut size={17} />退出登录</button></ModalShell>;
 }
 
 function ReauthModal({ code, setCode, close, submit }: { code: string; setCode: (value: string) => void; close: () => void; submit: () => void }) {

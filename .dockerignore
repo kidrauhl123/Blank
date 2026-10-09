@@ -8,7 +8,4 @@ npm-debug.log*
 Dockerfile*
 README.md
 docs
-integrations/nanobot/.venv
-integrations/nanobot/private
-**/__pycache__
 backups

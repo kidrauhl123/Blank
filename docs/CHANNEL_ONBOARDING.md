@@ -57,11 +57,10 @@ code or reports a connection that has not been confirmed in the database.
 
 ## References and design choices
 
-- [Nanobot channel guide](https://github.com/HKUDS/nanobot/blob/main/docs/chat-apps.md):
-  provider selection, specific setup steps and a private test message; distinguishes
-  saved configuration from a working live connection.
-- [Nanobot QQ walkthrough](https://github.com/HKUDS/nanobot/blob/main/docs/guides/qq-ai-agent.md):
-  sandbox membership, private-message pairing and retry after approval.
+- [QQ integration](QQ.md): bank-operated bot setup, sandbox membership and
+  private-message account binding through the shared Agent Runtime.
+- [WeCom integration](WECOM.md): official SDK worker, one-time binding and
+  user confirmation in the authenticated bank page.
 - [OpenClaw pairing](https://docs.openclaw.ai/channels/pairing): trusted approval
   before a new sender can use an account. Here approval belongs to the bank user,
   so it happens in the authenticated bank page instead of an administrator's CLI.

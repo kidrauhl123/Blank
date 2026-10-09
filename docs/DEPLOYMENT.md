@@ -32,10 +32,14 @@ AI 变量为空时，银行基础功能正常工作，内置助手明确显示�
 
 ```bash
 rsync -az \
+  --delete \
   --exclude node_modules \
   --exclude .next \
+  --exclude .env \
   --exclude .env.local \
+  --exclude .env.production \
   --exclude deploy/.env.production \
+  --exclude backups \
   --exclude .playwright-cli \
   ./ CONTABO-jp:/opt/bankpilot/
 ```
@@ -67,6 +71,24 @@ ssh CONTABO-jp 'cd /opt/bankpilot && \
 
 迁移表 `schema_migrations` 保证 SQL 每版只执行一次。旧原型第一次应用 `002_identity_and_platform.sql` 时会删除旧版预置业务数据；之后绝不会因再次部署而重跑。
 
+### 从旧的双运行时部署升级
+
+同步时的 `--delete` 会移除服务器上已经退役的源码；私有环境文件、依赖与 `backups` 目录在排除列表中。首次升级前，按下方“备份与恢复”备份数据库，并停止旧运行时容器，避免旧进程继续创建草稿：
+
+```bash
+docker rm -f bankpilot-nanobot
+```
+
+按上述发布命令执行 `009_retire_legacy_agent.sql`，再重建应用。该迁移先撤销旧运行时签发的 API 令牌及客户端，再删除四张专用表；银行账户、转账草稿、账本、审计和 LangGraph checkpoint 保留。新安装不再创建退役表，迁移对不存在的表会直接跳过。
+
+升级后，从服务器私有环境文件删除旧 `NANOBOT_*` 变量，并删除旧的凭据/会话数据卷：
+
+```bash
+docker volume rm bankpilot_nanobot
+```
+
+旧个人微信连接及用户自建机器人绑定不会迁移到官方渠道。QQ、企业微信使用现有官方 Worker，用户在 `/channels` 重新走银行账户绑定流程。
+
 ## 检查
 
 ```bash
@@ -94,3 +116,24 @@ ssh CONTABO-jp 'docker exec bankpilot-postgres pg_dump -U bankpilot -d bankpilot
 ## 域名
 
 `deploy/Caddyfile.bankpilot` 从 `BANKPILOT_DOMAIN` 读取站点域名。更换正式域名时只更新服务器环境和 DNS/Cloudflare 配置，不把公网 IP 写入仓库。MCP 客户端使用同一 HTTPS 域名下的 `/api/mcp`。
+
+正式访问地址为 `https://bank.jung.edu.pl`，MCP 入口为 `https://bank.jung.edu.pl/api/mcp`。
+服务器私有环境文件需要同步设置：
+
+```dotenv
+BANKPILOT_PUBLIC_URL=https://bank.jung.edu.pl
+MCP_ALLOWED_ORIGINS=https://bank.jung.edu.pl
+```
+
+先确认新域名的 HTTPS 证书签发成功，再重新创建应用容器，使公开地址和 IM 授权链接同时生效；不需要重建镜像或修改数据库：
+
+```bash
+docker compose --env-file deploy/.env.production -f deploy/compose.production.yml \
+  up -d --no-deps --wait app
+```
+
+旧域名的网页跳转到新域名，旧 `/api/*` 暂时保留反向代理以兼容现有无浏览器 Origin 的 MCP 客户端。新接入一律使用正式域名。浏览器登录状态和 PWA 安装属于各自域名，换域名后需重新登录，并从新地址重新添加到主屏幕。
+
+共享 Caddy 的实际配置在 `/opt/premsir-chat/source/Caddyfile.production`。修改前备份，保留其他站点，校验后再热加载。如果宿主机配置曾被原子替换，容器的单文件 bind mount 可能仍指向旧 inode：热加载前必须比较宿主机与容器内文件的校验和；不一致时可将已校验的完整配置复制到容器独立路径并从该路径热加载。宿主机配置仍须保存完整新版本，供容器下次启动挂载使用，不能仅修改容器临时文件。
+
+域名 A 记录直连服务器并不会隐藏源站 IP；需要隐藏源站时，应另行配置代理或 Tunnel，并限制源站入口。

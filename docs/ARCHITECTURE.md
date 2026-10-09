@@ -6,14 +6,14 @@ BankPilot 将“会聊天的模型”和“能改变资金状态的银行核心�
 
 ```text
 PWA ─ Session ─────────┐
-QQ / 企业微信 ─ Worker ├─ LangGraph Runtime ── intent nodes ── interrupt()
-                       │         │                         │
-外部 Agent ─ MCP ──────┘         │ checkpoints             │ resume
-                               ▼                         ▼
+QQ / 企业微信 ─ Worker ┴─ LangGraph Runtime ── intent nodes ── interrupt()
+                               │                          │
+                               │ checkpoints              │ resume
+                               ▼                          ▼
                          PostgreSQL ◀──── Policy + Authorization Gateway
                                ▲                  │ confirm / TOTP
                                │                  ▼
-                               └──────────── Bank Core ─ double-entry ledger
+外部工具客户端 ─ MCP / REST ─────────────── Bank Core ─ double-entry ledger
 ```
 
 ## 关键组件
@@ -28,21 +28,9 @@ Next.js App Router + React。支持注册、登录、账户、流水、入金、
 
 模型采用两次受约束调用：第一次输出通过 Zod 校验的意图、实体和步骤；银行工具返回事实后，第二次只能根据 `BANK_FACTS` 生成说明。模型不能生成 SQL、调用任意 URL 或直接提交账本。重复授权由 runtime 原子抢占，只有一个请求能从 `INTERRUPTED` 进入 `RUNNING`。
 
-### Nanobot APP 入口
+### 腾讯消息 Channel Adapters
 
-PWA 另提供独立 Nanobot 模式，通过私有 Python supervisor 启动原版 Nanobot 子进程，
-不经过 LangGraph 意图路由。`nanobot_consents` 保存用户授权，`nanobot_runs` 保存幂等
-运行与公开对话；每次运行签发短时 MCP 令牌并关联银行工具审计。授权执行仍回银行 APP。
-此模式向所有已登录用户开放，详见 [托管边界](NANOBOT_HOSTING.md)。
-
-### Nanobot 个人 IM（当前接入页）
-
-`/channels` 接入微信扫码和用户自己的 QQ/企微机器人。私有 supervisor 维护每连接
-独立的常驻渠道进程，复用 Nanobot 原生插件；银行负责登录、一次性配对、身份校验和
-短时 MCP 授权。消息进入同一 Nanobot 银行执行入口，不走下面的旧 LangGraph Worker。
-凭据/微信状态加密持久化，群聊和附件在入口拒绝。详见 [IM 设计与限制](NANOBOT_IM.md)。
-
-### 腾讯消息 Channel Adapters（原版助手）
+`/channels` 展示银行运营的 QQ 与企业微信机器人，用户添加机器人后发送“绑定”，在银行登录页面确认一次性绑定。用户不填写机器人密钥，也不连接个人微信登录态。所有已绑定消息进入同一 LangGraph Runtime。
 
 两个独立 Node.js Worker 分别使用 QQ 和企业微信官方 SDK 建立 WebSocket 长连接。Worker 不接触数据库，只使用各自的内部适配令牌调用渠道 API；Bot Secret 不会进入 Next.js 或浏览器。首次会话发放 10 分钟一次性绑定链接，渠道 openid/userid 加密保存并以 HMAC 摘要索引。
 
@@ -72,7 +60,6 @@ MCP 使用官方 TypeScript SDK 的 Streamable HTTP transport。每次请求按�
 - Agent：`agent_tasks`、`task_nodes`、`policy_decisions`
 - Agent Runtime：`agent_threads`、`agent_runtime_runs`、`langgraph.*`
 - 渠道：`channel_identities`、`channel_binding_tokens`、`channel_events`、`channel_outbox`
-- Nanobot：`nanobot_consents`、`nanobot_runs`、`nanobot_channels`、`nanobot_channel_messages`
 - 外部接入：`api_clients`、`api_tokens`、`mcp_invocations`
 - 审计：`audit_events`
 
