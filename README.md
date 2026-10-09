@@ -75,6 +75,7 @@ npm run db:verify
 ## 文档
 
 - [系统架构](docs/ARCHITECTURE.md)
+- [开发与参赛计划](docs/ROADMAP.md)
 - [MCP 与外部 Agent 接入](docs/MCP.md)
 - [企业微信智能机器人接入](docs/WECOM.md)
 - [QQ 官方机器人接入](docs/QQ.md)
