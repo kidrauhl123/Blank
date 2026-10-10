@@ -22,6 +22,7 @@ services:
       - ../db/migrations/005_qq_channel.sql:/docker-entrypoint-initdb.d/50-qq-channel.sql:ro
       - ../db/migrations/009_retire_legacy_agent.sql:/docker-entrypoint-initdb.d/90-retire-legacy-agent.sql:ro
       - ../db/migrations/010_visible_app_agent.sql:/docker-entrypoint-initdb.d/100-visible-app-agent.sql:ro
+      - ../db/migrations/011_demo_profiles.sql:/docker-entrypoint-initdb.d/110-demo-profiles.sql:ro
     networks:
       - internal
     mem_limit: 512m
@@ -42,6 +43,7 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      BANKPILOT_DEMO_MODE: ${BANKPILOT_DEMO_MODE:-false}
       PASSWORD_PEPPER: ${PASSWORD_PEPPER}
       MCP_ALLOWED_ORIGINS: ${MCP_ALLOWED_ORIGINS:-}
       AI_BASE_URL: ${AI_BASE_URL:-}

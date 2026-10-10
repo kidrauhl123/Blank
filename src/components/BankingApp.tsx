@@ -17,7 +17,7 @@ type Account = { id: string; name: string; account_no: string; masked_no: string
 type Transaction = { id: string; merchant_name: string; category: string; amount_minor: string; occurred_at: string; is_anomaly: boolean };
 type Card = { id: string; card_name: string; masked_no: string; card_type: string; status: string; daily_limit_minor: string };
 type Subscription = { id: string; merchant_name: string; amount_minor: string; billing_cycle: string; next_charge_at: string; status: string };
-type Bootstrap = { customer: { display_name: string; phone: string; mfa_configured: boolean }; totalMinor: number; accounts: Account[]; transactions: Transaction[]; cards: Card[]; subscriptions: Subscription[]; statement: BankStatement; ai: { configured: boolean; model: string | null } };
+type Bootstrap = { demoMode?: boolean; customer: { display_name: string; phone: string; mfa_configured: boolean }; totalMinor: number; accounts: Account[]; transactions: Transaction[]; cards: Card[]; subscriptions: Subscription[]; statement: BankStatement; ai: { configured: boolean; model: string | null } };
 type Operation = {
   type: "TRANSFER" | "CARD_LOCK" | "SUBSCRIPTION_CANCEL"; operationId: string; title: string;
   riskLevel: "GREEN" | "YELLOW" | "RED"; requiredAuth: "CONFIRM" | "MFA";
@@ -139,7 +139,17 @@ export function BankingApp() {
   if (loading && !data && !authRequired) return <main className={styles.stage}><div className={styles.splash}><span>B</span><p>正在连接银行核心</p></div></main>;
   if (authRequired) return <AuthScreen onAuthenticated={load} />;
 
-  const logout = async () => { await fetch("/api/auth/logout", { method: "POST" }); setData(null); setChats([]); conversationId.current = ""; setAuthRequired(true); };
+  const logout = async () => {
+    try {
+      const response = await fetch("/api/auth/logout", { method: "POST" });
+      if (!response.ok) throw new Error("退出未完成，请重试。");
+      sessionStorage.removeItem("bankpilot-app-agent-run");
+      setData(null); setChats([]); setInput(""); setDialog(null); setPrepared(null); setMfa(null); setMfaCode(""); setSelectedCard(null); setTab("home"); setError("");
+      conversationId.current = ""; authorizationLoaded.current = false;
+      if (location.search) history.replaceState(null, "", location.pathname);
+      setAuthRequired(true);
+    } catch { setError("退出未完成，请重试。"); }
+  };
   const closeTransfer = () => { setDialog(null); setPrepared(null); setMfaCode(""); if (location.search) history.replaceState(null, "", location.pathname); };
 
   return <main className={styles.stage} ref={appRoot} data-agent-page={dialog ?? ({ home: "首页", agent: "对话", activity: "账户明细", cards: "卡片管理" }[tab])}>
@@ -305,7 +315,7 @@ function CardModal({ account, busy, setBusy, close, done }: { account: Account; 
 }
 
 function ProfileModal({ data, close, logout }: { data: Bootstrap; close: () => void; logout: () => Promise<void> }) {
-  return <ModalShell eyebrow="当前账户" title={data.customer.display_name} close={close}><div className={styles.profileRows} data-agent-private><div><span>手机号</span><b>{data.customer.phone}</b></div><div><span>收款方式</span><b>姓名或手机号</b></div><div><span>账户号</span><b>{data.accounts[0]?.account_no ?? "—"}</b></div></div><a className={styles.developerLink} href="/security"><ShieldCheck size={17} /><span><b>安全中心</b><small>{data.customer.mfa_configured ? "强验证已开启" : "设置高风险操作验证"}</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/channels"><Link2 size={17} /><span><b>消息渠道</b><small>QQ 与企业微信</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/developers"><Sparkles size={17} /><span><b>外部 Agent</b><small>令牌与 MCP 接入</small></span><ChevronRight size={17} /></a><button className={styles.logoutButton} onClick={logout}><LogOut size={17} />退出登录</button></ModalShell>;
+  return <ModalShell eyebrow={data.demoMode ? "比赛模拟账户" : "当前账户"} title={data.customer.display_name} close={close}><div className={styles.profileRows} data-agent-private><div><span>手机号</span><b>{data.customer.phone}</b></div><div><span>收款方式</span><b>姓名或手机号</b></div><div><span>账户号</span><b>{data.accounts[0]?.account_no ?? "—"}</b></div></div><a className={styles.developerLink} href="/security"><ShieldCheck size={17} /><span><b>安全中心</b><small>{data.customer.mfa_configured ? "强验证已开启" : "设置高风险操作验证"}</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/channels"><Link2 size={17} /><span><b>消息渠道</b><small>QQ 与企业微信</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/developers"><Sparkles size={17} /><span><b>外部 Agent</b><small>令牌与 MCP 接入</small></span><ChevronRight size={17} /></a><button className={styles.logoutButton} onClick={logout}><LogOut size={17} />{data.demoMode ? "切换模拟用户" : "退出登录"}</button></ModalShell>;
 }
 
 function ReauthModal({ code, setCode, close, submit }: { code: string; setCode: (value: string) => void; close: () => void; submit: () => void }) {

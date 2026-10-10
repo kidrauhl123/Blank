@@ -199,6 +199,18 @@
 .developerLink + .developerLink { margin-top: 8px; }
 .developerLink > span { display: flex; flex-direction: column; gap: 3px; }.developerLink b { font-size: 15px; }.developerLink small { color: var(--muted); font-size: 12px; }
 .logoutButton { width: 100%; margin-top: 14px; height: 48px; border: 1px solid var(--line); border-radius: 13px; background: white; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--danger); font-size: 14px; cursor: pointer; }
+.demoCopy { margin: 34px 0 24px; }
+.demoCopy h1 { font-size: clamp(30px, 7vw, 38px); }
+.demoProfiles { display: grid; gap: 10px; }
+.demoProfile { display: flex; align-items: center; gap: 13px; width: 100%; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: white; color: var(--ink); text-align: left; cursor: pointer; }
+.demoProfile:hover, .demoProfile:focus-visible { background: #f7f9f4; border-color: var(--accent); }
+.demoProfile:disabled { opacity: .6; cursor: wait; }
+.demoAvatar { width: 48px; height: 48px; display: grid; place-items: center; flex-shrink: 0; border-radius: 14px; font-size: 29px; }
+.demoPerson { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.demoPerson b { font-size: 17px; }
+.demoPerson small { font-size: 11px; font-weight: 500; color: var(--muted); margin-left: 9px; }
+.demoPerson > span { font-size: 12px; line-height: 1.5; color: var(--muted); }
+.demoHint { font-size: 12px; color: var(--muted); line-height: 1.65; margin: 17px 0 0; }
 .mfaRequired { margin-bottom: 14px; padding: 13px; border-radius: 11px; background: #fff5e5; display: flex; flex-direction: column; gap: 4px; }.mfaRequired b { font-size: 14px; }.mfaRequired span { color: var(--muted); font-size: 13px; line-height: 1.45; }.mfaRequired a { margin-top: 4px; color: var(--accent); font-size: 13px; font-weight: 700; }
 
 @media (max-width: 560px), (hover: none) and (pointer: coarse), (display-mode: standalone) {

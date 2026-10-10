@@ -11,6 +11,7 @@ const schema = z.object({
 export async function POST(request: NextRequest) {
   try {
     assertSameOrigin(request);
+    if (process.env.BANKPILOT_DEMO_MODE === "true") throw new AuthError("DEMO_PROFILE_REQUIRED", 403);
     const parsed = schema.safeParse(await request.json());
     if (!parsed.success) throw new AuthError("INVALID_CREDENTIALS");
     const result = await loginCustomer({ ...parsed.data, userAgent: request.headers.get("user-agent") });

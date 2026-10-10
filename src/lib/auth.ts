@@ -160,7 +160,7 @@ export async function registerCustomer(input: { displayName: string; phone: stri
   });
 }
 
-async function createSession(customerId: string, userAgent?: string | null, client?: PoolClient) {
+export async function createSession(customerId: string, userAgent?: string | null, client?: PoolClient) {
   const token = randomBytes(32).toString("base64url");
   const expires = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
   const sql = `INSERT INTO user_sessions (customer_id,token_hash,user_agent,expires_at) VALUES ($1,$2,$3,$4)`;
