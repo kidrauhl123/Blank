@@ -82,6 +82,9 @@ export function FloatingAppAgent({ rootRef, configured, openSignal, transport = 
       setSteps((items) => items.some((item) => item.id === step.id) ? items.map((item) => item.id === step.id && !["done", "blocked"].includes(item.state) ? step : item) : [...items, step]);
     }
     if (next.status === "QUESTION" || next.status === "CONSENT") setOpen(true);
+    // After a clarification during an approved task, reveal the live page
+    // again so subsequent actions and the user's confirmation stay visible.
+    if (["ACTION", "HANDOFF"].includes(next.status) && next.controlGranted && !paused.current) setOpen(false);
     if (!next.pending) {
       control.current = false;
       paused.current = false;
