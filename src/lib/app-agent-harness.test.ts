@@ -11,6 +11,23 @@ function pending(result: unknown) {
 }
 
 describe("real Deep Agents harness, with a deterministic model transport", () => {
+  it("executes multiple Skill reads before advancing to the requested page action", async () => {
+    let calls = 0;
+    const model = new ChatOpenAI({ model: "parallel-skill-test", apiKey: "test-only", maxRetries: 0, configuration: {
+      baseURL: "https://test.invalid/v1", fetch: async () => {
+        const tools = ++calls === 1 ? ["bank-card", "bank-page"].map((name, index) => ({ id: `skill_${index}`, type: "function", function: { name: "read_file", arguments: JSON.stringify({ file_path: `/skills/${name}/SKILL.md`, offset: 0, limit: 1000 }) } }))
+          : [{ id: "open_cards", type: "function", function: { name: "click_control", arguments: JSON.stringify({ target: "nav-cards", pageVersion: "p1", description: "打开卡片" }) } }];
+        return new Response(JSON.stringify({ id: "skills-completion", object: "chat.completion", created: 1, model: "parallel-skill-test",
+          choices: [{ index: 0, finish_reason: "tool_calls", message: { role: "assistant", content: "", tool_calls: tools } }],
+          usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 },
+        }), { headers: { "Content-Type": "application/json" } });
+      },
+    } });
+    const graph = createAppAgentHarness(new MemorySaver(), model);
+    const result = await graph.invoke({ messages: [{ role: "user", content: JSON.stringify(page) }], files: appAgentSkillFiles() }, { configurable: { thread_id: "parallel-skills" }, maxConcurrency: 4 });
+    expect(calls).toBe(2);
+    expect(pending(result)).toMatchObject({ action: { type: "click", target: "nav-cards" } });
+  });
   it("discovers standard Skills, pauses page tools and feeds changed state back to the model", async () => {
     const requests: Array<Record<string, unknown>> = [];
     const actions = [

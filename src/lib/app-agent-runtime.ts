@@ -38,7 +38,10 @@ async function update(identity: Identity, id: string, fields: { status: AppAgent
 }
 async function invoke(identity: Identity, id: string, input: Parameters<ReturnType<typeof createAppAgentHarness>["invoke"]>[0], granted: boolean) {
   const graph = await getHarness();
-  const result = await graph.invoke(input, { configurable: { thread_id: id }, recursionLimit: 60, maxConcurrency: 1 });
+  // The SDK may read several Skills in one model turn. Concurrency=1 in the
+  // current graph scheduler can leave a second Send unexecuted. These reads
+  // are safe in parallel; page actions still must yield exactly one interrupt.
+  const result = await graph.invoke(input, { configurable: { thread_id: id }, recursionLimit: 60, maxConcurrency: 4 });
   const interrupts = (result as unknown as Record<string, unknown>)[INTERRUPT] as Array<{ value: { kind: string; id: string; action: unknown } }> | undefined;
   const requests = interrupts?.filter((item) => item.value.kind === "APP_PAGE_ACTION") ?? [];
   if (requests.length !== (interrupts?.length ?? 0)) throw new Error("APP_AGENT_UNSUPPORTED_INTERRUPT");
