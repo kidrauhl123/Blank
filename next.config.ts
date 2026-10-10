@@ -4,6 +4,13 @@ const developmentScriptPolicy = process.env.NODE_ENV === "development" ? " 'unsa
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Keep the Agent SDK's message classes, symbols and dynamic checkpoint
+  // deserialization in native Node modules, across route-handler boundaries.
+  serverExternalPackages: [
+    "deepagents", "langchain", "@langchain/core", "@langchain/openai",
+    "@langchain/deepseek", "@langchain/langgraph", "@langchain/langgraph-checkpoint",
+    "@langchain/langgraph-checkpoint-postgres",
+  ],
   poweredByHeader: false,
   async headers() {
     return [{

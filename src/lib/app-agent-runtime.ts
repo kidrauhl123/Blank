@@ -41,12 +41,17 @@ async function invoke(identity: Identity, id: string, input: Parameters<ReturnTy
   const result = await graph.invoke(input, { configurable: { thread_id: id }, recursionLimit: 60, maxConcurrency: 1 });
   const interrupts = (result as unknown as Record<string, unknown>)[INTERRUPT] as Array<{ value: { kind: string; id: string; action: unknown } }> | undefined;
   const requests = interrupts?.filter((item) => item.value.kind === "APP_PAGE_ACTION") ?? [];
+  if (requests.length !== (interrupts?.length ?? 0)) throw new Error("APP_AGENT_UNSUPPORTED_INTERRUPT");
   // Parallel page actions cannot be applied safely to a shared live page.
   if (requests.length > 1) throw new Error("APP_AGENT_PARALLEL_ACTIONS");
   const pending = requests.length ? { id: requests[0].value.id, action: pageActionSchema.parse(requests[0].value.action) } : null;
   const status: AppAgentStatus = !pending ? "COMPLETED" : pending.action.type === "question" ? "QUESTION"
     : pending.action.type === "handoff" ? "HANDOFF" : granted ? "ACTION" : "CONSENT";
   const last = result.messages.filter((message) => message.getType() === "ai").at(-1);
+  // A model tool request without a matching execution/interrupt is not a
+  // completed conversation, even when the framework returns normally.
+  const answered = new Set(result.messages.flatMap((message) => "tool_call_id" in message ? [message.tool_call_id] : []));
+  if (!pending && last && "tool_calls" in last && Array.isArray(last.tool_calls) && last.tool_calls.some((call: { id?: string }) => !answered.has(call.id))) throw new Error("APP_AGENT_INCOMPLETE_TOOL_CYCLE");
   const content = typeof last?.content === "string" ? last.content.slice(0, 1500) : "";
   const message = pending ? pending.action.type === "question" ? pending.action.question : pending.action.description
     : content || "本次助手任务已结束，请以页面上的银行状态为准。";
