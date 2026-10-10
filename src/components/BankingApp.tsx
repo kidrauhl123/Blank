@@ -9,6 +9,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { ServiceWorkerRegister } from "./ServiceWorkerRegister";
 import { AuthScreen } from "./AuthScreen";
+import { FloatingAppAgent } from "./FloatingAppAgent";
 import type { BankStatement } from "@/lib/banking-report";
 import styles from "./BankingApp.module.css";
 
@@ -48,7 +49,10 @@ export function BankingApp() {
   const [chats, setChats] = useState<ChatItem[]>([]);
   const [mfa, setMfa] = useState<{ itemId: string; operation: Operation; taskId: string } | null>(null);
   const [mfaCode, setMfaCode] = useState("");
-  const [dialog, setDialog] = useState<"deposit" | "transfer" | "card" | "profile" | null>(null);
+  const [dialog, setDialog] = useState<"deposit" | "transfer" | "card" | "profile" | "card-details" | null>(null);
+  const [selectedCard, setSelectedCard] = useState<string | null>(null);
+  const [assistantOpen, setAssistantOpen] = useState(0);
+  const appRoot = useRef<HTMLElement>(null);
   const [prepared, setPrepared] = useState<PreparedTransfer | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -138,7 +142,7 @@ export function BankingApp() {
   const logout = async () => { await fetch("/api/auth/logout", { method: "POST" }); setData(null); setChats([]); conversationId.current = ""; setAuthRequired(true); };
   const closeTransfer = () => { setDialog(null); setPrepared(null); setMfaCode(""); if (location.search) history.replaceState(null, "", location.pathname); };
 
-  return <main className={styles.stage}>
+  return <main className={styles.stage} ref={appRoot} data-agent-page={dialog ?? ({ home: "首页", agent: "对话", activity: "账户明细", cards: "卡片管理" }[tab])}>
     <ServiceWorkerRegister />
     <section className={styles.phone} aria-label="BankPilot 手机银行">
       <header className={styles.topbar}>
@@ -147,19 +151,20 @@ export function BankingApp() {
         <button className={styles.iconButton} aria-label="通知"><Bell size={20} strokeWidth={1.8} /><i /></button>
       </header>
       {error && <div className={styles.connectionError}><span>{error}</span><button onClick={load}><RefreshCw size={15} />重试</button></div>}
-      <div className={styles.viewport} ref={viewportRef}>
-        {tab === "home" && <HomeView data={data} loading={loading} visible={balanceVisible} toggleVisible={() => setBalanceVisible(!balanceVisible)} onOpenAgent={() => setTab("agent")} onDeposit={() => setDialog("deposit")} onTransfer={() => setDialog("transfer")} />}
+      <div className={styles.viewport} ref={viewportRef} data-agent-viewport>
+        {tab === "home" && <HomeView data={data} loading={loading} visible={balanceVisible} toggleVisible={() => setBalanceVisible(!balanceVisible)} onOpenAgent={() => setAssistantOpen((value) => value + 1)} onDeposit={() => setDialog("deposit")} onTransfer={() => setDialog("transfer")} />}
         {tab === "agent" && <AgentView chats={chats} sending={sending} coreConnected={!error} aiStatus={data?.ai ?? { configured: false, model: null }} onPrompt={send} onCommit={commit} onCancel={cancelAgentOperation} bottomRef={bottomRef} />}
         {tab === "activity" && <ActivityView data={data} />}
-        {tab === "cards" && <CardsView data={data} onCreate={() => setDialog("card")} onLocked={load} />}
+        {tab === "cards" && <CardsView data={data} onCreate={() => setDialog("card")} onLocked={load} onSelect={(id) => { setSelectedCard(id); setDialog("card-details"); }} />}
       </div>
       {tab === "agent" && <form className={styles.composer} onSubmit={onSubmit}><input value={input} onChange={(event) => setInput(event.target.value)} placeholder="说出你想办理的业务…" aria-label="向银行 Agent 发送消息" /><button type="submit" disabled={!input.trim() || sending} aria-label="发送"><Send size={18} /></button></form>}
       <nav className={styles.nav} aria-label="主导航">
-        <NavButton active={tab === "home"} label="首页" icon={<House size={21} />} onClick={() => setTab("home")} />
-        <NavButton active={tab === "agent"} label="AI 助手" icon={<Sparkles size={21} />} onClick={() => setTab("agent")} />
-        <NavButton active={tab === "activity"} label="明细" icon={<ChartNoAxesColumnIncreasing size={21} />} onClick={() => setTab("activity")} />
-        <NavButton active={tab === "cards"} label="卡片" icon={<CreditCard size={21} />} onClick={() => setTab("cards")} />
+        <NavButton agentId="nav-home" active={tab === "home"} label="首页" icon={<House size={21} />} onClick={() => setTab("home")} />
+        <NavButton active={tab === "agent"} label="AI 助手" icon={<Sparkles size={21} />} onClick={() => setAssistantOpen((value) => value + 1)} />
+        <NavButton agentId="nav-activity" active={tab === "activity"} label="明细" icon={<ChartNoAxesColumnIncreasing size={21} />} onClick={() => setTab("activity")} />
+        <NavButton agentId="nav-cards" active={tab === "cards"} label="卡片" icon={<CreditCard size={21} />} onClick={() => setTab("cards")} />
       </nav>
+      <FloatingAppAgent rootRef={appRoot} configured={data?.ai.configured ?? false} openSignal={assistantOpen} />
     </section>
     <a className={styles.auditLink} href="/audit" target="_blank"><ShieldCheck size={16} /> 打开安全审计台 <ChevronRight size={15} /></a>
     {mfa && <ReauthModal code={mfaCode} setCode={setMfaCode} close={() => { setMfa(null); setMfaCode(""); }} submit={() => commit(mfa.itemId, mfa.operation, mfa.taskId, mfaCode)} />}
@@ -167,19 +172,20 @@ export function BankingApp() {
     {dialog === "transfer" && data && <TransferModal account={data.accounts[0]} mfaConfigured={data.customer.mfa_configured} prepared={prepared} setPrepared={setPrepared} busy={actionBusy} setBusy={setActionBusy} close={closeTransfer} code={mfaCode} setCode={setMfaCode} done={async () => { closeTransfer(); await load(); }} />}
     {dialog === "card" && data && <CardModal account={data.accounts[0]} busy={actionBusy} setBusy={setActionBusy} close={() => setDialog(null)} done={async () => { setDialog(null); await load(); setTab("cards"); }} />}
     {dialog === "profile" && data && <ProfileModal data={data} close={() => setDialog(null)} logout={logout} />}
+    {dialog === "card-details" && data && <CardDetailsModal card={data.cards.find((card) => card.id === selectedCard)} close={() => setDialog(null)} done={load} />}
   </main>;
 }
 
-function NavButton({ active, label, icon, onClick }: { active: boolean; label: string; icon: React.ReactNode; onClick: () => void }) {
-  return <button className={active ? styles.navActive : ""} onClick={onClick}>{icon}<span>{label}</span></button>;
+function NavButton({ active, label, icon, onClick, agentId }: { active: boolean; label: string; icon: React.ReactNode; onClick: () => void; agentId?: string }) {
+  return <button data-agent-id={agentId} data-agent-permission="navigate" className={active ? styles.navActive : ""} onClick={onClick}>{icon}<span>{label}</span></button>;
 }
 
 function HomeView({ data, loading, visible, toggleVisible, onOpenAgent, onDeposit, onTransfer }: { data: Bootstrap | null; loading: boolean; visible: boolean; toggleVisible: () => void; onOpenAgent: () => void; onDeposit: () => void; onTransfer: () => void }) {
   return <div className={styles.home}>
     <section className={styles.balanceBlock}><div className={styles.labelRow}><span>总资产</span><button onClick={toggleVisible} aria-label="隐藏或显示余额"><Eye size={16} /></button></div><div className={styles.balance}>{loading ? "—" : visible ? money(data?.totalMinor ?? 0) : "••••••"}</div><div className={styles.balanceMeta}><span>可用余额</span><span>{data?.accounts[0]?.masked_no ?? "账户未就绪"}</span></div></section>
     <div className={styles.quickActions}>
-      <button onClick={onTransfer}><span><ArrowUpRight /></span>转账</button>
-      <button onClick={onDeposit}><span><Plus /></span>入金</button>
+      <button data-agent-id="open-transfer" data-agent-permission="navigate" onClick={onTransfer}><span><ArrowUpRight /></span>转账</button>
+      <button data-agent-id="open-deposit" data-agent-permission="navigate" onClick={onDeposit}><span><Plus /></span>入金</button>
     </div>
     <button className={styles.agentCallout} onClick={onOpenAgent} aria-label="打开 AI 助手"><span className={styles.agentMark}><Sparkles size={20} /></span><span><b>问 BankPilot</b><small>查账、转账、管卡，一句话就行</small></span><ChevronRight size={18} /></button>
     <section className={styles.section}><div className={styles.sectionHead}><div><p>本月支出与转出</p><h2>{data ? money(data.statement.expenseMinor) : "—"}</h2></div></div>{data?.statement.expenseMinor === 0 && <p className={styles.emptyCopy}>本月还没有支出记录。</p>}</section>
@@ -235,12 +241,12 @@ function OperationCard({ item, operation, onCommit, onCancel }: { item: ChatItem
 function ActivityView({ data }: { data: Bootstrap | null }) {
   const [filter, setFilter] = useState("全部");
   const items = (data?.transactions ?? []).filter((item) => filter === "全部" || (filter === "支出" && Number(item.amount_minor) < 0) || (filter === "收入" && Number(item.amount_minor) > 0) || (filter === "异常" && item.is_anomaly));
-  return <div className={styles.listView}><div className={styles.viewHeading}><p>最近 50 笔交易</p><h1>账户活动</h1></div><div className={styles.filterPills}>{["全部", "支出", "收入", "异常"].map((label) => <button key={label} aria-pressed={filter === label} className={filter === label ? styles.selected : undefined} onClick={() => setFilter(label)}>{label}</button>)}</div><section className={styles.section}>{items.length ? <TransactionList items={items} /> : <p className={styles.emptyCopy}>没有符合条件的交易。</p>}</section></div>;
+  return <div className={styles.listView}><div className={styles.viewHeading}><p>最近 50 笔交易</p><h1>账户活动</h1></div><div className={styles.filterPills}>{["全部", "支出", "收入", "异常"].map((label) => <button data-agent-id={`filter-${label}`} data-agent-permission="navigate" key={label} aria-pressed={filter === label} className={filter === label ? styles.selected : undefined} onClick={() => setFilter(label)}>{label}</button>)}</div><section className={styles.section}>{items.length ? <TransactionList items={items} /> : <p className={styles.emptyCopy}>没有符合条件的交易。</p>}</section></div>;
 }
 
 function ModalShell({ title, eyebrow, close, children }: { title: string; eyebrow: string; close: () => void; children: React.ReactNode }) {
   return <div className={styles.modalBackdrop} role="presentation"><section className={styles.modal} role="dialog" aria-modal="true" aria-label={title}>
-    <button className={styles.modalClose} onClick={close} aria-label="关闭"><X size={20} /></button>
+    <button data-agent-id="close-modal" data-agent-permission="navigate" className={styles.modalClose} onClick={close} aria-label="关闭"><X size={20} /></button>
     <p className={styles.eyebrow}>{eyebrow}</p><h2>{title}</h2>{children}
   </section></div>;
 }
@@ -255,10 +261,10 @@ function DepositModal({ account, busy, setBusy, close, done }: { account: Accoun
     } catch (err) { setError(err instanceof Error ? err.message : "入金未完成"); } finally { setBusy(false); }
   };
   return <ModalShell eyebrow="银行核心 · 实时记账" title="向账户入金" close={close}><p>金额将写入双分录账本。</p><form className={styles.actionForm} onSubmit={submit}>
-    <label>金额（元）<input name="amount" type="number" inputMode="decimal" min="0.01" max="1000000" step="0.01" required autoFocus /></label>
-    <label>资金来源<select name="source"><option value="EXTERNAL_TRANSFER">外部账户转入</option><option value="CASH">现金存入</option></select></label>
-    <label>外部参考号（选填）<input name="reference" maxLength={80} /></label>{error && <div className={styles.formError}>{error}</div>}
-    <button className={styles.primaryButton} disabled={busy}>{busy ? "正在记账…" : "确认入金"}</button>
+    <label>金额（元）<input data-agent-id="field-amount" data-agent-permission="fill" name="amount" type="number" inputMode="decimal" min="0.01" max="1000000" step="0.01" required autoFocus /></label>
+    <label>资金来源<select data-agent-id="field-source" data-agent-permission="fill" name="source"><option value="EXTERNAL_TRANSFER">外部账户转入</option><option value="CASH">现金存入</option></select></label>
+    <label>外部参考号（选填）<input data-agent-id="field-reference" data-agent-permission="fill" name="reference" maxLength={80} /></label>{error && <div className={styles.formError}>{error}</div>}
+    <button data-agent-id="confirm-deposit" data-agent-permission="human" className={styles.primaryButton} disabled={busy}>{busy ? "正在记账…" : "确认入金"}</button>
   </form><small>沙箱入金，不进入真实清算网络。</small></ModalShell>;
 }
 
@@ -288,29 +294,53 @@ function TransferModal({ account, mfaConfigured, prepared, setPrepared, busy, se
     } catch (err) { setError(err instanceof Error ? err.message : "资金未转出"); } finally { setBusy(false); }
   };
   return <ModalShell eyebrow={prepared ? `${prepared.riskLevel === "RED" ? "红色风险" : "黄色风险"} · ${prepared.requiredAuth === "MFA" ? "强验证" : "用户确认"}` : "先核对，再执行"} title={prepared ? "核对转账" : "发起转账"} close={close}>{!prepared ? <><p>输入已注册用户的姓名或完整手机号。</p><form className={styles.actionForm} onSubmit={prepare}>
-    <label>收款人<input name="recipient" required minLength={2} placeholder="姓名或完整手机号" autoFocus /></label><label>金额（元）<input name="amount" type="number" inputMode="decimal" min="0.01" max="1000000" step="0.01" required /></label><label>备注（选填）<input name="note" maxLength={80} /></label>{error && <div className={styles.formError}>{error}</div>}<button className={styles.primaryButton} disabled={busy}>{busy ? "正在核验…" : "继续核对"}</button>
-  </form></> : <><div className={styles.transferReceipt}><strong>{money(prepared.details.amountMinor)}</strong><dl><div><dt>收款人</dt><dd>{prepared.details.recipient.name}</dd></div><div><dt>手机号</dt><dd>{prepared.details.recipient.phoneMasked}</dd></div><div><dt>付款账户</dt><dd>{prepared.details.sourceAccount.maskedNo}</dd></div><div><dt>操作编号</dt><dd>{prepared.operationId}</dd></div></dl></div>{prepared.requiredAuth === "MFA" && (mfaConfigured ? <label className={styles.reauthField}>验证器动态码<input inputMode="numeric" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} placeholder="6 位动态验证码" autoComplete="one-time-code" autoFocus /></label> : <div className={styles.mfaRequired}><b>需要先启用多因素认证</b><span>此操作为红色风险，必须使用真实 TOTP 动态码。</span><a href="/security">前往安全中心设置</a></div>)}{error && <div className={styles.formError}>{error}</div>}<button className={styles.primaryButton} disabled={busy || (prepared.requiredAuth === "MFA" && (!mfaConfigured || code.length !== 6))} onClick={authorize}>{busy ? "账本处理中…" : "授权并执行"}</button><small>外部 Agent 无权点击此按钮；授权仅绑定当前操作编号。</small></>}</ModalShell>;
+    <label>收款人<input data-agent-id="field-recipient" data-agent-permission="fill" name="recipient" required minLength={2} placeholder="姓名或完整手机号" autoFocus /></label><label>金额（元）<input data-agent-id="field-amount" data-agent-permission="fill" name="amount" type="number" inputMode="decimal" min="0.01" max="1000000" step="0.01" required /></label><label>备注（选填）<input data-agent-id="field-note" data-agent-permission="fill" name="note" maxLength={80} /></label>{error && <div className={styles.formError}>{error}</div>}<button data-agent-id="prepare-transfer" data-agent-permission="prepare" className={styles.primaryButton} disabled={busy}>{busy ? "正在核验…" : "继续核对"}</button>
+  </form></> : <><div className={styles.transferReceipt}><strong>{money(prepared.details.amountMinor)}</strong><dl><div><dt>收款人</dt><dd>{prepared.details.recipient.name}</dd></div><div><dt>手机号</dt><dd>{prepared.details.recipient.phoneMasked}</dd></div><div><dt>付款账户</dt><dd>{prepared.details.sourceAccount.maskedNo}</dd></div><div><dt>操作编号</dt><dd>{prepared.operationId}</dd></div></dl></div>{prepared.requiredAuth === "MFA" && (mfaConfigured ? <label className={styles.reauthField}>验证器动态码<input data-agent-private inputMode="numeric" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} placeholder="6 位动态验证码" autoComplete="one-time-code" autoFocus /></label> : <div className={styles.mfaRequired}><b>需要先启用多因素认证</b><span>此操作为红色风险，必须使用真实 TOTP 动态码。</span><a href="/security">前往安全中心设置</a></div>)}{error && <div className={styles.formError}>{error}</div>}<button data-agent-id="confirm-transfer" data-agent-permission="human" className={styles.primaryButton} disabled={busy || (prepared.requiredAuth === "MFA" && (!mfaConfigured || code.length !== 6))} onClick={authorize}>{busy ? "账本处理中…" : "授权并执行"}</button><small>外部 Agent 无权点击此按钮；授权仅绑定当前操作编号。</small></>}</ModalShell>;
 }
 
 function CardModal({ account, busy, setBusy, close, done }: { account: Account; busy: boolean; setBusy: (value: boolean) => void; close: () => void; done: () => Promise<void> }) {
   const [error, setError] = useState("");
   const submit = async (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); setBusy(true); const values = new FormData(event.currentTarget); try { const response = await fetch("/api/v1/cards", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accountId: account.id, cardName: values.get("cardName") }) }); const result = await response.json(); if (!response.ok) throw new Error(result.message); await done(); } catch (err) { setError(err instanceof Error ? err.message : "开卡失败"); } finally { setBusy(false); } };
-  return <ModalShell eyebrow="黄色风险 · 用户确认" title="申请虚拟卡" close={close}><p>虚拟卡绑定你的活期账户，默认日限额为 ¥1,000。系统只保存脱敏卡号。</p><form className={styles.actionForm} onSubmit={submit}><label>卡片名称<input name="cardName" defaultValue="日常虚拟卡" required minLength={2} maxLength={30} autoFocus /></label>{error && <div className={styles.formError}>{error}</div>}<button className={styles.primaryButton} disabled={busy}>{busy ? "正在开卡…" : "确认申请"}</button></form></ModalShell>;
+  return <ModalShell eyebrow="黄色风险 · 用户确认" title="申请虚拟卡" close={close}><p>虚拟卡绑定你的活期账户，默认日限额为 ¥1,000。系统只保存脱敏卡号。</p><form className={styles.actionForm} onSubmit={submit}><label>卡片名称<input data-agent-id="field-card-name" data-agent-permission="fill" name="cardName" defaultValue="日常虚拟卡" required minLength={2} maxLength={30} autoFocus /></label>{error && <div className={styles.formError}>{error}</div>}<button data-agent-id="confirm-card" data-agent-permission="human" className={styles.primaryButton} disabled={busy}>{busy ? "正在开卡…" : "确认申请"}</button></form></ModalShell>;
 }
 
 function ProfileModal({ data, close, logout }: { data: Bootstrap; close: () => void; logout: () => Promise<void> }) {
-  return <ModalShell eyebrow="当前账户" title={data.customer.display_name} close={close}><div className={styles.profileRows}><div><span>手机号</span><b>{data.customer.phone}</b></div><div><span>收款方式</span><b>姓名或手机号</b></div><div><span>账户号</span><b>{data.accounts[0]?.account_no ?? "—"}</b></div></div><a className={styles.developerLink} href="/security"><ShieldCheck size={17} /><span><b>安全中心</b><small>{data.customer.mfa_configured ? "强验证已开启" : "设置高风险操作验证"}</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/channels"><Link2 size={17} /><span><b>消息渠道</b><small>QQ 与企业微信</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/developers"><Sparkles size={17} /><span><b>外部 Agent</b><small>令牌与 MCP 接入</small></span><ChevronRight size={17} /></a><button className={styles.logoutButton} onClick={logout}><LogOut size={17} />退出登录</button></ModalShell>;
+  return <ModalShell eyebrow="当前账户" title={data.customer.display_name} close={close}><div className={styles.profileRows} data-agent-private><div><span>手机号</span><b>{data.customer.phone}</b></div><div><span>收款方式</span><b>姓名或手机号</b></div><div><span>账户号</span><b>{data.accounts[0]?.account_no ?? "—"}</b></div></div><a className={styles.developerLink} href="/security"><ShieldCheck size={17} /><span><b>安全中心</b><small>{data.customer.mfa_configured ? "强验证已开启" : "设置高风险操作验证"}</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/channels"><Link2 size={17} /><span><b>消息渠道</b><small>QQ 与企业微信</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/developers"><Sparkles size={17} /><span><b>外部 Agent</b><small>令牌与 MCP 接入</small></span><ChevronRight size={17} /></a><button className={styles.logoutButton} onClick={logout}><LogOut size={17} />退出登录</button></ModalShell>;
 }
 
 function ReauthModal({ code, setCode, close, submit }: { code: string; setCode: (value: string) => void; close: () => void; submit: () => void }) {
-  return <ModalShell eyebrow="红色风险 · 强验证" title="确认是你本人" close={close}><p>输入身份验证器生成的 6 位动态码。连续失败 3 次后，此操作将安全熔断。</p><input className={styles.codeInput} inputMode="numeric" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} placeholder="6 位动态验证码" autoComplete="one-time-code" autoFocus /><button className={styles.primaryButton} disabled={code.length !== 6} onClick={submit}><LockKeyhole size={17} />验证并执行</button><small>动态码只用于本次操作验证，不会写入 Agent 上下文或审计明文。</small></ModalShell>;
+  return <ModalShell eyebrow="红色风险 · 强验证" title="确认是你本人" close={close}><p>输入身份验证器生成的 6 位动态码。连续失败 3 次后，此操作将安全熔断。</p><input data-agent-private className={styles.codeInput} inputMode="numeric" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} placeholder="6 位动态验证码" autoComplete="one-time-code" autoFocus /><button className={styles.primaryButton} disabled={code.length !== 6} onClick={submit}><LockKeyhole size={17} />验证并执行</button><small>动态码只用于本次操作验证，不会写入 Agent 上下文或审计明文。</small></ModalShell>;
 }
 
-function CardsView({ data, onCreate, onLocked }: { data: Bootstrap | null; onCreate: () => void; onLocked: () => Promise<void> }) {
+function CardDetailsModal({ card, close, done }: { card?: Card; close: () => void; done: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const lock = async () => {
+    if (!card) return;
+    setBusy(true); setError("");
+    try {
+      const response = await fetch(`/api/v1/cards/${card.id}/lock`, { method: "POST" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message ?? "锁卡失败");
+      await done();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "锁卡失败"); }
+    finally { setBusy(false); }
+  };
+  return <ModalShell title="卡片管理" eyebrow="黄色风险 · 用户确认" close={close}>
+    {!card ? <p>该卡片当前不可用，请刷新。</p> : <><p><b>{card.card_name} {card.masked_no}</b></p>
+      <p>当前状态：{card.status === "ACTIVE" ? "可用" : card.status === "LOCKED" ? "已锁定" : card.status}。</p>
+      <p>锁定后暂停使用该卡。真正挂失与解挂暂未开放，锁卡不代表挂失。</p>
+      {error && <div role="alert" className={styles.formError}>{error}</div>}
+      {card.status === "ACTIVE" && <button data-agent-id="confirm-card-lock" data-agent-permission="human" className={styles.primaryButton} disabled={busy} onClick={lock}>{busy ? "正在锁定…" : "确认锁定这张卡"}</button>}
+    </>}
+  </ModalShell>;
+}
+
+function CardsView({ data, onCreate, onLocked, onSelect }: { data: Bootstrap | null; onCreate: () => void; onLocked: () => Promise<void>; onSelect: (id: string) => void }) {
   const lock = async (card: Card) => {
     if (!window.confirm(`确认锁定 ${card.card_name} ${card.masked_no}？锁定后将暂停交易。`)) return;
     const response = await fetch(`/api/v1/cards/${card.id}/lock`, { method: "POST" });
     if (!response.ok) alert((await response.json()).message ?? "操作失败"); else await onLocked();
   };
-  return <div className={styles.listView}><div className={styles.viewHeading}><p>卡片与限额</p><h1>我的卡</h1></div>{!data?.cards.length && <div className={styles.largeEmpty}><CreditCard size={28} /><b>还没有卡片</b><span>确认申请后，银行核心将实时签发一张虚拟卡。</span></div>}{data?.cards.map((card, index) => <section className={`${styles.bankCard} ${index === 1 ? styles.bankCardLight : ""}`} key={card.id}><div><span>B</span><small>{card.card_type === "VIRTUAL" ? "VIRTUAL" : "DEBIT"}</small></div><strong>{card.card_name}</strong><p>{card.masked_no}</p><footer><span>{card.status === "ACTIVE" ? "可用" : "已锁定"}</span><span>日限额 {money(card.daily_limit_minor)}</span></footer>{card.status === "ACTIVE" && <button className={styles.cardLock} onClick={() => lock(card)}>锁定</button>}</section>)}<button className={styles.outlineAction} onClick={onCreate}><Plus size={18} />申请虚拟卡<ChevronRight size={17} /></button></div>;
+  return <div className={styles.listView}><div className={styles.viewHeading}><p>卡片与限额</p><h1>我的卡</h1></div>{!data?.cards.length && <div className={styles.largeEmpty}><CreditCard size={28} /><b>还没有卡片</b><span>确认申请后，银行核心将实时签发一张虚拟卡。</span></div>}{data?.cards.map((card, index) => <section className={`${styles.bankCard} ${index === 1 ? styles.bankCardLight : ""}`} key={card.id}><div><span>B</span><small>{card.card_type === "VIRTUAL" ? "VIRTUAL" : "DEBIT"}</small></div><strong>{card.card_name}</strong><p>{card.masked_no}</p><footer><span>{card.status === "ACTIVE" ? "可用" : card.status === "LOCKED" ? "已锁定" : card.status}</span><span>日限额 {money(card.daily_limit_minor)}</span></footer><button data-agent-id={`view-card-${card.id}`} data-agent-permission="navigate" data-agent-label={`查看 ${card.card_name} ${card.masked_no}`} className={styles.cardLock} onClick={() => onSelect(card.id)}>查看与管理</button>{card.status === "ACTIVE" && <button data-agent-id={`lock-card-${card.id}`} data-agent-permission="human" className={styles.cardLock} onClick={() => lock(card)}>锁定</button>}</section>)}<button data-agent-id="open-card-application" data-agent-permission="navigate" className={styles.outlineAction} onClick={onCreate}><Plus size={18} />申请虚拟卡<ChevronRight size={17} /></button></div>;
 }

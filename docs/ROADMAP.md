@@ -10,7 +10,7 @@
 确定采用：
 
 - 银行 APP 为主入口，官方 QQ、企业微信为辅助渠道。
-- LangGraph 为唯一 Agent 运行时；PostgreSQL 保存任务、授权与 checkpoint。
+- 通用 Agent 能力复用成熟 SDK，不自行实现调用循环、上下文压缩或 Skills 加载。当前 APP 可见页面原型采用 Deep Agents SDK，现有业务工作流采用 LangGraph；PostgreSQL 保存任务、授权与 checkpoint。Codex app-server、Claude Agent SDK 均为可评估的替代基座，不能把框架选择等同于自研成果。
 - 保留现有 Next.js、银行核心、整数金额、双分录、账户行锁、会话和 outbox。
 - 银行工具固定注册并校验参数，模型不获得 Shell、SQL、任意网络或资金直接提交能力。
 - 关闭并移除对外 MCP、通用 REST 令牌接入及开发者中心，银行内部业务服务与官方渠道 API 保留。这是下一阶段架构收敛工作，当前代码仍存在这些外部接口。
@@ -26,6 +26,8 @@
 已保留的基础：独立 Bank Core，PostgreSQL 事务及有序账户行锁，双分录，银行登录会话，TOTP，LangGraph 授权中断/恢复，QQ/企微官方 Worker，入站事件去重与 outbox。
 
 运行基线：移除旧运行时后，本地 21 项单元测试通过，8 项数据库集成测试默认跳过；lint、TypeScript 与生产构建通过。旧环境清理迁移尚需在部署目标实际执行并核实。不能将这些检查等同于全场景、安全或真实模型验收。
+
+独立原型分支 `feat/visible-app-agent` 增加 APP 主页面与业务弹窗的悬浮接管、结构化选择题、干预暂停和重新观察后继续。真实 SDK / 数据库与浏览器测试使用确定性模型传输或 API 测试替身，未完成真实模型质量验收，也未修复下述银行核心缺陷。详细复现与能力边界见 [VISIBLE_APP_AGENT.md](VISIBLE_APP_AGENT.md)。
 
 审查发现的明确问题：
 
