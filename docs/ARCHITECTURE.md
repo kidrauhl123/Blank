@@ -20,7 +20,7 @@ QQ / 企业微信 ─ Worker ┴─ LangGraph Runtime ── intent nodes ──
 
 ### PWA
 
-Next.js App Router + React。支持注册、登录、账户、流水、入金、转账、卡片、安全中心、开发者中心和 Agent 对话。所有写请求使用 HttpOnly SameSite Cookie，并校验 Origin。
+Next.js App Router + React。入口选择五位固定模拟用户，支持账户、流水、入金、转账、卡片、安全中心、开发者中心和 Agent 对话。所有写请求使用 HttpOnly SameSite Cookie，并校验 Origin。
 
 ### LangGraph Agent Runtime
 
