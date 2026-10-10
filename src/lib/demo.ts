@@ -4,8 +4,6 @@ import { AuthError, createSession } from "./auth";
 import { query, withTransaction } from "./db";
 import { DEMO_PROFILES } from "./demo-catalog";
 
-export function demoEnabled() { return process.env.BANKPILOT_DEMO_MODE === "true"; }
-export function assertDemoEnabled() { if (!demoEnabled()) throw new AuthError("DEMO_DISABLED", 404); }
 export async function isDemoCustomer(customerId: string) {
   return Boolean((await query("SELECT 1 FROM demo_profiles WHERE customer_id=$1", [customerId])).rowCount);
 }
@@ -24,7 +22,6 @@ async function post(client: PoolClient, accountId: string, counterparty: string,
 }
 
 export async function ensureDemoProfiles() {
-  assertDemoEnabled();
   await withTransaction(async (client) => {
     await client.query("SELECT pg_advisory_xact_lock(hashtext('bankpilot-demo-seed-v1'))");
     const existing = await client.query<{ profile_key: string }>("SELECT profile_key FROM demo_profiles");
@@ -79,7 +76,6 @@ export async function ensureDemoProfiles() {
 }
 
 export async function loginDemoProfile(input: { profileKey: string; previousToken?: string; userAgent?: string | null }) {
-  assertDemoEnabled();
   // Only the published fictional identities are selectable, never a customer UUID.
   if (!DEMO_PROFILES.some((profile) => profile.key === input.profileKey)) throw new AuthError("DEMO_PROFILE_NOT_FOUND", 404);
   await ensureDemoProfiles();

@@ -43,7 +43,6 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      BANKPILOT_DEMO_MODE: ${BANKPILOT_DEMO_MODE:-false}
       PASSWORD_PEPPER: ${PASSWORD_PEPPER}
       MCP_ALLOWED_ORIGINS: ${MCP_ALLOWED_ORIGINS:-}
       AI_BASE_URL: ${AI_BASE_URL:-}

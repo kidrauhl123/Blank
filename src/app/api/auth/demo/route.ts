@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { AuthError, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
-import { demoEnabled, loginDemoProfile } from "@/lib/demo";
+import { loginDemoProfile } from "@/lib/demo";
 import { publicDemoProfiles } from "@/lib/demo-catalog";
 import { apiError } from "@/lib/http";
 
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 const schema = z.object({ profileKey: z.string().max(32) }).strict();
 
 export async function GET() {
-  return NextResponse.json({ enabled: demoEnabled(), profiles: demoEnabled() ? publicDemoProfiles() : [] }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ profiles: publicDemoProfiles() }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(request: NextRequest) {
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     const parsed = schema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) throw new AuthError("DEMO_PROFILE_NOT_FOUND", 404);
     const result = await loginDemoProfile({ ...parsed.data, previousToken: request.cookies.get(SESSION_COOKIE)?.value, userAgent: request.headers.get("user-agent") });
-    const response = NextResponse.json({ customer: result.customer, demoMode: true });
+    const response = NextResponse.json({ customer: result.customer });
     response.cookies.set(SESSION_COOKIE, result.token, sessionCookieOptions(result.expires));
     response.headers.set("Cache-Control", "no-store");
     return response;

@@ -1,5 +1,5 @@
 BEGIN;
--- Mapping only. Fictional data is created once, exclusively with demo mode enabled.
+-- Mapping only. Fictional data is created once, on the first permitted profile selection.
 CREATE TABLE IF NOT EXISTS demo_profiles (
   profile_key TEXT PRIMARY KEY,
   customer_id UUID NOT NULL UNIQUE REFERENCES customers(id),

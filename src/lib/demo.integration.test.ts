@@ -7,7 +7,6 @@ import { ensureDemoProfiles, loginDemoProfile } from "./demo";
 import { db, query } from "./db";
 
 describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("fictional competition identities", () => {
-  const originalMode = process.env.BANKPILOT_DEMO_MODE;
   let sentinel: Awaited<ReturnType<typeof registerCustomer>>;
   let ownedSeed = false;
   beforeAll(async () => {
@@ -18,8 +17,6 @@ describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("fictional competition i
     sentinel = await registerCustomer({ displayName: "Untouched customer", phone: randomUUID(), password: "Test-only-123456" });
   });
   afterAll(async () => {
-    if (originalMode === undefined) delete process.env.BANKPILOT_DEMO_MODE;
-    else process.env.BANKPILOT_DEMO_MODE = originalMode;
     if (ownedSeed) {
       const ids = (await query<{ customer_id: string }>("SELECT customer_id FROM demo_profiles WHERE profile_key=ANY($1::text[])", [DEMO_PROFILES.map((p) => p.key)])).rows.map((r) => r.customer_id);
       if (sentinel) ids.push(sentinel.customer.id);
@@ -33,10 +30,7 @@ describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("fictional competition i
     }
     await db.end();
   });
-  it("is opt-in and rejects arbitrary identities before seeding", async () => {
-    process.env.BANKPILOT_DEMO_MODE = "false";
-    await expect(loginDemoProfile({ profileKey: "potato" })).rejects.toThrow("DEMO_DISABLED");
-    process.env.BANKPILOT_DEMO_MODE = "true";
+  it("rejects arbitrary identities before seeding", async () => {
     for (const profileKey of ["tomato", sentinel.customer.id, "unknown"]) await expect(loginDemoProfile({ profileKey })).rejects.toThrow("DEMO_PROFILE_NOT_FOUND");
     expect((await query("SELECT 1 FROM demo_profiles")).rowCount).toBe(0);
   });

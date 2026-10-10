@@ -49,7 +49,6 @@ function authMessage(code: string) {
     ACCOUNT_CHANGED: "登录账户已发生变化，请重新核对后再确认连接",
     DEMO_PROFILE_REQUIRED: "比赛沙箱请直接选择一位模拟用户进入",
     DEMO_PROFILE_NOT_FOUND: "请选择列表中的模拟用户",
-    DEMO_DISABLED: "当前环境未开启模拟用户入口",
     AUTHENTICATION_REQUIRED: "请先登录",
     SESSION_EXPIRED: "登录已过期，请重新登录",
     INVALID_API_TOKEN: "Agent 访问令牌无效或已过期",
