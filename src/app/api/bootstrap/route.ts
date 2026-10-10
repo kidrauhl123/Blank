@@ -12,7 +12,8 @@ export async function GET(request: Request) {
     const principal = await authenticateRequest(request);
     if (principal.kind !== "SESSION") throw new AuthError("BANK_APP_SESSION_REQUIRED", 403);
     if (!(await isDemoCustomer(principal.customerId))) throw new AuthError("DEMO_PROFILE_REQUIRED");
-    return NextResponse.json({ ...(await getBankingOverview(principal.customerId)), ai: getAIStatus() });
+    const overview = await getBankingOverview(principal.customerId);
+    return NextResponse.json({ ...overview, customer: { ...overview.customer, demo: true }, ai: getAIStatus() });
   } catch (error) {
     return apiError(error, "BANK_CORE_UNAVAILABLE");
   }

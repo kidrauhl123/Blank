@@ -3,7 +3,10 @@
 import { ArrowLeft, ChevronRight, RefreshCw, ShieldCheck, Unplug } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { BankDialog } from "./BankDialog";
+import { bankRequest, BankRequestError, jsonPost } from "@/lib/client-request";
+import bankStyles from "./BankingApp.module.css";
 import type { ChannelSetup } from "@/lib/channel-onboarding";
 import { ChannelOnboarding } from "./ChannelOnboarding";
 import styles from "./ChannelSettings.module.css";
@@ -19,6 +22,10 @@ export function ChannelSettings() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [confirmation, setConfirmation] = useState<Identity | null>(null);
+  const [actionError, setActionError] = useState("");
+  const [uncertain, setUncertain] = useState(false);
+  const pending = useRef(false);
   const provider = providers.find(item => item.channelType === selected);
 
   const load = useCallback(async () => {
@@ -65,22 +72,32 @@ export function ChannelSettings() {
   }, [load, selected, signedOut]);
 
   const revoke = async (identity: Identity) => {
-    if (!window.confirm("解除这个聊天身份与当前银行账户的绑定？")) return;
-    setBusy(identity.id); setError(""); setNotice("");
+    if (pending.current || uncertain) return;
+    pending.current = true; setBusy(identity.id); setActionError(""); setNotice("");
     try {
-      const response = await fetch("/api/v1/channels", {
-        method: "DELETE", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identityId: identity.id }),
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.message ?? "解除绑定失败，请重试。");
+      await bankRequest("/api/v1/channels", { ...jsonPost({ identityId: identity.id }), method: "DELETE" });
       setChannels(items => items.map(item => item.id === identity.id ? { ...item, status: "REVOKED" } : item));
       setNotice("已解除绑定，该聊天身份不能再访问你的银行账户。");
+      setConfirmation(null);
     } catch (error) {
-      setError(error instanceof Error ? error.message : "解除绑定失败，请重试。");
+      setActionError(error instanceof BankRequestError ? error.message : "解除结果暂时无法确认，请重新读取绑定状态。");
+      setUncertain(!(error instanceof BankRequestError) || error.outcomeUnknown);
     } finally {
-      setBusy(null);
+      pending.current = false; setBusy(null);
     }
+  };
+  const checkRevoke = async () => {
+    if (!confirmation || pending.current) return;
+    pending.current = true; setBusy(confirmation.id);
+    try {
+      const result = await bankRequest<{ channels: Identity[] }>("/api/v1/channels");
+      setChannels(result.channels);
+      const current = result.channels.find(item => item.id === confirmation.id);
+      if (current?.status === "REVOKED") { setConfirmation(null); setNotice("已核实：该聊天身份已解除绑定。"); }
+      else if (current?.status === "ACTIVE") { setUncertain(false); setActionError("已核实：仍处于绑定状态，可重新确认解除。"); }
+      else setActionError("未能找到这条绑定，请关闭窗口并重新读取连接状态。");
+    } catch { setActionError("绑定状态暂时无法读取，请稍后重新核对。"); }
+    finally { pending.current = false; setBusy(null); }
   };
 
   return <main className={styles.stage}><section className={styles.panel}>
@@ -103,10 +120,10 @@ export function ChannelSettings() {
       {channels.length > 0 && <><h2 className={styles.listTitle}>我的聊天身份</h2><div className={styles.list}>{channels.map(identity => <article key={identity.id}>
         <div className={styles.channelMark}><Image src={identity.channel_type === "QQ" ? "/brands/qq.svg" : "/brands/wecom.svg"} alt="" width={28} height={28} /></div>
         <div><b>{identity.channel_type === "QQ" ? "QQ" : "企业微信"}</b><small>{identity.status === "ACTIVE" ? "已绑定" : "已解除绑定"}</small><small>绑定于 {new Date(identity.bound_at).toLocaleDateString("zh-CN")}</small></div>
-        {identity.status === "ACTIVE" ? <button disabled={busy !== null} onClick={() => void revoke(identity)}><Unplug size={15} />{busy === identity.id ? "处理中…" : "解除绑定"}</button> : <span className={styles.revoked}>已撤销</span>}
+        {identity.status === "ACTIVE" ? <button disabled={busy !== null} onClick={() => { setConfirmation(identity); setActionError(""); setUncertain(false); }}><Unplug size={15} />解除绑定</button> : <span className={styles.revoked}>已撤销</span>}
       </article>)}</div></>}
     </>}
     <div className={styles.rule}><ShieldCheck size={21} /><span><b>操作前，由你确认</b><small>敏感操作会要求确认或回到银行 APP 完成强验证。</small></span></div>
     <footer><ShieldCheck size={15} /> 银行业务仅支持机器人私聊</footer>
-  </section></main>;
+  </section>{confirmation && <BankDialog title="解除聊天绑定" eyebrow="确认后立即停止该身份访问" busy={busy !== null} close={() => setConfirmation(null)}><p>解除 {confirmation.channel_type === "QQ" ? "QQ" : "企业微信"} 与当前账户的绑定？解除后，你可以重新绑定。</p>{actionError && <div role="alert" className={bankStyles.formError}>{actionError}</div>}<div className={styles.confirmActions}><button disabled={busy !== null} onClick={() => setConfirmation(null)}>保留绑定</button><button disabled={busy !== null || uncertain} onClick={() => void revoke(confirmation)}>{busy !== null ? "正在处理…" : "确认解除"}</button></div>{uncertain && <button className={styles.secondary} disabled={busy !== null} onClick={() => void checkRevoke()}>重新读取绑定状态</button>}</BankDialog>}</main>;
 }

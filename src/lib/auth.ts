@@ -254,11 +254,13 @@ export async function beginTotpSetup(customerId: string) {
   const secret = base32Encode(randomBytes(20));
   const identity = await query<{ display_name: string; phone: string }>("SELECT display_name,phone FROM customers WHERE id=$1", [customerId]);
   if (!identity.rows[0]) throw new AuthError("CUSTOMER_UNAVAILABLE", 403);
-  await query(
+  const setup = await query(
     `INSERT INTO mfa_totp (customer_id,encrypted_secret,enabled_at) VALUES ($1,$2,NULL)
-     ON CONFLICT (customer_id) DO UPDATE SET encrypted_secret=excluded.encrypted_secret,enabled_at=NULL,updated_at=now()`,
+     ON CONFLICT (customer_id) DO UPDATE SET encrypted_secret=excluded.encrypted_secret,updated_at=now()
+     WHERE mfa_totp.enabled_at IS NULL RETURNING customer_id`,
     [customerId, encryptSecret(secret)],
   );
+  if (!setup.rows.length) throw new AuthError("MFA_ALREADY_CONFIGURED", 409);
   const label = encodeURIComponent(`BankPilot:${identity.rows[0].phone}`);
   const uri = `otpauth://totp/${label}?secret=${secret}&issuer=BankPilot&algorithm=SHA1&digits=6&period=30`;
   return { secret, uri };
@@ -267,7 +269,8 @@ export async function beginTotpSetup(customerId: string) {
 export async function confirmTotpSetup(customerId: string, code: string) {
   const result = await query<{ encrypted_secret: string }>("SELECT encrypted_secret FROM mfa_totp WHERE customer_id=$1 AND enabled_at IS NULL", [customerId]);
   if (!result.rows[0] || !verifyTotp(decryptSecret(result.rows[0].encrypted_secret), code)) throw new AuthError("MFA_INVALID", 401);
-  await query("UPDATE mfa_totp SET enabled_at=now(),updated_at=now() WHERE customer_id=$1", [customerId]);
+  const enabled = await query("UPDATE mfa_totp SET enabled_at=now(),updated_at=now() WHERE customer_id=$1 AND enabled_at IS NULL AND encrypted_secret=$2 RETURNING customer_id", [customerId, result.rows[0].encrypted_secret]);
+  if (!enabled.rows.length) throw new AuthError("MFA_SETUP_CHANGED", 409);
   await query(`INSERT INTO audit_events (customer_id,event_type,actor_type,event_summary,evidence) VALUES ($1,'MFA_ENABLED','USER','客户启用 TOTP 多因素认证','{}'::jsonb)`, [customerId]);
   return { enabled: true };
 }

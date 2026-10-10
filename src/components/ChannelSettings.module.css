@@ -1,4 +1,7 @@
 .stage { min-height: 100dvh; display: grid; place-items: center; padding: 28px 18px; background: var(--paper); }
+.stage { --ink: #292333; --muted: #746d7d; --line: #e5e1eb; --accent: #70538f; --accent-soft: #eee7f6; background: #f8f9fb; }
+.confirmActions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
+.confirmActions button { min-height: 48px; padding: 10px; border: 1px solid var(--line); border-radius: 13px; background: white; cursor: pointer; font-size: 14px; }.confirmActions button:last-child { color: white; background: var(--ink); border-color: var(--ink); }.confirmActions button:disabled { opacity: .5; cursor: default; }
 .panel { width: min(100%, 560px); min-height: 680px; padding: 30px 32px; display: flex; flex-direction: column; background: var(--white); border: 1px solid var(--line); border-radius: 30px; box-shadow: 0 24px 70px rgba(23,33,27,.09); }
 .panel > header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
 .panel > header a { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; }

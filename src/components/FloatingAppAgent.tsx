@@ -40,8 +40,10 @@ function StepList({ items, compact = false }: { items: Step[]; compact?: boolean
   </div>;
 }
 
-export function FloatingAppAgent({ rootRef, configured, openSignal, transport = bankTransport }: { rootRef: RefObject<HTMLElement | null>; configured: boolean; openSignal: number; transport?: AppAgentTransport }) {
+export function FloatingAppAgent({ rootRef, configured, openSignal, closeSignal = 0, onOpenChange, transport = bankTransport }: { rootRef: RefObject<HTMLElement | null>; configured: boolean; openSignal: number; closeSignal?: number; onOpenChange?: (open: boolean) => void; transport?: AppAgentTransport }) {
   const [open, setOpen] = useState(false);
+  const [observedCloseSignal, setObservedCloseSignal] = useState(closeSignal);
+  if (observedCloseSignal !== closeSignal) { setObservedCloseSignal(closeSignal); setOpen(false); }
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [run, setRun] = useState<AppAgentView | null>(null);
@@ -227,6 +229,7 @@ export function FloatingAppAgent({ rootRef, configured, openSignal, transport = 
     if (rootRef.current) setPageName(captureAppPage(rootRef.current).name);
     setOpen(true);
   }, [openSignal, pause, rootRef]);
+  useEffect(() => { onOpenChange?.(open); }, [open, onOpenChange]);
   const question = run?.pending?.action.type === "question" ? run.pending.action : null;
   const active = Boolean(run?.pending);
   const status = run?.status === "PAUSED" ? "你已接管 · 已暂停" : run?.status === "HANDOFF" ? "等待你确认或验证"
@@ -244,7 +247,7 @@ export function FloatingAppAgent({ rootRef, configured, openSignal, transport = 
       <header><span><Sparkles size={19} /><b>BankPilot</b></span><button onClick={() => setOpen(false)} aria-label="收起助手"><ChevronDown size={21} /></button><button onClick={() => { pause(); setOpen(false); }} aria-label="关闭助手面板"><X size={19} /></button></header>
       <p className={styles.context}>已共享：{pageName} · 密码和验证码不共享</p>
       <div className={styles.messages}>
-        {!messages.length && !run && <p className={styles.intro}>告诉我你想办理什么。我可以查看当前页面，并在你允许后帮你操作。</p>}
+        {!messages.length && !run && <><p className={styles.intro}>告诉我你想办理什么。我会先核对页面信息，必要时向你追问。涉及账户操作，由你确认。</p><div className={styles.choices}>{["查一下我的余额", "分析本月账单", "查看我的卡片"].map(prompt => <button key={prompt} disabled={busy || !configured} onClick={() => send(prompt)}>{prompt}</button>)}</div><a className={styles.channelLink} href="/channels">连接 QQ / 企业微信</a></>}
         {messages.map((message, index) => <p key={index} className={message.role === "user" ? styles.user : styles.assistant}>{message.text}</p>)}
         {run && <p className={styles.assistant}>{run.message}</p>}
         <StepList items={steps} />
@@ -253,7 +256,7 @@ export function FloatingAppAgent({ rootRef, configured, openSignal, transport = 
         {(run?.status === "PAUSED" || run?.status === "HANDOFF") && !question && <div className={styles.controls}><button disabled={busy} onClick={continueRun}>{run.controlGranted ? "继续 · 重新读取页面" : run.status === "HANDOFF" ? "我已操作 · 查看页面" : "允许代操作"}</button><button disabled={busy} onClick={cancel}>结束</button></div>}
         {busy && <p className={styles.progress}>正在处理…</p>}
         {error && <p role="alert" className={styles.error}>{error}</p>}
-        {!configured && <p className={styles.error}>模型尚未配置，暂时不能启动代操作。</p>}
+        {!configured && <p className={styles.error}>助手服务暂不可用，你仍可通过页面办理业务。</p>}
         <div ref={historyEnd} />
       </div>
       <form onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}><input aria-label="向悬浮助手描述需求或回答问题" placeholder={question ? "选择选项，或直接输入…" : "描述你想办理的业务…"} value={input} onChange={(event) => setInput(event.target.value)} maxLength={1000} /><button aria-label="发送给悬浮助手" disabled={!configured || busy || !input.trim()}><Send size={18} /></button></form>

@@ -66,7 +66,7 @@ test("a trusted user touch cancels the highlighted click; continue observes the 
   const state = await setup(page, "pause");
   await page.getByRole("button", { name: "允许代操作" }).click();
   await expect(page.locator('[data-agent-id="nav-cards"][data-agent-highlight]')).toBeVisible();
-  await page.getByRole("button", { name: "隐藏或显示余额" }).click();
+  await page.getByRole("button", { name: "隐藏余额", exact: true }).click();
   await expect(page.getByRole("button", { name: "打开悬浮助手" })).toContainText("已暂停");
   await page.waitForTimeout(650); // Longer than the visible action highlight; the queued click must not run.
   await expect(page.getByRole("heading", { name: "我的卡" })).toHaveCount(0);

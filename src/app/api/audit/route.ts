@@ -23,7 +23,7 @@ export async function GET(request: Request) {
         WHERE t.customer_id=$1 OR EXISTS (SELECT 1 FROM transfers x WHERE x.operation_id=p.operation_id AND x.customer_id=$1)
         ORDER BY p.created_at DESC LIMIT 30`, [customerId]),
       query(`SELECT id,tool_name,input_summary,outcome,operation_id,created_at FROM mcp_invocations WHERE customer_id=$1 ORDER BY created_at DESC LIMIT 40`, [customerId]),
-      query(`SELECT id,task_id,direction,event_type,payload_summary,outcome,created_at
+      query(`SELECT id,task_id,channel_type,direction,event_type,payload_summary,outcome,created_at
         FROM channel_events WHERE customer_id=$1 ORDER BY created_at DESC LIMIT 60`, [customerId]),
       query(`SELECT id,channel_type,status,bound_at,last_seen_at,revoked_at
         FROM channel_identities WHERE customer_id=$1 ORDER BY bound_at DESC`, [customerId]),
