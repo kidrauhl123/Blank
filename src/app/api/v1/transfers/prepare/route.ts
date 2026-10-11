@@ -13,7 +13,7 @@ const schema = z.object({
 export async function POST(request: Request) {
   try {
     assertSameOrigin(request);
-    const principal = await authenticateRequest(request, "transfers:prepare");
+    const principal = await authenticateRequest(request);
     const input = schema.parse(await request.json());
     return Response.json(await prepareTransfer(principal.customerId, input), { status: 201 });
   } catch (error) {

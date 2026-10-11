@@ -50,6 +50,8 @@ rsync -az \
   --exclude .env.production \
   --exclude deploy/.env.production \
   --exclude backups \
+  --exclude releases \
+  --exclude DEPLOYED_COMMIT \
   --exclude .playwright-cli \
   ./ CONTABO-jp:/opt/bankpilot/
 ```
@@ -99,6 +101,12 @@ docker volume rm bankpilot_nanobot
 
 旧个人微信连接及用户自建机器人绑定不会迁移到官方渠道。QQ、企业微信使用现有官方 Worker，用户在 `/channels` 重新走银行账户绑定流程。
 
+### 从外部工具平台升级
+
+新版删除对外 MCP、OpenAPI、开发者中心和客户令牌接口。发布前备份，停止旧应用后执行 `013_retire_external_access.sql`：撤销全部旧客户凭据，将客户端和令牌改名归档，调用记录迁入 `external_access_history`；银行数据与会话不清空。未完成的历史 MCP 任务取消、线程关闭，新增此类渠道被拒绝。详见 [外部接入退役](EXTERNAL_ACCESS_RETIREMENT.md)。
+
+从服务器环境中删除 `MCP_ALLOWED_ORIGINS`；自动发布脚本会处理该项。QQ/企微内部适配令牌及模型服务密钥继续使用，不属于被退役的客户令牌。发布验收检查 013、归档凭据撤销、旧地址 404 和银行 APP 拒绝 Authorization 头。
+
 ## 检查
 
 ```bash
@@ -121,18 +129,17 @@ ssh CONTABO-jp 'cd /opt/bankpilot && \
 ssh CONTABO-jp 'docker exec bankpilot-postgres pg_dump -U bankpilot -d bankpilot -Fc' > bankpilot.dump
 ```
 
-没有“恢复演示数据”命令，因为项目不再维护任何预置业务数据。需要清理测试数据时应先备份并单独走受控运维流程。
+五用户模拟历史仅在首次初始化时生成，不提供“重新进入即重置”或公开恢复入口。需要清理测试数据时应先备份并单独走受控运维流程。
 
 ## 域名
 
-`deploy/Caddyfile.bankpilot` 从 `BANKPILOT_DOMAIN` 读取站点域名。更换正式域名时只更新服务器环境和 DNS/Cloudflare 配置，不把公网 IP 写入仓库。MCP 客户端使用同一 HTTPS 域名下的 `/api/mcp`。
+`deploy/Caddyfile.bankpilot` 从 `BANKPILOT_DOMAIN` 读取站点域名。更换正式域名时只更新服务器环境和 DNS/Cloudflare 配置，不把公网 IP 写入仓库。
 
-正式访问地址为 `https://bank.jung.edu.pl`，MCP 入口为 `https://bank.jung.edu.pl/api/mcp`。
+正式访问地址为 `https://bank.jung.edu.pl`。
 服务器私有环境文件需要同步设置：
 
 ```dotenv
 BANKPILOT_PUBLIC_URL=https://bank.jung.edu.pl
-MCP_ALLOWED_ORIGINS=https://bank.jung.edu.pl
 ```
 
 先确认新域名的 HTTPS 证书签发成功，再重新创建应用容器，使公开地址和 IM 授权链接同时生效；不需要重建镜像或修改数据库：
@@ -142,7 +149,7 @@ docker compose --env-file deploy/.env.production -f deploy/compose.production.ym
   up -d --no-deps --wait app
 ```
 
-旧域名的网页跳转到新域名，旧 `/api/*` 暂时保留反向代理以兼容现有无浏览器 Origin 的 MCP 客户端。新接入一律使用正式域名。浏览器登录状态和 PWA 安装属于各自域名，换域名后需重新登录，并从新地址重新添加到主屏幕。
+银行写操作只接受 `BANKPILOT_PUBLIC_URL` 的完整 Origin；旧域名的过渡代理也不能恢复已退休的工具接口。浏览器登录状态和 PWA 安装属于各自域名，换域名后需重新登录，并从新地址重新添加到主屏幕。
 
 共享 Caddy 的实际配置在 `/opt/premsir-chat/source/Caddyfile.production`。修改前备份，保留其他站点，校验后再热加载。如果宿主机配置曾被原子替换，容器的单文件 bind mount 可能仍指向旧 inode：热加载前必须比较宿主机与容器内文件的校验和；不一致时可将已校验的完整配置复制到容器独立路径并从该路径热加载。宿主机配置仍须保存完整新版本，供容器下次启动挂载使用，不能仅修改容器临时文件。
 

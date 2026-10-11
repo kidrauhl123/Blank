@@ -6,9 +6,9 @@
 |---|---|---|
 | GREEN | 意图确认后自动查询 | 余额、流水、账单、卡片、订阅、已核验产品 |
 | YELLOW | 展示金额、对象、影响、操作编号后明确确认 | 小额转账、虚拟卡申请、锁卡 |
-| RED | TOTP 多因素认证；三次失败熔断 | 日累计超过 ¥1,000、非可信设备或异常行为 |
+| RED | TOTP 多因素认证；单挑战三次失败锁定 | 日累计超过 ¥1,000；设备/行为画像仍待实现 |
 
-外部 Agent 只可创建转账草稿。最终授权端点只接受银行 APP 会话，不接受 API 令牌。
+对外 MCP、OpenAPI、开发者中心和客户 API 令牌已退役。银行 APP 接口只接受会话，任何 Authorization 头均拒绝；旧令牌不能读取或创建草稿。历史凭据全部撤销归档，旧调用审计保留，见 [外部接入退役](EXTERNAL_ACCESS_RETIREMENT.md)。
 
 QQ 与企业微信属于受控用户渠道而不是新的银行核心。黄色操作可在绑定身份的原生按钮内明确确认；红色操作只能跳转 BankPilot，并由现有银行会话 + TOTP 完成。不同渠道身份、任务 ID 与操作 ID 必须同时匹配。
 
@@ -17,13 +17,13 @@ QQ 与企业微信属于受控用户渠道而不是新的银行核心。黄色�
 - 演示身份：只允许五个固定模拟 profile key；注册与密码登录 HTTP 路由已移除。这些是公开共享测试身份，不用于验证真实客户身份。
 - 会话：256 位随机不透明令牌，仅保存 SHA-256 摘要；HttpOnly、Secure（生产）、SameSite=Lax、7 天过期、可撤销。
 - MFA：RFC 6238 TOTP，服务端密钥以 AES-256-GCM 加密；允许前后一个 30 秒窗口。
-- CSRF/DNS rebinding：Cookie 写操作校验 Origin；MCP Origin 使用精确白名单。
-- 数据隔离：所有客户查询和写入都带已认证 `customer_id`，令牌也绑定客户。
+- CSRF：Cookie 写操作必须携带正式 APP 的完整 Origin；不允许 Bearer 豁免，不依赖 Host/x-forwarded-host 授权。普通 GET/HEAD 可无 Origin，仍需银行会话。
+- 数据隔离：所有客户查询和写入都带已认证 `customer_id`，历史外部审计也按客户隔离。
 - Prompt Injection：用户文本被视为不可信数据；模型仅能输出固定 Schema；工具与策略层不接受模型越权指令。
 - 幻觉防护：回复模型只能看到银行工具返回的 `BANK_FACTS`；未配置 AI 时直接失败，不回退到写死回复。
 - 资金完整性：数据库事务、行锁、正整数金额、非负客户余额、唯一操作编号、平衡双分录。
 - 转账累计：提交事务以客户为粒度串行，锁等待后按数据库时间重算上海当日成功金额；超过 1000 元的黄色草稿持久化升级 RED/MFA 并暂停，APP/IM 均不提前报告成功。见 [提交时日累计校验](TRANSFER_QUOTA.md)。
-- 审计：模拟用户初始化、用户选择、入金、转账准备/成功、MFA、卡片、令牌和 Agent DAG 均留痕。
+- 审计：模拟用户初始化、用户选择、入金、转账准备/成功、MFA、卡片和 Agent 任务均留痕；旧外部凭据/调用历史保留。
 - 代码沙箱：系统不向 LLM 暴露代码执行、Shell、SQL 或任意网络请求工具，因此当前没有模型生成代码的执行面。
 - 数据最小化：卡片只保存脱敏尾号；密码、TOTP 动态码和原始 API 令牌不写入日志。
 - 持久化 Agent：LangGraph checkpoint 独立 schema；业务租户关系由 BankPilot 表维护，不信任 checkpoint 内的 customer id。
@@ -40,15 +40,16 @@ Agent 任务和每个 DAG 节点均有状态字段，可进入 `NEEDS_INPUT`、`
 
 ## 已知风险
 
+依赖审计（2026-10-11）：Next.js 升至 16.3.8，sharp 至 0.35.5、source-map-js 至 1.2.2，移除 MCP SDK 后核对生产依赖。Next 修复范围参考 [官方安全公告](https://github.com/advisories/GHSA-mcj8-r9mp-w47p)。`npm audit --omit=dev` 仍报告 4 个 high 项，来源为 Deep Agents → fast-glob / micromatch / braces 链；[braces 公告](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) 暂无修复版本。当前页面工具禁用 glob/grep/ls，read_file 只允许固定技能文件；这缩小输入面，不代表依赖漏洞已修复。继续跟踪上游，不通过将 SDK 降到旧版 0.0.2 消除告警。
+
 - 比赛沙箱不连接真实 KYC、AML、制裁筛查、银行卡清算、短信、人脸或 U 盾系统。
-- personal access token 适合受控测试，不等同完整 OAuth 2.1 授权服务器。
 - 审计记录位于主 PostgreSQL，尚未同步到 WORM/独立 SIEM。
 - TOTP 初始密钥暂以手工录入方式交付，尚未提供二维码和恢复码。
 - 设备可信度目前由策略输入占位，尚未完成设备绑定和风险画像。
 - TOTP 仍未原子消费时间步，动态码可以在有效窗口复用；失败计数只针对单挑战，尚无跨草稿熔断。初次绑定已禁止覆盖启用密钥，换绑与恢复仍缺失。
 - 模型结果说明仍主要受提示词约束，尚无服务端事实校验保证；页面动作完成不能当作银行业务回执。
 - 理财数据管道和申购尚未开放，避免用虚构产品满足场景。
-- QQ 与企业微信 Bot 凭据需在各自腾讯开放平台创建；没有凭据时对应 Worker profile 保持关闭，PWA 与 MCP 不受影响。
+- QQ 与企业微信 Bot 凭据需在各自腾讯开放平台创建；没有凭据时对应 Worker profile 保持关闭，APP 可独立运行。
 - 渠道 outbox 达到 8 次失败后保留为 `FAILED`，目前需要运维审计与人工重放，尚未接入独立告警平台。
 
 这些限制会在答辩中明确，不将比赛沙箱描述为可直接承载真实资金的生产银行。

@@ -122,7 +122,7 @@ test("demo verifier enrollment explains the shared account and requires explicit
 
 test("audit view reflects failed nodes and unavailable service health", async ({ page }) => {
   await page.route("**/api/health", route => route.fulfill({ status: 503, json: { status: "degraded", database: "unavailable" } }));
-  await page.route("**/api/audit", route => route.fulfill({ json: { tasks: [{ id: cardId, user_utterance: "失败的任务", intent: "TRANSFER", status: "FAILED", risk_level: "RED", plan: [], created_at: new Date().toISOString(), nodes: [{ key: "transfer", tool: "transfer", status: "FAILED", dependencies: [], output: {} }, { key: "pending", tool: "confirm", status: "AWAITING_AUTH", dependencies: [], output: {} }, { key: "unknown", tool: "unknown", status: "UNRECOGNIZED", dependencies: [], output: {} }] }], events: [], policies: [], mcpInvocations: [], channelEvents: [], channels: [], outbox: [] } }));
+  await page.route("**/api/audit", route => route.fulfill({ json: { tasks: [{ id: cardId, user_utterance: "失败的任务", intent: "TRANSFER", status: "FAILED", risk_level: "RED", plan: [], created_at: new Date().toISOString(), nodes: [{ key: "transfer", tool: "transfer", status: "FAILED", dependencies: [], output: {} }, { key: "pending", tool: "confirm", status: "AWAITING_AUTH", dependencies: [], output: {} }, { key: "unknown", tool: "unknown", status: "UNRECOGNIZED", dependencies: [], output: {} }] }], events: [], policies: [], externalAccessHistory: [], channelEvents: [], channels: [], outbox: [] } }));
   await page.goto("/audit");
   await expect(page.getByRole("status")).toContainText("服务状态读取失败");
   await expect(page.getByText("所有系统正常")).toHaveCount(0);

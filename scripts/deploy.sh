@@ -63,7 +63,7 @@ fi
 # Do not let Docker's non-interactive exec drain the SSH script's stdin.
 bash scripts/migrate.sh --env-file deploy/.env.production -f deploy/compose.production.yml < /dev/null
 
-sed '/^[[:space:]]*NANOBOT_/d; /^[[:space:]]*BANKPILOT_NANOBOT_/d' \
+sed '/^[[:space:]]*NANOBOT_/d; /^[[:space:]]*BANKPILOT_NANOBOT_/d; /^[[:space:]]*MCP_ALLOWED_ORIGINS=/d' \
   deploy/.env.production > "$backup_dir/production.cleaned.env"
 chmod 600 "$backup_dir/production.cleaned.env"
 cp "$backup_dir/production.cleaned.env" deploy/.env.production
@@ -83,6 +83,12 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='009_retire_legacy_agent.sql') THEN
     RAISE EXCEPTION 'Retirement migration is missing';
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='013_retire_external_access.sql')
+     OR to_regclass('public.api_tokens') IS NOT NULL
+     OR to_regclass('public.api_clients') IS NOT NULL
+     OR to_regclass('public.mcp_invocations') IS NOT NULL THEN
+    RAISE EXCEPTION 'External access retirement is incomplete';
+  END IF;
 END;
 $$;
 SQL
@@ -94,10 +100,12 @@ docker exec -i bankpilot-app node - <<'JS'
   if (!response.ok || health.database !== 'connected' || health.agentRuntime !== 'ready') {
     throw new Error('Application or LangGraph is not ready');
   }
-  for (const path of ['/api/nanobot', '/api/nanobot/channels', '/api/internal/nanobot/result']) {
+  for (const path of ['/api/nanobot', '/api/nanobot/channels', '/api/internal/nanobot/result', '/api/mcp', '/api/openapi', '/developers', '/api/v1/developer/tokens', '/api/v1/developer/tokens/retired']) {
     const result = await fetch('http://127.0.0.1:3000' + path);
     if (result.status !== 404) throw new Error('Retired endpoint remains: ' + path);
   }
+  const tokenAttempt = await fetch('http://127.0.0.1:3000/api/bootstrap', { headers: { authorization: 'Bearer retired-client' } });
+  if (tokenAttempt.status !== 403) throw new Error('External credentials still accepted by bank APP');
   console.log(JSON.stringify({ database: health.database, agentRuntime: health.agentRuntime, aiConfigured: health.ai.configured }));
 })().catch(() => { console.error('Application verification failed'); process.exitCode = 1; });
 JS

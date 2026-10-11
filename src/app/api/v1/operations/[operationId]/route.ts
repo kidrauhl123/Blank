@@ -4,7 +4,7 @@ import { apiError } from "@/lib/http";
 
 export async function GET(request: Request, context: RouteContext<"/api/v1/operations/[operationId]">) {
   try {
-    const principal = await authenticateRequest(request, "operations:read");
+    const principal = await authenticateRequest(request);
     const { operationId } = await context.params;
     return Response.json(await getOperation(principal.customerId, operationId));
   } catch (error) {

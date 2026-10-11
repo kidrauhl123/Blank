@@ -22,14 +22,15 @@ can use the banking core; neither UI is a dependency of the other.
 - Activity filters operate on the latest 50 transactions, explicitly labelled.
 - Transfers and cards keep their existing native bank flows.
 
-These new endpoints are session-only. External Agent access continues through
-the existing scoped APIs/MCP; it does not inherit bank-session permissions.
+Bank APP endpoints are session-only. External MCP, developer pages and customer
+API tokens are retired. Official IM workers use separate channel adapter
+credentials, which cannot authenticate to bank APP endpoints.
 
 ## Verification
 
 `npm test` runs calendar and existing regression tests. Database integration tests
 are opt-in. Create an isolated PostgreSQL cluster with role `bankpilot_test`, apply
-`db/migrations/001` through `005`, then run:
+all files in `db/migrations` in order, then run:
 
 ```sh
 BANKPILOT_DB_TESTS=1 DATABASE_URL=postgresql://bankpilot_test@127.0.0.1:55439/postgres npm test

@@ -19,7 +19,6 @@ export function apiError(error: unknown, fallback = "REQUEST_FAILED") {
     OPERATION_NOT_FOUND: 404,
     OPERATION_NOT_EXECUTABLE: 409,
     CARD_NOT_FOUND: 404,
-    TOKEN_NOT_FOUND: 404,
     AUTH_INVALID: 401,
     AUTH_EXPIRED: 401,
     AUTH_FUSE_ACTIVE: 423,
@@ -51,13 +50,10 @@ function authMessage(code: string) {
     DEMO_PROFILE_NOT_FOUND: "请选择列表中的模拟用户",
     AUTHENTICATION_REQUIRED: "请先登录",
     SESSION_EXPIRED: "登录已过期，请重新登录",
-    INVALID_API_TOKEN: "Agent 访问令牌无效或已过期",
-    INSUFFICIENT_SCOPE: "当前 Agent 未获得这项权限",
     INVALID_CREDENTIALS: "手机号或密码不正确",
     LOGIN_TEMPORARILY_LOCKED: "连续登录失败，账户已暂时锁定 15 分钟",
     PHONE_ALREADY_REGISTERED: "该手机号已经注册",
     CUSTOMER_UNAVAILABLE: "账户当前不可用",
-    INVALID_SCOPE: "包含不支持的 Agent 权限",
     INVALID_REGISTRATION: "请检查姓名、手机号和密码格式",
     MFA_INVALID: "动态验证码不正确",
     MFA_ALREADY_CONFIGURED: "验证器已启用。当前入口仅支持首次设置，请勿覆盖已有验证器。",
@@ -67,8 +63,6 @@ function authMessage(code: string) {
     DEPOSIT_REQUIRES_BANK_APP: "入金只能在银行 APP 内操作",
     CARD_ISSUANCE_REQUIRES_BANK_APP: "开卡只能在银行 APP 内操作",
     CARD_MANAGEMENT_REQUIRES_BANK_APP: "卡片写操作只能在银行 APP 内完成",
-    TOKEN_CREATION_REQUIRES_BANK_APP: "访问令牌只能在银行 APP 内签发",
-    TOKEN_MANAGEMENT_REQUIRES_BANK_APP: "访问令牌只能在银行 APP 内管理",
     AUTHORIZATION_REQUIRES_BANK_APP: "最终授权必须回到银行 APP 完成",
     MFA_SETUP_REQUIRES_BANK_APP: "多因素认证只能在银行 APP 内设置",
     INVALID_ORIGIN: "请求来源未获允许",
@@ -91,7 +85,6 @@ function publicMessage(code: string) {
     OPERATION_NOT_FOUND: "操作不存在或不属于当前用户",
     OPERATION_NOT_EXECUTABLE: "操作当前不可执行",
     CARD_NOT_FOUND: "没有找到可锁定的卡片",
-    TOKEN_NOT_FOUND: "访问令牌不存在",
     AUTH_INVALID: "强验证失败，资金未转出",
     AUTH_EXPIRED: "授权已过期，请重新发起",
     AUTH_FUSE_ACTIVE: "连续验证失败，操作已熔断",
@@ -116,9 +109,9 @@ function publicMessage(code: string) {
 }
 
 export function assertSameOrigin(request: Request) {
-  if (request.headers.get("authorization")?.startsWith("Bearer ")) return;
+  if (request.headers.has("authorization")) throw new AuthError("BANK_APP_SESSION_REQUIRED", 403);
   const origin = request.headers.get("origin");
-  if (!origin) return;
-  const forwardedHost = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-  if (!forwardedHost || new URL(origin).host !== forwardedHost) throw new AuthError("INVALID_ORIGIN", 403);
+  if (!origin && ["GET", "HEAD"].includes(request.method)) return;
+  const expected = new URL(process.env.BANKPILOT_PUBLIC_URL || request.url).origin;
+  if (!origin || origin !== expected) throw new AuthError("INVALID_ORIGIN", 403);
 }

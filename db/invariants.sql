@@ -2,6 +2,14 @@
 
 DO $$
 BEGIN
+  IF to_regclass('public.api_tokens') IS NOT NULL
+     OR to_regclass('public.api_clients') IS NOT NULL
+     OR to_regclass('public.mcp_invocations') IS NOT NULL
+     OR EXISTS (SELECT 1 FROM retired_api_tokens WHERE revoked_at IS NULL)
+     OR EXISTS (SELECT 1 FROM retired_api_clients WHERE status<>'REVOKED') THEN
+    RAISE EXCEPTION 'External access invariant failed: retirement incomplete';
+  END IF;
+
   IF EXISTS (
     SELECT 1 FROM ledger_entries
     GROUP BY ledger_transaction_id

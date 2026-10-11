@@ -34,7 +34,7 @@ docker compose --env-file deploy/.env.production \
   -f deploy/compose.production.yml --profile wecom up -d --build
 ```
 
-未取得 Bot 凭据前不要启用 `wecom` profile。银行 PWA、内置 Agent 和 MCP 可独立运行。
+未取得 Bot 凭据前不要启用 `wecom` profile。银行 APP 与内置 Agent 可独立运行。
 
 ## 用户流程
 

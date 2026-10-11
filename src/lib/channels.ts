@@ -12,7 +12,7 @@ import { query, withTransaction } from "./db";
 import { writeAudit } from "./audit";
 
 export type ChannelType = "WECOM" | "QQ";
-export type AgentChannel = "PWA" | ChannelType | "MCP";
+export type AgentChannel = "PWA" | ChannelType;
 
 const BINDING_TTL_MS = 10 * 60 * 1000;
 

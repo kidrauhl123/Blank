@@ -5,22 +5,24 @@
 BankPilot 将“会聊天的模型”和“能改变资金状态的银行核心”严格分开。LLM 只能提出结构化意图与计划；确定性的策略引擎决定风险；只有银行核心能在数据库事务中执行操作。
 
 ```text
-PWA ─ Session ─────────┐
-QQ / 企业微信 ─ Worker ┴─ LangGraph Runtime ── intent nodes ── interrupt()
-                               │                          │
-                               │ checkpoints              │ resume
-                               ▼                          ▼
-                         PostgreSQL ◀──── Policy + Authorization Gateway
-                               ▲                  │ confirm / TOTP
-                               │                  ▼
-外部工具客户端 ─ MCP / REST ─────────────── Bank Core ─ double-entry ledger
+APP ─ Bank Session ─┬─ 原生银行页面 ────────────────┐
+                    └─ Deep Agents / LangGraph ─ 页面动作 / 人工确认
+QQ / 企业微信 ─ 官方 Worker ─ LangGraph ─ interrupt() / 授权链接
+                                                      │
+                                      Policy + Authorization
+                                                      │
+                                                Bank Core
+                                                      │
+                              PostgreSQL / 双分录账本 / 审计
 ```
 
 ## 关键组件
 
 ### PWA
 
-Next.js App Router + React。入口选择五位固定模拟用户，支持账户、流水、入金、转账、卡片、安全中心、开发者中心和 Agent 对话。所有写请求使用 HttpOnly SameSite Cookie，并校验 Origin。
+Next.js App Router + React。入口选择五位固定模拟用户，支持账户、流水、入金、转账、卡片、安全中心和 Agent 对话。银行接口只接受 HttpOnly SameSite Cookie 会话；写请求必须匹配正式 APP 完整 Origin，不信任转发 Host 作为来源授权。提供 Authorization 头时拒绝，不回落到 Cookie。
+
+主页面助手通过 Deep Agents SDK 在 LangGraph 上进行页面工具循环，持久化到 `app_agent_runs`。银行动作按钮区分导航、填写、准备和本人确认；模型动作完成不是银行回执。现有 IM 业务 Runtime 如下，尚未与页面对话线程合并。
 
 ### LangGraph Agent Runtime
 
@@ -36,21 +38,21 @@ Next.js App Router + React。入口选择五位固定模拟用户，支持账户
 
 绿色任务直接回复；黄色任务使用原生按钮确认；红色任务只发送银行 APP 深链，由银行会话和 TOTP 完成。消息按平台事件 ID 去重，异步结果经按渠道隔离的事务 outbox 重试投递。QQ 群聊不进入银行 Agent，只引导用户转到 C2C 私聊，避免账户信息在群内暴露。
 
-### MCP / REST Adapter
+### 银行内部业务接口
 
-MCP 使用官方 TypeScript SDK 的 Streamable HTTP transport。每次请求按令牌 scope 动态注册工具。REST 与 MCP 都调用同一个 `bank-core.ts`，不复制业务规则。
+APP 的 `/api/v1/*` 接口服务银行页面；QQ/企微通过各自认证的内部渠道 API 调用相同 `bank-core.ts`。对外 MCP、OpenAPI、开发者页面和客户 API 令牌认证已退役，不再向任意外部 Agent 发布银行工具。
 
 ### Policy + Authorization
 
 - GREEN：余额、流水、账单分析、卡片/订阅/理财查询，可自动执行。
 - YELLOW：小额转账、虚拟卡申请、锁卡，先展示完整单据并获得明确确认。
-- RED：日累计转账超过 ¥1,000 或设备/行为风险规则升级，要求 TOTP 动态码。
+- RED：日累计转账超过 ¥1,000，要求 TOTP 动态码。设备与跨草稿行为画像尚未落实。
 
-模型提供的风险等级不被信任。策略裁决写入 `policy_decisions`，授权凭证绑定操作编号且 10 分钟过期。
+模型提供的风险等级不被信任。策略裁决写入 `policy_decisions`，红色挑战关联操作编号且 10 分钟过期。授权指纹比对、黄色草稿期限和 TOTP 防重放仍待完成。
 
 ### Bank Core 与 PostgreSQL
 
-金额统一使用人民币分的整数。转账在单一数据库事务中锁定付款与收款账户，检查余额，写入一条账本交易和金额和为零的借贷分录，再同步账户快照和用户流水。失败则整体回滚。
+金额统一使用人民币分的整数。转账事务先取得付款客户锁，再按固定顺序锁定付款与收款账户；锁等待后重算上海当日成功金额。需要升级时保存红色挑战并暂停；授权满足后写平衡借贷分录、账户快照和用户流水，失败则整体回滚。
 
 关键数据域：
 
@@ -60,11 +62,11 @@ MCP 使用官方 TypeScript SDK 的 Streamable HTTP transport。每次请求按�
 - Agent：`agent_tasks`、`task_nodes`、`policy_decisions`
 - Agent Runtime：`agent_threads`、`agent_runtime_runs`、`langgraph.*`
 - 渠道：`channel_identities`、`channel_binding_tokens`、`channel_events`、`channel_outbox`
-- 外部接入：`api_clients`、`api_tokens`、`mcp_invocations`
+- 已退役历史：`retired_api_clients`、`retired_api_tokens`、`external_access_history`；凭据全部撤销，仅审计台查询历史调用
 - 审计：`audit_events`
 
 ## 数据真实性边界
 
-这里的“真实”指系统不种入虚构业务记录：客户由本人注册，余额由本人声明入金或系统内转账产生，卡片由本人申请。它仍是比赛沙箱，不连接央行清算、银联或真实商业银行核心，因此不能承载真实货币。
+比赛入口使用五个公开共享模拟用户和标记 `DEMO_SEED` 的预置历史；后续余额、卡片和交易依据实际沙箱数据库操作返回，重新进入不重置。共享身份不等于真实客户认证。系统不连接央行清算、银联或商业银行核心，不能承载真实货币。
 
 理财产品没有可靠来源就保持空表。未来可增加经过许可的数据采集任务，并强制保存 `source_url`、发布时间、核验时间和原始事实。

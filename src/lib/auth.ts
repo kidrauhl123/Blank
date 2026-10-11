@@ -7,23 +7,9 @@ const scrypt = promisify(scryptCallback);
 export const SESSION_COOKIE = "bankpilot_session";
 const SESSION_DAYS = 7;
 
-export const API_SCOPES = [
-  "accounts:read",
-  "transactions:read",
-  "beneficiaries:read",
-  "transfers:prepare",
-  "operations:read",
-  "cards:read",
-  "subscriptions:read",
-  "products:read",
-] as const;
-
-export type ApiScope = typeof API_SCOPES[number];
 export type AuthPrincipal = {
   customerId: string;
-  kind: "SESSION" | "API_TOKEN";
-  scopes: Set<ApiScope | "*">;
-  clientId?: string;
+  kind: "SESSION";
 };
 
 export class AuthError extends Error {
@@ -208,24 +194,10 @@ export async function logoutSession(rawToken: string | undefined) {
   await query("UPDATE user_sessions SET revoked_at=now() WHERE token_hash=$1 AND revoked_at IS NULL", [sha256(rawToken)]);
 }
 
-export async function authenticateRequest(request: Request, requiredScope?: ApiScope): Promise<AuthPrincipal> {
-  const authorization = request.headers.get("authorization");
-  if (authorization?.startsWith("Bearer ")) {
-    const raw = authorization.slice(7).trim();
-    const result = await query<{ customer_id: string; scopes: ApiScope[]; client_id: string }>(
-      `UPDATE api_tokens t SET last_used_at=now()
-       FROM api_clients c,customers u
-       WHERE t.token_hash=$1 AND t.client_id=c.id AND t.customer_id=u.id
-         AND t.revoked_at IS NULL AND t.expires_at>now() AND c.status='ACTIVE' AND u.status='ACTIVE'
-       RETURNING t.customer_id,t.scopes,t.client_id`,
-      [sha256(raw)],
-    );
-    const row = result.rows[0];
-    if (!row) throw new AuthError("INVALID_API_TOKEN");
-    const principal: AuthPrincipal = { customerId: row.customer_id, kind: "API_TOKEN", scopes: new Set(row.scopes), clientId: row.client_id };
-    if (requiredScope && !principal.scopes.has(requiredScope)) throw new AuthError("INSUFFICIENT_SCOPE", 403);
-    return principal;
-  }
+export async function authenticateRequest(request: Request): Promise<AuthPrincipal> {
+  // APP identity comes only from its bank session. Do not fall back to cookies
+  // when a retired client token or an internal adapter credential is supplied.
+  if (request.headers.has("authorization")) throw new AuthError("BANK_APP_SESSION_REQUIRED", 403);
 
   const raw = parseCookies(request.headers.get("cookie")).get(SESSION_COOKIE);
   if (!raw) throw new AuthError("AUTHENTICATION_REQUIRED");
@@ -238,7 +210,7 @@ export async function authenticateRequest(request: Request, requiredScope?: ApiS
     [sha256(raw)],
   );
   if (!result.rows[0]) throw new AuthError("SESSION_EXPIRED");
-  return { customerId: result.rows[0].customer_id, kind: "SESSION", scopes: new Set(["*"]) };
+  return { customerId: result.rows[0].customer_id, kind: "SESSION" };
 }
 
 export async function verifyCustomerPassword(customerId: string, password: string) {
@@ -279,29 +251,4 @@ export async function verifyCustomerTotp(customerId: string, code: string, clien
   const sql = "SELECT encrypted_secret FROM mfa_totp WHERE customer_id=$1 AND enabled_at IS NOT NULL";
   const result = client ? await client.query<{ encrypted_secret: string }>(sql, [customerId]) : await query<{ encrypted_secret: string }>(sql, [customerId]);
   return Boolean(result.rows[0] && verifyTotp(decryptSecret(result.rows[0].encrypted_secret), code));
-}
-
-export async function createApiToken(customerId: string, input: { name: string; scopes: ApiScope[] }) {
-  const invalid = input.scopes.filter((scope) => !API_SCOPES.includes(scope));
-  if (invalid.length) throw new AuthError("INVALID_SCOPE", 400);
-  return withTransaction(async (client) => {
-    const clientId = `bp_${randomBytes(8).toString("hex")}`;
-    const app = await client.query<{ id: string }>(
-      `INSERT INTO api_clients (customer_id,name,client_id) VALUES ($1,$2,$3) RETURNING id`,
-      [customerId, input.name, clientId],
-    );
-    const token = `bpt_${randomBytes(32).toString("base64url")}`;
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    await client.query(
-      `INSERT INTO api_tokens (client_id,customer_id,token_prefix,token_hash,scopes,expires_at)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
-      [app.rows[0].id, customerId, token.slice(0, 12), sha256(token), input.scopes, expiresAt],
-    );
-    await client.query(
-      `INSERT INTO audit_events (customer_id,event_type,actor_type,event_summary,evidence)
-       VALUES ($1,'API_TOKEN_CREATED','USER','客户创建第三方 Agent 访问令牌',$2::jsonb)`,
-      [customerId, JSON.stringify({ clientId, name: input.name, scopes: input.scopes, expiresAt })],
-    );
-    return { clientId, token, tokenPrefix: token.slice(0, 12), scopes: input.scopes, expiresAt };
-  });
 }

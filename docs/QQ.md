@@ -35,7 +35,7 @@ docker compose --env-file deploy/.env.production \
   -f deploy/compose.production.yml --profile qq up -d --build qq
 ```
 
-未取得 AppID/AppSecret 前不要启用 `qq` profile。PWA、内置 Agent、数据库与 MCP 不受影响。
+未取得 AppID/AppSecret 前不要启用 `qq` profile。银行 APP、内置 Agent 与数据库不受影响。
 
 ## 用户流程与安全边界
 
