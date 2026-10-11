@@ -40,7 +40,7 @@ REMOTE_BACKUP
 rsync -az --delete \
   --exclude .git --exclude node_modules --exclude .next \
   --exclude '.env' --exclude '.env.*' --exclude deploy/.env.production \
-  --exclude backups --exclude releases --exclude .playwright-cli \
+  --exclude backups --exclude releases --exclude DEPLOYED_COMMIT --exclude .playwright-cli \
   "$release_dir/" "$target:/opt/bankpilot/"
 
 ssh -o BatchMode=yes -o ConnectTimeout=10 "$target" bash -s -- "$commit_sha" "$release_stamp" <<'REMOTE_DEPLOY'
@@ -60,7 +60,8 @@ if docker container inspect bankpilot-app >/dev/null 2>&1; then
   docker stop bankpilot-app >/dev/null
 fi
 "${compose[@]}" up -d --wait postgres
-bash scripts/migrate.sh --env-file deploy/.env.production -f deploy/compose.production.yml
+# Do not let Docker's non-interactive exec drain the SSH script's stdin.
+bash scripts/migrate.sh --env-file deploy/.env.production -f deploy/compose.production.yml < /dev/null
 
 sed '/^[[:space:]]*NANOBOT_/d; /^[[:space:]]*BANKPILOT_NANOBOT_/d' \
   deploy/.env.production > "$backup_dir/production.cleaned.env"

@@ -9,7 +9,7 @@ fi
 
 for migration in db/migrations/*.sql; do
   version="$(basename "$migration")"
-  applied="$("${compose[@]}" exec -T postgres psql -U bankpilot -d bankpilot -Atc "SELECT 1 FROM schema_migrations WHERE version='$version'" 2>/dev/null || true)"
+  applied="$("${compose[@]}" exec -T postgres psql -U bankpilot -d bankpilot -Atc "SELECT 1 FROM schema_migrations WHERE version='$version'" < /dev/null 2>/dev/null || true)"
   if [[ "$applied" == "1" ]]; then
     echo "skip $version"
     continue
