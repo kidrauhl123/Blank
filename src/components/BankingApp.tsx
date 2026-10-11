@@ -152,7 +152,7 @@ function HomeView({ data, loading, visible, toggleVisible, onOpenAgent, onDeposi
   const categories = data?.statement.categories.slice(0, 3) ?? [];
   return <div className={styles.home}>
     <div className={styles.homeGreeting}><div><p>你的日常，轻松掌握</p><h1>你好，{data?.customer.display_name ?? "欢迎回来"}</h1></div><span>账户总览</span></div>
-    <LiquidBankCard className={styles.balanceBlock}><div className={styles.labelRow}><span>总资产 · CNY</span><button onClick={toggleVisible} aria-label={visible ? "隐藏余额" : "显示余额"} aria-pressed={!visible}>{visible ? <Eye size={18} /> : <EyeOff size={18} />}</button></div><div className={styles.balance}>{visible ? money(data.totalMinor) : "••••••"}</div><div className={styles.balanceMeta}><span>{loading ? "上次读取的账户资产" : "BankPilot · 账户资产"}</span><span>{data.accounts[0]?.masked_no ?? "暂无可用账户"}</span></div></LiquidBankCard>
+    <section className={styles.balanceBlock} aria-label="账户资产总览"><div className={styles.labelRow}><span>总资产 · CNY</span><button onClick={toggleVisible} aria-label={visible ? "隐藏余额" : "显示余额"} aria-pressed={!visible}>{visible ? <Eye size={18} /> : <EyeOff size={18} />}</button></div><div className={styles.balance}>{visible ? money(data.totalMinor) : "••••••"}</div><div className={styles.balanceMeta}><span>{loading ? "上次读取的账户资产" : "BankPilot · 账户资产"}</span><span>{data.accounts[0]?.masked_no ?? "暂无可用账户"}</span></div></section>
     <div className={styles.quickActions}>
       <button data-agent-id="open-transfer" data-agent-permission="navigate" disabled={loading || !data.accounts[0]} onClick={onTransfer}><span><ArrowUpRight /></span>转账</button>
       <button data-agent-id="open-deposit" data-agent-permission="navigate" disabled={loading || !data.accounts[0]} onClick={onDeposit}><span><Plus /></span>入金</button>

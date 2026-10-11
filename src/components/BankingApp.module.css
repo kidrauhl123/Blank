@@ -40,10 +40,10 @@
 .homeGreeting p { font-size: 12px; color: var(--muted); margin-bottom: 5px; }
 .homeGreeting h1 { font-size: 23px; line-height: 1.35; letter-spacing: -.035em; overflow-wrap: anywhere; }
 .homeGreeting > span { flex-shrink: 0; color: #777080; background: #eeedf2; border-radius: 20px; padding: 6px 10px; font-size: 11px; }
-.balanceBlock { padding: 20px 22px 22px; }
+.balanceBlock { padding: 20px 22px 22px; color: var(--ink); background: linear-gradient(135deg, #fff 0%, #f1edf7 100%); border: 1px solid #e5dfed; border-radius: 25px; box-shadow: 0 12px 28px -22px #392b5838, inset 0 1px 0 #ffffff; }
 .labelRow, .balanceMeta { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 14px; }
-.labelRow, .balanceMeta { color: #ffffffd9; font-size: 12px; }
-.labelRow button { width: 44px; height: 44px; margin: -9px -9px -9px 0; border: 0; background: none; color: #ffffffd9; cursor: pointer; display: grid; place-items: center; border-radius: 50%; }
+.balanceBlock .labelRow, .balanceBlock .balanceMeta { color: var(--muted); font-size: 12px; }
+.balanceBlock .labelRow button { width: 44px; height: 44px; margin: -9px -9px -9px 0; border: 0; background: var(--accent-soft); color: var(--accent); cursor: pointer; display: grid; place-items: center; border-radius: 50%; }
 .balance { margin: 27px 0 29px; font-size: clamp(30px, 9vw, 44px); line-height: 1.12; letter-spacing: -.055em; font-weight: 650; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .balanceMeta { gap: 10px; font-size: 11px; }
 .positive { color: var(--positive) !important; }
