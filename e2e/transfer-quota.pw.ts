@@ -30,6 +30,30 @@ test("a submission-time upgrade refreshes the yellow form to red and requires a 
   expect(submissions).toBe(2);
 });
 
+for (const refreshStatus of [401, 404]) {
+  test(`an upgrade followed by a ${refreshStatus} refresh blocks the stale confirmation`, async ({ page }) => {
+    const account = { id: "00000000-0000-4000-8000-000000000001", name: "活期账户", masked_no: "•• 1001", account_type: "CHECKING", available_balance_minor: "200000", currency: "CNY", status: "ACTIVE" };
+    const draft = { operationId: "TRF-UI-REFRESH", status: "AWAITING_AUTH", riskLevel: "YELLOW", requiredAuth: "CONFIRM", details: { amountMinor: 60000, sourceAccount: account, recipient: { name: "收款测试用户", phoneMasked: "990****0002", maskedAccount: "•• 1002" } } };
+    let submissions = 0;
+    await page.route("**/api/bootstrap", route => route.fulfill({ json: { customer: { display_name: "测试客户", phone: "99000000001", mfa_configured: true }, totalMinor: 200000, accounts: [account], cards: [], transactions: [], ai: { configured: true }, statement: { month: "2026-10", expenseMinor: 0, categories: [] } } }));
+    await page.route(`**/api/v1/operations/${draft.operationId}`, route => route.fulfill(submissions
+      ? { status: refreshStatus, json: { error: "OPERATION_UNAVAILABLE", message: "无法读取操作" } }
+      : { json: draft }));
+    await page.route(`**/api/v1/operations/${draft.operationId}/authorize`, route => {
+      submissions++;
+      return route.fulfill({ status: 409, json: { error: "AUTH_REQUIRED", message: "资金未转出，请完成强验证。" } });
+    });
+    await page.goto(`/?authorize=${draft.operationId}`);
+    const dialog = page.getByRole("dialog", { name: "核对转账" });
+    await expect(dialog).toContainText("黄色风险");
+    await dialog.getByRole("button", { name: "确认转账" }).click();
+    await expect(dialog.getByRole("alert")).toContainText("无法读取最新授权状态");
+    await expect(dialog.getByRole("button", { name: "确认转账" })).toBeDisabled();
+    await expect(dialog.getByRole("button", { name: "重新读取账户状态" })).toBeVisible();
+    expect(submissions).toBe(1);
+  });
+}
+
 test("real API pre-created 600 CNY drafts cannot cross the daily limit through the APP", async ({ page, baseURL }) => {
   test.skip(process.env.BANKPILOT_DEMO_E2E !== "1", "Requires the disposable database demo server");
   await page.goto("/");

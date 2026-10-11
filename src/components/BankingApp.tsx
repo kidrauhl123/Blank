@@ -26,6 +26,7 @@ const shortDate = (date: string) => new Intl.DateTimeFormat("zh-CN", { month: "n
 type PreparedTransfer = {
   operationId: string; riskLevel: "YELLOW" | "RED"; requiredAuth: "CONFIRM" | "MFA";
   taskId?: string;
+  status?: string;
   details: { amountMinor: number; sourceAccount: { name: string; maskedNo: string }; recipient: { name: string; phoneMasked: string; maskedAccount: string }; note?: string | null };
 };
 
@@ -229,11 +230,15 @@ function TransferModal({ account, mfaConfigured, prepared, setPrepared, busy, se
         },
       ); } catch (reason) {
         if (reason instanceof BankRequestError && reason.code === "AUTH_REQUIRED") {
-          const updated = await bankRequest<PreparedTransfer>(`/api/v1/operations/${encodeURIComponent(prepared.operationId)}`);
-          if (updated.operationId !== prepared.operationId || updated.requiredAuth !== "MFA" || updated.riskLevel !== "RED") {
-            throw new BankRequestError("无法核对最新授权状态，请重新读取账户后再办理。", true);
+          try {
+            const updated = await bankRequest<PreparedTransfer>(`/api/v1/operations/${encodeURIComponent(prepared.operationId)}`);
+            if (updated.operationId !== prepared.operationId || updated.status !== "AWAITING_AUTH" || updated.requiredAuth !== "MFA" || updated.riskLevel !== "RED") {
+              throw new Error("Unexpected authorization state");
+            }
+            setPrepared({ ...updated, taskId: prepared.taskId }); setCode("");
+          } catch {
+            throw new BankRequestError("风险已升级，但无法读取最新授权状态。请重新读取账户后再办理。", true);
           }
-          setPrepared({ ...updated, taskId: prepared.taskId }); setCode("");
         }
         throw reason;
       }
