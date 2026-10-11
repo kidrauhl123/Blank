@@ -30,7 +30,7 @@ cp deploy/.env.production "$backup_dir/production.env"
 chmod 600 "$backup_dir/production.env"
 docker exec bankpilot-postgres pg_dump -U bankpilot -d bankpilot -Fc > "$backup_dir/bankpilot.dump"
 chmod 600 "$backup_dir/bankpilot.dump"
-tar --exclude='./backups' --exclude='./node_modules' --exclude='./.next' \
+tar --exclude='./backups' --exclude='./releases' --exclude='./node_modules' --exclude='./.next' \
   --exclude='./.git' --exclude='./deploy/.env.production' --exclude='./.env*' \
   -czf "$backup_dir/source.tar.gz" .
 chmod 600 "$backup_dir/source.tar.gz"
@@ -40,7 +40,7 @@ REMOTE_BACKUP
 rsync -az --delete \
   --exclude .git --exclude node_modules --exclude .next \
   --exclude '.env' --exclude '.env.*' --exclude deploy/.env.production \
-  --exclude backups --exclude .playwright-cli \
+  --exclude backups --exclude releases --exclude .playwright-cli \
   "$release_dir/" "$target:/opt/bankpilot/"
 
 ssh -o BatchMode=yes -o ConnectTimeout=10 "$target" bash -s -- "$commit_sha" "$release_stamp" <<'REMOTE_DEPLOY'

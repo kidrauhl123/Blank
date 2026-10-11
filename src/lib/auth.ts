@@ -275,8 +275,9 @@ export async function confirmTotpSetup(customerId: string, code: string) {
   return { enabled: true };
 }
 
-export async function verifyCustomerTotp(customerId: string, code: string) {
-  const result = await query<{ encrypted_secret: string }>("SELECT encrypted_secret FROM mfa_totp WHERE customer_id=$1 AND enabled_at IS NOT NULL", [customerId]);
+export async function verifyCustomerTotp(customerId: string, code: string, client?: PoolClient) {
+  const sql = "SELECT encrypted_secret FROM mfa_totp WHERE customer_id=$1 AND enabled_at IS NOT NULL";
+  const result = client ? await client.query<{ encrypted_secret: string }>(sql, [customerId]) : await query<{ encrypted_secret: string }>(sql, [customerId]);
   return Boolean(result.rows[0] && verifyTotp(decryptSecret(result.rows[0].encrypted_secret), code));
 }
 

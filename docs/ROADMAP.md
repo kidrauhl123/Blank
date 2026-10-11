@@ -25,7 +25,7 @@
 
 已保留的基础：独立 Bank Core，PostgreSQL 事务及有序账户行锁，双分录，银行登录会话，TOTP，LangGraph 授权中断/恢复，QQ/企微官方 Worker，入站事件去重与 outbox。
 
-2026-10-11 核验的应用版本：本地、GitHub main 与线上发布标记均为 `b2310743b17966a07947b681e320d8f2cae1a58d`，仓库为私有。线上 APP / PostgreSQL healthy，health 返回数据库 connected、Agent ready，配置模型为 deepseek-v4-flash。这些是可用性检查，不代表真实模型全场景验收。
+2026-10-11 实施日累计修复前核验的应用版本：本地、GitHub main 与线上发布标记均为 `b2310743b17966a07947b681e320d8f2cae1a58d`，仓库为私有。线上 APP / PostgreSQL healthy，health 返回数据库 connected、Agent ready，配置模型为 deepseek-v4-flash。这些是可用性检查，不代表真实模型全场景验收。
 
 已进入主线并部署的变化：
 
@@ -44,7 +44,7 @@
 
 审查发现的明确问题：
 
-1. 风险仅在创建草稿时判定。本次在隔离 PostgreSQL 上用当前真实 Bank Core 复现：先入金 2000 元、预建两笔 600 元草稿，等级均为 YELLOW；无 TOTP 顺序提交，两笔均 SUCCEEDED，总额 1200 元。没有在生产账户执行此攻击。
+1. **已修复日累计绕过**：修复前在隔离数据库复现两笔黄色 600 元无 TOTP 累计执行 1200 元。现提交事务按客户串行重算上海当日成功金额；第二笔持久化升级 RED/MFA、返回 409 且不扣款。不同账户/渠道共享同一核心校验，APP 刷新红色确认，IM 返回强验证链接。新增 12 项真实数据库检查与两个 Chrome 用例，细节和剩余边界见 [TRANSFER_QUOTA.md](TRANSFER_QUOTA.md)。没有在生产共享账户执行攻击测试。
 2. 已启用 TOTP 不再能由 setup 覆盖，但动态码仍没有消费时间步控制，挑战失败没有形成跨草稿熔断，换绑/恢复缺失。
 3. 授权指纹只写不比对，黄色草稿缺少有效期；设备与行为风险输入尚未形成真实链路。
 4. 原有回复服务仍可返回与 BANK_FACTS 矛盾的余额或成功状态；新页面助手依赖不可信客户端快照，两个入口均缺少服务端事实回执约束。
@@ -55,6 +55,8 @@
 
 相关位置：src/lib/bank-core.ts、auth.ts、ai.ts、agent.ts、agent-runtime.ts、policy.ts、bank-statements.ts。
 修复前，不新增其他资金写操作。
+
+日累计修复后的验证：独立数据库上完整 Vitest 69 项通过、Chrome 17 项通过，lint / TypeScript / 生产构建通过。Subagent 独立审查锁序及升级后的调用链并增加 APP/IM 回归测试。本次只关闭日累计绕过，M1 其余安全项仍待实现。
 
 ## 3. 阶段与验收
 

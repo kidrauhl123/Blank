@@ -170,6 +170,11 @@ export async function handleChannelAction(config: GatewayConfig, input: ChannelA
   const prepared = operation.rows[0]?.final_reply?.operation;
   if (prepared?.type === "TRANSFER") {
     const committed = await commitTransfer(identity.customer_id, input.operationId, { taskId: input.taskId });
+    if ("authError" in committed && committed.authError === "AUTH_REQUIRED") return {
+      status: "MFA_REQUIRED" as const,
+      message: "执行前风险已升级，资金未转出。请回到 BankPilot 使用动态验证码完成强验证。",
+      authorizeUrl: operationLink(input.operationId, input.taskId),
+    };
     if ("authError" in committed) throw new Error(committed.authError);
   } else if (prepared?.type === "CARD_LOCK" && prepared.resourceId) {
     await commitPreparedCardLock(identity.customer_id, input.operationId, {

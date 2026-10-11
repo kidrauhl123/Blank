@@ -218,7 +218,7 @@ function TransferModal({ account, mfaConfigured, prepared, setPrepared, busy, se
   const authorize = async () => {
     if (!prepared) return;
     await run(async () => {
-      await bankRequest(
+      try { await bankRequest(
         prepared.taskId ? `/api/operations/${prepared.operationId}/commit` : `/api/v1/operations/${prepared.operationId}/authorize`,
         {
           method: "POST",
@@ -227,7 +227,16 @@ function TransferModal({ account, mfaConfigured, prepared, setPrepared, busy, se
             ? { confirmed: true, totpCode: prepared.requiredAuth === "MFA" ? code : undefined, taskId: prepared.taskId, type: "TRANSFER" }
             : { totpCode: prepared.requiredAuth === "MFA" ? code : undefined }),
         },
-      );
+      ); } catch (reason) {
+        if (reason instanceof BankRequestError && reason.code === "AUTH_REQUIRED") {
+          const updated = await bankRequest<PreparedTransfer>(`/api/v1/operations/${encodeURIComponent(prepared.operationId)}`);
+          if (updated.operationId !== prepared.operationId || updated.requiredAuth !== "MFA" || updated.riskLevel !== "RED") {
+            throw new BankRequestError("无法核对最新授权状态，请重新读取账户后再办理。", true);
+          }
+          setPrepared({ ...updated, taskId: prepared.taskId }); setCode("");
+        }
+        throw reason;
+      }
       await done();
     });
   };

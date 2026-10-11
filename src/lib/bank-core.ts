@@ -2,6 +2,7 @@ import { createHash, randomInt, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { query, withTransaction } from "./db";
 import { evaluateTransferRisk } from "./policy";
+import { readDailyTransferTotal } from "./transfer-quota";
 import { verifyCustomerTotp } from "./auth";
 import { writeAudit } from "./audit";
 import { getBankStatement } from "./bank-statements";
@@ -132,13 +133,10 @@ export async function prepareTransfer(customerId: string, input: { fromAccountId
   const source = sourceResult.rows[0];
   if (!source) throw new Error("ACCOUNT_NOT_FOUND");
   if (Number(source.available_balance_minor) < input.amountMinor) throw new Error("INSUFFICIENT_FUNDS");
-  const daily = await query<{ total: string }>(
-    `SELECT coalesce(sum(amount_minor),0)::text AS total FROM transfers
-     WHERE customer_id=$1 AND status='SUCCEEDED' AND executed_at>=date_trunc('day',now())`,
-    [customerId],
-  );
+  const clock = await query<{ at: string }>("SELECT clock_timestamp()::text AS at");
+  const dailyTotalMinor = await readDailyTransferTotal(customerId, clock.rows[0].at);
   const known = await query("SELECT trusted FROM beneficiaries WHERE customer_id=$1 AND settlement_account_id=$2", [customerId, recipient.account_id]);
-  const risk = evaluateTransferRisk({ amountMinor: input.amountMinor, dailyTotalMinor: Number(daily.rows[0].total), trustedBeneficiary: Boolean(known.rows[0]?.trusted), trustedDevice: true });
+  const risk = evaluateTransferRisk({ amountMinor: input.amountMinor, dailyTotalMinor, trustedBeneficiary: Boolean(known.rows[0]?.trusted), trustedDevice: true });
   const operationId = `TRF-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`;
   const fingerprint = createHash("sha256").update(JSON.stringify({ operationId, customerId, source: source.id, target: recipient.account_id, amountMinor: input.amountMinor, currency: "CNY" })).digest("hex");
 
@@ -159,7 +157,7 @@ export async function prepareTransfer(customerId: string, input: { fromAccountId
     await client.query(
       `INSERT INTO policy_decisions (operation_id,base_level,final_level,matched_rules,evidence)
        VALUES ($1,$2,$3,$4::jsonb,$5::jsonb)`,
-      [operationId, risk.baseLevel, risk.finalLevel, JSON.stringify(risk.matchedRules), JSON.stringify({ amountMinor: input.amountMinor, dailyTotalMinor: Number(daily.rows[0].total), knownBeneficiary: Boolean(known.rowCount) })],
+      [operationId, risk.baseLevel, risk.finalLevel, JSON.stringify(risk.matchedRules), JSON.stringify({ amountMinor: input.amountMinor, dailyTotalMinor, knownBeneficiary: Boolean(known.rowCount), timeZone: "Asia/Shanghai" })],
     );
     if (risk.requiredAuth === "MFA") {
       await client.query(
@@ -191,12 +189,21 @@ type TransferRow = {
   amount_minor: string; currency: string; risk_level: "YELLOW" | "RED"; required_auth: "CONFIRM" | "MFA";
   status: string; authorization_fingerprint: string; beneficiary_name: string; recipient_customer_id: string;
   target_account_id: string;
+  trusted_beneficiary: boolean;
 };
 
 export async function commitTransfer(customerId: string, operationId: string, input: { totpCode?: string | null; taskId?: string | null }) {
   return withTransaction(async (client) => {
+    // Re-read committed transfers after the customer lock is acquired. A
+    // repeatable-read snapshot taken while waiting would miss the prior payer.
+    await client.query("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
+    // Serialize all outgoing accounts/channels for this customer. NO KEY UPDATE
+    // remains compatible with recipient audit/transfer foreign-key KEY SHARE
+    // locks, so opposite-direction transfers do not lock both customers.
+    const customer = await client.query("SELECT id FROM customers WHERE id=$1 AND status='ACTIVE' FOR NO KEY UPDATE", [customerId]);
+    if (!customer.rowCount) throw new Error("ACCOUNT_NOT_FOUND");
     const result = await client.query<TransferRow>(
-      `SELECT t.*,b.name AS beneficiary_name,b.recipient_customer_id,b.settlement_account_id AS target_account_id
+      `SELECT t.*,b.name AS beneficiary_name,b.recipient_customer_id,b.settlement_account_id AS target_account_id,b.trusted AS trusted_beneficiary
        FROM transfers t JOIN beneficiaries b ON b.id=t.beneficiary_id
        WHERE t.operation_id=$1 AND t.customer_id=$2 FOR UPDATE OF t`,
       [operationId, customerId],
@@ -208,23 +215,12 @@ export async function commitTransfer(customerId: string, operationId: string, in
       return { alreadyExecuted: true, operationId, status: "SUCCEEDED", receipt: receipt.rows[0] };
     }
     if (row.status !== "AWAITING_AUTH") throw new Error("OPERATION_NOT_EXECUTABLE");
-    if (row.required_auth === "MFA") {
-      const challenge = await client.query<{ id: string; attempts: number; expires_at: Date; status: string }>(
+    const challenge = row.required_auth === "MFA"
+      ? await client.query<{ id: string; attempts: number; expires_at: Date; status: string }>(
         `SELECT id,attempts,expires_at,status FROM authorization_challenges
          WHERE operation_id=$1 ORDER BY expires_at DESC LIMIT 1 FOR UPDATE`,
         [operationId],
-      );
-      const auth = challenge.rows[0];
-      if (!auth || auth.expires_at < new Date() || auth.status !== "PENDING") throw new Error("AUTH_EXPIRED");
-      if (auth.attempts >= 3) throw new Error("AUTH_FUSE_ACTIVE");
-      if (!input.totpCode || !(await verifyCustomerTotp(customerId, input.totpCode))) {
-        const attempts = auth.attempts + 1;
-        await client.query("UPDATE authorization_challenges SET attempts=$2,status=CASE WHEN $2>=3 THEN 'LOCKED' ELSE status END WHERE id=$1", [auth.id, attempts]);
-        await writeAudit({ customerId, eventType: "MFA_REJECTED", actorType: "RISK_ENGINE", summary: "高风险交易 TOTP 验证失败", operationId, evidence: { attempts, fuseActive: attempts >= 3 } }, client);
-        return { authError: attempts >= 3 ? "AUTH_FUSE_ACTIVE" : "AUTH_INVALID" } as const;
-      }
-      await client.query("UPDATE authorization_challenges SET status='VERIFIED',verified_at=now() WHERE id=$1", [auth.id]);
-    }
+      ) : null;
     const accounts = await client.query<{ id: string; customer_id: string; available_balance_minor: string; status: string }>(
       `SELECT id,customer_id,available_balance_minor,status FROM accounts
        WHERE id=ANY($1::uuid[]) ORDER BY id FOR UPDATE`,
@@ -234,11 +230,59 @@ export async function commitTransfer(customerId: string, operationId: string, in
     const target = accounts.rows.find((item) => item.id === row.target_account_id);
     if (!source || source.customer_id !== customerId || source.status !== "ACTIVE" || !target || target.status !== "ACTIVE") throw new Error("ACCOUNT_NOT_FOUND");
     if (Number(source.available_balance_minor) < Number(row.amount_minor)) throw new Error("INSUFFICIENT_FUNDS");
+    // Capture once after contended customer/operation/challenge/account locks.
+    // Use this same instant for classification and all posting timestamps.
+    const clock = await client.query<{ at: string }>("SELECT clock_timestamp()::text AS at");
+    const postingAt = clock.rows[0].at;
+    const dailyTotalMinor = await readDailyTransferTotal(customerId, postingAt, client);
+    const risk = evaluateTransferRisk({ amountMinor: Number(row.amount_minor), dailyTotalMinor, trustedBeneficiary: row.trusted_beneficiary });
+    if (row.required_auth !== "MFA" && risk.requiredAuth === "MFA") {
+      await client.query("UPDATE transfers SET risk_level='RED',required_auth='MFA',version=version+1 WHERE id=$1", [row.id]);
+      const upgraded = await client.query<{ expires_at: Date }>(
+        `INSERT INTO authorization_challenges(customer_id,operation_id,method,code_hash,expires_at)
+         VALUES($1,$2,'TOTP',NULL,$3::timestamptz+interval '10 minutes') RETURNING expires_at`,
+        [customerId, operationId, postingAt],
+      );
+      const evidence = { amountMinor: Number(row.amount_minor), dailyTotalMinor, postingAt, timeZone: "Asia/Shanghai", operationExecuted: false };
+      await client.query(
+        `INSERT INTO policy_decisions(operation_id,base_level,final_level,matched_rules,evidence)
+         VALUES($1,$2,'RED',$3::jsonb,$4::jsonb)`,
+        [operationId, row.risk_level, JSON.stringify(risk.matchedRules), JSON.stringify(evidence)],
+      );
+      await client.query(
+        `UPDATE agent_tasks SET risk_level='RED',updated_at=now()
+         WHERE customer_id=$1 AND id IN (SELECT task_id FROM agent_runtime_runs WHERE customer_id=$1 AND operation_id=$2 AND status='INTERRUPTED')`,
+        [customerId, operationId],
+      );
+      await client.query(
+        `UPDATE agent_runtime_runs SET interrupt_kind='MFA',updated_at=now(),
+          final_reply=jsonb_set(jsonb_set(jsonb_set(final_reply,'{operation,riskLevel}','"RED"'::jsonb),'{operation,requiredAuth}','"MFA"'::jsonb),'{message}',to_jsonb($3::text))
+         WHERE customer_id=$1 AND operation_id=$2 AND status='INTERRUPTED'`,
+        [customerId, operationId, "当日累计转账已超过 1000 元，资金未转出，请回银行 APP 完成强验证。"],
+      );
+      await writeAudit({ customerId, operationId, eventType: "TRANSFER_AUTH_UPGRADED", actorType: "RISK_ENGINE", summary: "执行前重算日累计，转账升级为强验证，资金未转出", evidence }, client);
+      // Returning commits the upgraded state. Throwing would roll it back. Even
+      // a supplied OTP cannot bypass the newly displayed authorization step.
+      return { authError: "AUTH_REQUIRED", operationId, status: "AWAITING_AUTH", riskLevel: "RED", requiredAuth: "MFA", authorizationExpiresAt: upgraded.rows[0].expires_at.toISOString() } as const;
+    }
+    if (row.required_auth === "MFA") {
+      const auth = challenge?.rows[0];
+      if (auth && auth.attempts >= 3) throw new Error("AUTH_FUSE_ACTIVE");
+      if (!auth || auth.expires_at <= new Date(postingAt) || auth.status !== "PENDING") throw new Error("AUTH_EXPIRED");
+      if (!input.totpCode) return { authError: "AUTH_REQUIRED", operationId, status: "AWAITING_AUTH", riskLevel: "RED", requiredAuth: "MFA", authorizationExpiresAt: auth.expires_at.toISOString() } as const;
+      if (!(await verifyCustomerTotp(customerId, input.totpCode, client))) {
+        const attempts = auth.attempts + 1;
+        await client.query("UPDATE authorization_challenges SET attempts=$2,status=CASE WHEN $2>=3 THEN 'LOCKED' ELSE status END WHERE id=$1", [auth.id, attempts]);
+        await writeAudit({ customerId, eventType: "MFA_REJECTED", actorType: "RISK_ENGINE", summary: "高风险交易 TOTP 验证失败", operationId, evidence: { attempts, fuseActive: attempts >= 3 } }, client);
+        return { authError: attempts >= 3 ? "AUTH_FUSE_ACTIVE" : "AUTH_INVALID" } as const;
+      }
+      await client.query("UPDATE authorization_challenges SET status='VERIFIED',verified_at=$2 WHERE id=$1", [auth.id, postingAt]);
+    }
     await client.query("UPDATE transfers SET status='EXECUTING',confirmed_at=now(),version=version+1 WHERE id=$1", [row.id]);
     const ledger = await client.query<{ id: string; reference: string; posted_at: string }>(
-      `INSERT INTO ledger_transactions (reference,transfer_id,transaction_type,description)
-       VALUES ($1,$2,'TRANSFER',$3) RETURNING id,reference,posted_at::text`,
-      [`LED-${operationId}`, row.id, `转账给${row.beneficiary_name}`],
+      `INSERT INTO ledger_transactions (reference,transfer_id,transaction_type,description,posted_at)
+       VALUES ($1,$2,'TRANSFER',$3,$4) RETURNING id,reference,posted_at::text`,
+      [`LED-${operationId}`, row.id, `转账给${row.beneficiary_name}`, postingAt],
     );
     await client.query(
       `INSERT INTO ledger_entries (ledger_transaction_id,account_id,amount_minor,direction)
@@ -249,10 +293,10 @@ export async function commitTransfer(customerId: string, operationId: string, in
     await client.query("UPDATE accounts SET available_balance_minor=available_balance_minor+$2,version=version+1 WHERE id=$1", [row.target_account_id, row.amount_minor]);
     await client.query(
       `INSERT INTO bank_transactions (account_id,merchant_name,category,amount_minor,occurred_at,metadata)
-       VALUES ($1,$2,'转账',$3,now(),$4::jsonb),($5,$6,'转账',$7,now(),$4::jsonb)`,
-      [row.from_account_id, `转账给${row.beneficiary_name}`, -Number(row.amount_minor), JSON.stringify({ operationId, ledgerReference: ledger.rows[0].reference }), row.target_account_id, "来自 BankPilot 用户的转账", Number(row.amount_minor)],
+       VALUES ($1,$2,'转账',$3,$8,$4::jsonb),($5,$6,'转账',$7,$8,$4::jsonb)`,
+      [row.from_account_id, `转账给${row.beneficiary_name}`, -Number(row.amount_minor), JSON.stringify({ operationId, ledgerReference: ledger.rows[0].reference }), row.target_account_id, "来自 BankPilot 用户的转账", Number(row.amount_minor), postingAt],
     );
-    await client.query("UPDATE transfers SET status='SUCCEEDED',executed_at=now(),version=version+1 WHERE id=$1", [row.id]);
+    await client.query("UPDATE transfers SET status='SUCCEEDED',executed_at=$2,version=version+1 WHERE id=$1", [row.id, postingAt]);
     if (input.taskId) await client.query("UPDATE agent_tasks SET status='SUCCEEDED',updated_at=now() WHERE id=$1 AND customer_id=$2", [input.taskId, customerId]);
     await writeAudit({ customerId, eventType: "TRANSFER_SUCCEEDED", actorType: "BANK_CORE", summary: "核心账本完成客户间双分录转账", operationId, evidence: { ledgerReference: ledger.rows[0].reference, authorizationFingerprint: row.authorization_fingerprint, balancedEntries: true } }, client);
     if (row.recipient_customer_id) {

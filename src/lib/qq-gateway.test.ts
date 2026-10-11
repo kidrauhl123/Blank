@@ -74,6 +74,23 @@ describe("QQ gateway security boundary", () => {
     expect(mocks.resumeAgentRuntime).not.toHaveBeenCalled();
   });
 
+  it("redirects a yellow confirmation upgraded by the bank core to APP MFA without resuming", async () => {
+    const taskId = "68b63839-422c-4bf7-9d37-f9e814c406d3";
+    mocks.resolveChannelIdentity.mockResolvedValue({ id: "identity-1", customer_id: "customer-1" });
+    mocks.inspectAgentRun.mockResolvedValue({ status: "INTERRUPTED", operation_id: "TRF-1", channel_type: "QQ", channel_identity_id: "identity-1", interrupt_kind: "CONFIRM" });
+    mocks.query.mockResolvedValue({ rows: [{ final_reply: { operation: { type: "TRANSFER", requiredAuth: "CONFIRM" } } }], rowCount: 1 });
+    mocks.commitTransfer.mockResolvedValue({ authError: "AUTH_REQUIRED", operationId: "TRF-1", status: "AWAITING_AUTH", riskLevel: "RED", requiredAuth: "MFA", authorizationExpiresAt: "2030-01-01T00:10:00.000Z" });
+    const result = await handleQqAction({
+      tenantExternalId: "qq-app-1", subjectExternalId: "user-openid-1", eventId: "upgraded-interaction-1",
+      taskId, operationId: "TRF-1", approved: true,
+    });
+    expect(result.status).toBe("MFA_REQUIRED");
+    expect(result.authorizeUrl).toBe(`https://bank.example.com/?authorize=TRF-1&task=${taskId}`);
+    expect(result.message).toContain("资金未转出");
+    expect(mocks.commitTransfer).toHaveBeenCalledExactlyOnceWith("customer-1", "TRF-1", { taskId });
+    expect(mocks.resumeAgentRuntime).not.toHaveBeenCalled();
+  });
+
   it("rejects a button click from another QQ identity", async () => {
     mocks.resolveChannelIdentity.mockResolvedValue({ id: "identity-2", customer_id: "customer-1" });
     mocks.inspectAgentRun.mockResolvedValue({ status: "INTERRUPTED", operation_id: "CARD-1", channel_type: "QQ", channel_identity_id: "identity-1", interrupt_kind: "CONFIRM" });

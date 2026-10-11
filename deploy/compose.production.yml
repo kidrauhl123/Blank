@@ -23,6 +23,7 @@ services:
       - ../db/migrations/009_retire_legacy_agent.sql:/docker-entrypoint-initdb.d/90-retire-legacy-agent.sql:ro
       - ../db/migrations/010_visible_app_agent.sql:/docker-entrypoint-initdb.d/100-visible-app-agent.sql:ro
       - ../db/migrations/011_demo_profiles.sql:/docker-entrypoint-initdb.d/110-demo-profiles.sql:ro
+      - ../db/migrations/012_transfer_daily_quota.sql:/docker-entrypoint-initdb.d/120-transfer-daily-quota.sql:ro
     networks:
       - internal
     mem_limit: 512m
