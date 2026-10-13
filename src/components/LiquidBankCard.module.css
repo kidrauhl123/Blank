@@ -1,20 +1,16 @@
 .card {
-  --light-x: 65%; --light-y: 25%;
   --orb-a: #665782; --orb-b: #9e8cc0; --orb-c: #ddd2f4;
   position: relative; isolation: isolate; overflow: hidden; contain: paint;
-  color: #fff; background: #242131; border: 1px solid #ffffff26; border-radius: 26px;
-  box-shadow: 0 12px 26px -14px #3c2e6666, inset 0 1px 0 #ffffff24;
+  color: #fff; background: #242131; border-radius: var(--radius-container);
+  box-shadow: 0 12px 26px -14px #3c2e6666;
 }
 .surface { position: absolute; inset: 0; pointer-events: none; z-index: -1; background: linear-gradient(135deg, #252233, #453955); }
 .surface::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, #17152508, #17152582); }
-.surface i { position: absolute; width: 85%; height: 135%; border-radius: 50%; filter: blur(42px); opacity: .8; will-change: auto; }
-.surface i:first-child { top: -60%; left: -15%; background: var(--orb-a); animation: drift 19s ease-in-out infinite alternate; }
-.surface i:nth-child(2) { right: -35%; bottom: -75%; background: var(--orb-b); animation: drift 23s ease-in-out infinite alternate-reverse; }
-.surface .glow { width: 72%; height: 110%; left: var(--light-x); top: var(--light-y); transform: translate(-50%, -50%); background: var(--orb-c); opacity: .32; transition: left .65s cubic-bezier(.2,.7,.2,1), top .65s cubic-bezier(.2,.7,.2,1); }
+.surface i { position: absolute; width: 85%; height: 135%; border-radius: 50%; filter: blur(42px); opacity: .8; }
+.surface i:first-child { top: -60%; left: -15%; background: var(--orb-a); }
+.surface i:nth-child(2) { right: -35%; bottom: -75%; background: var(--orb-b); }
+.surface .glow { width: 72%; height: 110%; left: 65%; top: 25%; transform: translate(-50%, -50%); background: var(--orb-c); opacity: .32; }
 .content { height: 100%; position: relative; }
-.card:not([data-animate="true"]) .surface i { animation-play-state: paused; }
 .card[data-light] { --orb-a: #c2b0db; --orb-b: #a8bfe0; --orb-c: #f0e9fa; }
 .card[data-light] .surface { background: linear-gradient(125deg, #504666, #3c536b); }
 .card[data-locked] .surface { filter: saturate(.25); }
-@keyframes drift { from { transform: translate(0, 0) scale(1); } to { transform: translate(35px, 20px) scale(1.18); } }
-@media (prefers-reduced-motion: reduce) { .card .surface i { animation: none !important; transition: none !important; } }

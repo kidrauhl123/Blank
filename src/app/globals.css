@@ -1,25 +1,79 @@
 :root {
-  --ink: #17211b;
-  --muted: #626962;
-  --line: #dfe4dc;
-  --paper: #f5f7f2;
+  color-scheme: light;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --radius-control: 12px;
+  --radius-container: 24px;
+
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-md: 16px;
+  --text-lg: 20px;
+  --text-xl: 24px;
+
+  --motion-fast: 150ms;
+  --motion-base: 200ms;
+
+  --content-narrow: 640px;
+  --content-wide: 1200px;
+  --device-width: 430px;
+  --target: 32px;
+  --target-touch: 44px;
+
+  --ink: #292333;
+  --muted: #696172;
+  --paper: #f8f9fb;
   --white: #ffffff;
-  --accent: #397a19;
-  --accent-soft: #dffd93;
+
+  /* 行分隔线：只分行，不围合内容 */
+  --line: #e5e1eb;
+  --line-quiet: #f0edf4;
+  /* 空表单控件的边框：3.25:1，满足 WCAG 1.4.11 */
+  --line-control: #948aa1;
+
+  --accent: #70538f;
+  --accent-soft: #eee7f6;
+  --accent-tint: #f6f3fa;
+
   --positive: #08775b;
+  --positive-ink: #09674d;
+  --positive-tint: #eaf7f2;
+  --positive-line: #bde0d4;
+
   --warning: #9b6407;
+  --warning-ink: #9a6405;
+  --warning-tint: #fff4dd;
+
   --danger: #c83a3a;
+  --danger-ink: #a92f2f;
+  --danger-tint: #fff0ef;
+
+  /* 真浮层：只投影，不加描边、不做色差 */
+  --elevate: 0 24px 70px rgba(41, 35, 51, .14);
+  --scrim: rgba(6, 6, 7, .48);
+  --stage-glow: radial-gradient(ellipse at 20% 15%, #eee8f480, transparent 60%);
+  --auth-glow: radial-gradient(ellipse at top, var(--accent-soft), var(--paper) 65%);
+  --mark-gradient: linear-gradient(135deg, #79618f, #4b3e63);
+  --chip-gradient: linear-gradient(135deg, #e9dcc082, #9c91805c);
+
+  /* Agent 实时操作的标识色，与品牌紫独立 */
+  --agent-live: #d2f7a6;
+  --brand-qq: #eef8ff;
   --font-sans: "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  --text-caption: 13px;
-  --text-secondary: 14px;
-  --text-body: 16px;
 }
 
 * { box-sizing: border-box; padding: 0; margin: 0; }
 html { min-height: 100%; background: var(--paper); overscroll-behavior-y: none; }
 body { overscroll-behavior-y: none; }
-body { min-height: 100%; color: var(--ink); background: var(--paper); font-family: var(--font-sans); font-size: var(--text-body); line-height: 1.5; letter-spacing: -.011em; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+body { min-height: 100%; color: var(--ink); background: var(--paper); font-family: var(--font-sans); font-size: var(--text-md); line-height: 1.5; letter-spacing: -.011em; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
 button, input, select, textarea { font: inherit; }
 button {
   color: inherit;
@@ -33,7 +87,9 @@ a, button, input, select, textarea, summary, label, [role="button"] {
 a { color: inherit; text-decoration: none; }
 ::selection { background: var(--accent-soft); }
 :focus:not(:focus-visible) { outline: none; }
-:focus-visible { outline: 3px solid rgba(57,122,25,.28); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:not(:disabled), summary, [role="button"] { cursor: pointer; }
+button:disabled { cursor: default; opacity: .5; }
 
 @media (hover: none) and (pointer: coarse) {
   a:active, button:not(:disabled):active, summary:active, [role="button"]:active { opacity: .72; }
