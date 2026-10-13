@@ -233,15 +233,16 @@ export function FloatingAppAgent({ rootRef, configured, openSignal, closeSignal 
   const question = run?.pending?.action.type === "question" ? run.pending.action : null;
   const active = Boolean(run?.pending);
   const status = run?.status === "PAUSED" ? "你已接管 · 已暂停" : run?.status === "HANDOFF" ? "等待你确认或验证"
-    : busy ? run?.message ?? "正在理解需求" : active ? run!.message : "问 BankPilot";
+    : busy ? run?.message ?? "正在理解需求" : run?.message ?? "";
 
   return <div className={styles.root} data-agent-overlay>
     {motion && <div className={styles.cursor} data-phase={motion.phase} style={{ left: motion.x, top: motion.y }} aria-hidden="true"><MousePointer2 size={25} fill="currentColor" /><span>{motion.phase === "typing" ? "正在填写" : motion.phase === "clicking" ? "点击" : "BankPilot"}</span></div>}
     {!open && active && <StepList items={steps} compact />}
-    {!open && <div className={styles.floating}>
+    {/* 只在 agent 真的有事要报告时出现；平时首页的 AI 入口是底部导航那一个 */}
+    {!open && active && <div className={styles.floating}>
       <button className={styles.trigger} onClick={expand} aria-label="打开悬浮助手"><Sparkles size={18} /><span>{status}</span></button>
-      {active && (run?.status === "PAUSED" || run?.status === "HANDOFF" ? <button onClick={continueRun} disabled={busy} aria-label="继续代操作"><Play size={17} /></button> : run?.controlGranted && run.status === "ACTION" ? <button onClick={pause} aria-label="暂停代操作"><Pause size={17} /></button> : null)}
-      {active && <button onClick={cancel} aria-label="结束代操作"><Square size={15} /></button>}
+      {run?.status === "PAUSED" || run?.status === "HANDOFF" ? <button onClick={continueRun} disabled={busy} aria-label="继续代操作"><Play size={17} /></button> : run?.controlGranted && run.status === "ACTION" ? <button onClick={pause} aria-label="暂停代操作"><Pause size={17} /></button> : null}
+      <button onClick={cancel} aria-label="结束代操作"><Square size={15} /></button>
     </div>}
     {open && <section className={styles.panel} role="dialog" aria-modal="false" aria-label="BankPilot 悬浮助手">
       <header><span><Sparkles size={19} /><b>BankPilot</b></span><button onClick={() => setOpen(false)} aria-label="收起助手"><ChevronDown size={21} /></button><button onClick={() => { pause(); setOpen(false); }} aria-label="关闭助手面板"><X size={19} /></button></header>

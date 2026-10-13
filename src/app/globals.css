@@ -27,20 +27,22 @@
   --target: 32px;
   --target-touch: 44px;
 
-  --ink: #292333;
-  --muted: #696172;
-  --paper: #f8f9fb;
+  /* 中性色同一个色相（265°），表面饱和度 ≤22%，避免页面底色与文字/描边分属两种色温 */
+  --ink: #282131;
+  --muted: #645d6f;
+  --paper: #f7f6f8;
   --white: #ffffff;
+  --surface: #f2f0f4;
 
   /* 行分隔线：只分行，不围合内容 */
-  --line: #e5e1eb;
-  --line-quiet: #f0edf4;
-  /* 空表单控件的边框：3.25:1，满足 WCAG 1.4.11 */
-  --line-control: #948aa1;
+  --line: #dddae2;
+  --line-quiet: #edeaf0;
+  /* 空表单控件的边框：对白 3.46:1，满足 WCAG 1.4.11 的 3:1 */
+  --line-control: #90869c;
 
   --accent: #70538f;
-  --accent-soft: #eee7f6;
-  --accent-tint: #f6f3fa;
+  --accent-soft: #eae6ef;
+  --accent-tint: #f5f3f6;
 
   --positive: #08775b;
   --positive-ink: #09674d;
@@ -56,15 +58,12 @@
   --danger-tint: #fff0ef;
 
   /* 真浮层：只投影，不加描边、不做色差 */
-  --elevate: 0 24px 70px rgba(41, 35, 51, .14);
-  --scrim: rgba(6, 6, 7, .48);
-  --stage-glow: radial-gradient(ellipse at 20% 15%, #eee8f480, transparent 60%);
-  --auth-glow: radial-gradient(ellipse at top, var(--accent-soft), var(--paper) 65%);
-  --mark-gradient: linear-gradient(135deg, #79618f, #4b3e63);
-  --chip-gradient: linear-gradient(135deg, #e9dcc082, #9c91805c);
+  --elevate: 0 24px 70px rgba(40, 33, 49, .14);
+  --scrim: rgba(26, 21, 33, .48);
 
   /* Agent 实时操作的标识色，与品牌紫独立 */
   --agent-live: #d2f7a6;
+  --agent-live-ink: #241b32;
   --brand-qq: #eef8ff;
   --font-sans: "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
