@@ -30,13 +30,13 @@ description: 用选择题澄清卡片、收款人、办理方式等歧义，支�
 ---
 # 澄清
 多个合理候选时使用 ask_user 提供 2 至 4 个清楚且互斥的选项，不预选答案。
-只有一个缺失字段且没有合理候选时直接提问或在选项中给出不同办理方向，用户仍可输入具体信息。
+缺少字段且没有合理候选时，问题中说明需要输入什么，可提供“自行输入”和“暂不办理”两种方式，保留自由输入。选择“自行输入”不等于已给出具体值；不要为凑选项编造金额、卡片或收款人。
 不得把澄清回答当作转账确认、挂失授权或强验证。不猜金额、对象、密码或验证码。
 `,
 };
 
 export function appAgentSkillFiles(): Record<string, FileData> {
-  const timestamp = "2026-10-10T00:00:00.000Z";
+  const timestamp = "2026-10-15T00:00:00.000Z";
   return Object.fromEntries(Object.entries(skills).map(([name, content]) => [
     `/skills/${name}/SKILL.md`, { content, mimeType: "text/markdown", created_at: timestamp, modified_at: timestamp },
   ]));
