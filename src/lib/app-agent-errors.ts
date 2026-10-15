@@ -23,8 +23,10 @@ export function appAgentFailure(error: unknown) {
   let upstreamStatus: number | undefined;
   let timeout = false;
   let current = error;
+  const seen = new Set<object>();
   // SDKs may wrap provider failures. Never return or log their body, message or headers.
-  for (let depth = 0; depth < 6 && current && typeof current === "object"; depth++) {
+  for (let depth = 0; depth < 32 && current && typeof current === "object" && !seen.has(current); depth++) {
+    seen.add(current);
     if ("status" in current && typeof current.status === "number" && Number.isInteger(current.status) && current.status >= 400 && current.status <= 599) upstreamStatus ??= current.status;
     if ("name" in current && ["APIConnectionTimeoutError", "TimeoutError", "AbortError"].includes(String(current.name))) timeout = true;
     current = "cause" in current ? current.cause : undefined;

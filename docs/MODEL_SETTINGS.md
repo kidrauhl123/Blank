@@ -29,4 +29,6 @@
 
 本次修复默认 Vitest 132 项通过、39 项数据库用例按配置跳过；lint、TypeScript 与生产构建通过。生产浏览器用默认 Flash 从卡片页发起“查一下我的余额”，允许页面操作后打开首页并依据显示金额完成回复，未执行资金操作。
 
+用户随后指定仅以 free 模型验收。网关 8 个带 `free` 的模型实测均失败：`longcat-2.5-preview-free`、`mimo-v2.6-flash-free`、`muse-spark-1.3-contributor-free` 返回 OpenCode 使用限制 403；`ling-3.1-flash-free` 返回代理不支持上游协议 400；另外 4 个返回上游失败 502。补查 `big-pickle` 同样返回使用限制 403；网关未授权的 `cat-jam-free` 直连自有代理仍返回相同限制。没有确认可用于银行助手的免费模型，不能将付费模型测试算作免费验收。SDK 会将原始错误嵌套 8 层，分类器以带循环检测的 32 层上限穿透，并以真实 SDK 错误回归覆盖。
+
 本机模型设置浏览器回归使用独立模型替身：设置 `BANKPILOT_MODEL_E2E=1`、`BANKPILOT_DEMO_E2E=1`、隔离数据库、`AI_BASE_URL=http://127.0.0.1:54230/v1`、`AI_API_KEY=model-e2e-only`、`AI_MODEL=bank-test-alpha` 后运行 `npm run test:e2e`。Playwright 启动仅绑定本机的测试模型服务器；这类用例不计为真实模型成功率。

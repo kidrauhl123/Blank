@@ -4,6 +4,7 @@ import { Command, INTERRUPT, MemorySaver } from "@langchain/langgraph";
 import { createAppAgentHarness } from "./app-agent-harness";
 import { appAgentSkillFiles } from "./app-agent-skills";
 import type { AppPage } from "./app-agent-protocol";
+import { appAgentFailure } from "./app-agent-errors";
 
 const page: AppPage = { name: "首页", version: "p1", text: "测试银行", controls: [{ id: "nav-cards", label: "卡片", kind: "button", permission: "navigate", disabled: false }] };
 function pending(result: unknown) {
@@ -11,6 +12,19 @@ function pending(result: unknown) {
 }
 
 describe("real Deep Agents harness, with a deterministic model transport", () => {
+  it("preserves provider access-denial classification through the real middleware error wrappers", async () => {
+    const model = new ChatOpenAI({ model: "restricted-free-test", apiKey: "test-only", maxRetries: 0, configuration: {
+      baseURL: "https://test.invalid/v1", fetch: async () => Response.json({ error: { message: "Only available in the upstream client", type: "upstream_error" } }, { status: 403 }),
+    } });
+    const graph = createAppAgentHarness(new MemorySaver(), model);
+    let failure: unknown;
+    try {
+      await graph.invoke({ messages: [{ role: "user", content: JSON.stringify(page) }], files: appAgentSkillFiles() }, { configurable: { thread_id: "restricted-free-error" }, maxConcurrency: 4 });
+    } catch (error) { failure = error; }
+    expect(failure).toBeDefined();
+    expect(appAgentFailure(failure)).toMatchObject({ code: "AI_MODEL_ACCESS_DENIED", status: 502, upstreamStatus: 403 });
+  });
+
   it("executes multiple Skill reads before advancing to the requested page action", async () => {
     let calls = 0;
     const model = new ChatOpenAI({ model: "parallel-skill-test", apiKey: "test-only", maxRetries: 0, configuration: {
