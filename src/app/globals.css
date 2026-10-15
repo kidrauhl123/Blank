@@ -27,44 +27,49 @@
   --target: 32px;
   --target-touch: 44px;
 
-  /* 中性色同一个色相（265°），表面饱和度 ≤22%，避免页面底色与文字/描边分属两种色温 */
-  --ink: #282131;
-  --muted: #645d6f;
-  --paper: #f7f6f8;
+  --ink: #262722;
+  --muted: #68645d;
+  --paper: #efede8;
   --white: #ffffff;
-  --surface: #f2f0f4;
+  --surface: #f5f3ef;
+  --surface-strong: #e8e4dc;
+  --surface-hover: #e2ddd3;
 
   /* 行分隔线：只分行，不围合内容 */
-  --line: #dddae2;
-  --line-quiet: #edeaf0;
-  /* 空表单控件的边框：对白 3.46:1，满足 WCAG 1.4.11 的 3:1 */
-  --line-control: #90869c;
+  --line: #d8d3c9;
+  --line-quiet: #eae6df;
+  --line-control: #8b8477;
 
-  --accent: #70538f;
-  --accent-soft: #eae6ef;
-  --accent-tint: #f5f3f6;
+  --accent: #262722;
+  --accent-hover: #44443c;
+  --accent-soft: #e8e4dc;
+  --accent-tint: #f5f3ef;
 
-  --positive: #08775b;
-  --positive-ink: #09674d;
-  --positive-tint: #eaf7f2;
-  --positive-line: #bde0d4;
+  --positive: #386451;
+  --positive-ink: #315843;
+  --positive-tint: #edf3ee;
+  --positive-line: #ccd9ce;
 
-  --warning: #9b6407;
-  --warning-ink: #9a6405;
-  --warning-tint: #fff4dd;
+  --warning: #8b631c;
+  --warning-ink: #795615;
+  --warning-tint: #f7f0df;
 
-  --danger: #c83a3a;
-  --danger-ink: #a92f2f;
-  --danger-tint: #fff0ef;
+  --danger: #ae4440;
+  --danger-ink: #963c36;
+  --danger-tint: #f8eeeb;
 
-  /* 真浮层：只投影，不加描边、不做色差 */
-  --elevate: 0 24px 70px rgba(40, 33, 49, .14);
-  --scrim: rgba(26, 21, 33, .48);
+  --elevate: none;
+  --scrim: rgba(32, 32, 28, .44);
 
-  /* Agent 实时操作的标识色，与品牌紫独立 */
-  --agent-live: #d2f7a6;
-  --agent-live-ink: #241b32;
-  --brand-qq: #eef8ff;
+  --agent-live: #e8e4dc;
+  --agent-live-ink: #262722;
+  --brand-qq: var(--surface);
+  --card-face: #34372f;
+  --card-face-alt: #5b6053;
+  --card-face-locked: #57574f;
+  --card-ink: #f8f6f0;
+  --card-detail: rgba(255, 255, 255, .16);
+  --card-detail-strong: rgba(255, 255, 255, .32);
   --font-sans: "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
@@ -89,6 +94,41 @@ a { color: inherit; text-decoration: none; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 button:not(:disabled), summary, [role="button"] { cursor: pointer; }
 button:disabled { cursor: default; opacity: .5; }
+input, select, textarea { color: var(--ink); background: var(--surface); }
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --ink: #f0ede6;
+    --muted: #b6b0a5;
+    --paper: #1b1b19;
+    --white: #242421;
+    --surface: rgba(255, 255, 255, .04);
+    --surface-strong: rgba(255, 255, 255, .08);
+    --surface-hover: rgba(255, 255, 255, .12);
+    --line: rgba(255, 255, 255, .14);
+    --line-quiet: rgba(255, 255, 255, .08);
+    --line-control: #8d887d;
+    --accent: #f0ede6;
+    --accent-hover: #d5d0c4;
+    --accent-soft: rgba(255, 255, 255, .08);
+    --accent-tint: rgba(255, 255, 255, .04);
+    --positive: #a4c6af;
+    --positive-ink: #b6d3be;
+    --positive-tint: rgba(139, 180, 151, .12);
+    --positive-line: rgba(139, 180, 151, .24);
+    --warning: #d4b472;
+    --warning-ink: #e0c58c;
+    --warning-tint: rgba(212, 180, 114, .12);
+    --danger: #e0a19a;
+    --danger-ink: #edb5ad;
+    --danger-tint: rgba(224, 161, 154, .12);
+    --scrim: rgba(0, 0, 0, .64);
+    --agent-live: #45453d;
+    --agent-live-ink: #f0ede6;
+  }
+}
 
 @media (hover: none) and (pointer: coarse) {
   a:active, button:not(:disabled):active, summary:active, [role="button"]:active { opacity: .72; }

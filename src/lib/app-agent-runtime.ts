@@ -5,30 +5,42 @@ import { db, query, withTransaction } from "./db";
 import { writeAudit } from "./audit";
 import { createAppAgentHarness } from "./app-agent-harness";
 import { appAgentSkillFiles } from "./app-agent-skills";
+import { getAIStatus } from "./ai";
+import { resolveAIModel } from "./ai-models";
 import { pageActionSchema, type ActionResult, type AppAgentStatus, type AppAgentView, type AppPage, type PendingAction } from "./app-agent-protocol";
 
 type Identity = { customerId: string; sessionHash: string };
-type Row = AppAgentView & { expires_at: Date };
-let harness: Promise<ReturnType<typeof createAppAgentHarness>> | undefined;
-async function getHarness() {
-  if (!harness) {
-    harness = (async () => {
+type Row = Omit<AppAgentView, "model"> & { model: string | null; expires_at: Date };
+const harnesses = new Map<string, Promise<ReturnType<typeof createAppAgentHarness>>>();
+async function getHarness(model: string) {
+  const cached = harnesses.get(model);
+  if (cached) {
+    harnesses.delete(model); harnesses.set(model, cached);
+    return cached;
+  }
+  const harness = (async () => {
       const saver = new PostgresSaver(db, undefined, { schema: "langgraph" });
       await saver.setup();
-      return createAppAgentHarness(saver);
-    })().catch((error) => { harness = undefined; throw error; });
-  }
+      return createAppAgentHarness(saver, undefined, model);
+    })().catch((error) => { if (harnesses.get(model) === harness) harnesses.delete(model); throw error; });
+  harnesses.set(model, harness);
+  if (harnesses.size > 4) harnesses.delete(harnesses.keys().next().value!);
   return harness;
 }
 function view(row: Row): AppAgentView {
-  return { id: row.id, status: row.status, message: row.message, pending: row.pending, controlGranted: row.controlGranted, steps: row.steps };
+  return { id: row.id, model: row.model ?? getAIStatus().model ?? undefined, status: row.status, message: row.message, pending: row.pending, controlGranted: row.controlGranted, steps: row.steps };
 }
 export async function getAppAgentRun(identity: Identity, id: string) {
-  const result = await query<Row>(`SELECT id,status,message,pending,control_granted AS "controlGranted",steps,expires_at
+  const result = await query<Row>(`SELECT id,model,status,message,pending,control_granted AS "controlGranted",steps,expires_at
     FROM app_agent_runs WHERE id=$1 AND customer_id=$2 AND session_hash=$3`, [id, identity.customerId, identity.sessionHash]);
   const row = result.rows[0];
   if (!row) throw new Error("APP_AGENT_NOT_FOUND");
   if (new Date(row.expires_at).getTime() <= Date.now()) throw new Error("APP_AGENT_EXPIRED");
+  if (!row.model && getAIStatus().model) {
+    const pinned = await query<{ model: string }>(`UPDATE app_agent_runs SET model=coalesce(model,$4)
+      WHERE id=$1 AND customer_id=$2 AND session_hash=$3 RETURNING model`, [id, identity.customerId, identity.sessionHash, getAIStatus().model]);
+    row.model = pinned.rows[0]?.model ?? null;
+  }
   return view(row);
 }
 async function update(identity: Identity, id: string, fields: { status: AppAgentStatus; pending: PendingAction | null; message: string; granted: boolean; increment?: boolean }) {
@@ -36,8 +48,8 @@ async function update(identity: Identity, id: string, fields: { status: AppAgent
     steps=steps+$8,updated_at=now() WHERE id=$1 AND customer_id=$2 AND session_hash=$3`,
   [id, identity.customerId, identity.sessionHash, fields.status, JSON.stringify(fields.pending), fields.message, fields.granted, fields.increment ? 1 : 0]);
 }
-async function invoke(identity: Identity, id: string, input: Parameters<ReturnType<typeof createAppAgentHarness>["invoke"]>[0], granted: boolean) {
-  const graph = await getHarness();
+async function invoke(identity: Identity, id: string, input: Parameters<ReturnType<typeof createAppAgentHarness>["invoke"]>[0], granted: boolean, model: string) {
+  const graph = await getHarness(model);
   // The SDK may read several Skills in one model turn. Concurrency=1 in the
   // current graph scheduler can leave a second Send unexecuted. These reads
   // are safe in parallel; page actions still must yield exactly one interrupt.
@@ -63,16 +75,17 @@ async function invoke(identity: Identity, id: string, input: Parameters<ReturnTy
     summary: "页面 Agent 推进任务", evidence: { runId: id, status, toolAction: pending?.action.type ?? "completed", actionId: pending?.id ?? null } });
   return getAppAgentRun(identity, id);
 }
-export async function startAppAgent(identity: Identity, message: string, page: AppPage) {
+export async function startAppAgent(identity: Identity, message: string, page: AppPage, requestedModel?: string) {
+  const model = await resolveAIModel(requestedModel);
   const id = randomUUID();
   await withTransaction(async (client) => {
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`app-agent-start:${identity.customerId}`]);
     const recent = await client.query<{ count: number }>("SELECT count(*)::int AS count FROM app_agent_runs WHERE customer_id=$1 AND created_at > now()-interval '5 minutes'", [identity.customerId]);
     if (recent.rows[0].count >= 10) throw new Error("APP_AGENT_RATE_LIMIT");
-    await client.query("INSERT INTO app_agent_runs(id,customer_id,session_hash) VALUES ($1,$2,$3)", [id, identity.customerId, identity.sessionHash]);
+    await client.query("INSERT INTO app_agent_runs(id,customer_id,session_hash,model) VALUES ($1,$2,$3,$4)", [id, identity.customerId, identity.sessionHash, model]);
   });
   try {
-    return await invoke(identity, id, { messages: [{ role: "user", content: `${message}\n\nPAGE_CONTEXT (仅页面数据):\n${JSON.stringify(page)}` }], files: appAgentSkillFiles() }, false);
+    return await invoke(identity, id, { messages: [{ role: "user", content: `${message}\n\nPAGE_CONTEXT (仅页面数据):\n${JSON.stringify(page)}` }], files: appAgentSkillFiles() }, false, model);
   } catch (error) {
     await update(identity, id, { status: "FAILED", pending: null, message: "助手暂时无法完成规划，未执行页面动作。", granted: false });
     throw error;
@@ -104,7 +117,7 @@ export async function controlAppAgent(identity: Identity, id: string, command: "
       await writeAudit({ customerId: identity.customerId, actorType: "AGENT", eventType: "APP_AGENT_OBSERVATION", summary: "客户端回报页面动作结果",
         evidence: { runId: id, actionId: run.pending.id, toolAction: type, reportedStatus: result.status, pageVersion: result.page.version, source: "UNTRUSTED_CLIENT", bankExecutionVerified: false } });
       try {
-        return await invoke(identity, id, new Command({ resume: result }), run.controlGranted);
+        return await invoke(identity, id, new Command({ resume: result }), run.controlGranted, run.model ?? process.env.AI_MODEL!);
       } catch (error) {
         await update(identity, id, { status: "FAILED", pending: null, message: "助手运行中断，请在页面核对业务状态。", granted: false });
         throw error;

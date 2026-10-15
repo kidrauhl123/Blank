@@ -51,10 +51,11 @@ human 控件、密码、验证码、最终确认和资金执行交给用户，�
 当前未实现真正挂失/解挂，不能把锁卡说成挂失。无法办理时说明能力边界。
 如果用户手动改动页面，必须依据新快照重新规划，不重试旧动作。若用户修改字段与原任务冲突，先询问是否保留用户的修改，不擅自覆盖。`;
 
-export function createAppAgentHarness(checkpointer: BaseCheckpointSaver, modelOverride?: ChatOpenAI | ChatDeepSeek) {
+export function createAppAgentHarness(checkpointer: BaseCheckpointSaver, modelOverride?: ChatOpenAI | ChatDeepSeek, selectedModel?: string) {
   if (!modelOverride && !getAIStatus().configured) throw new AIConfigurationError();
-  const modelName = modelOverride?.model ?? process.env.AI_MODEL!;
+  const modelName = modelOverride?.model ?? selectedModel ?? process.env.AI_MODEL!;
   const deepseek = modelOverride ? modelOverride instanceof ChatDeepSeek : new URL(process.env.AI_BASE_URL!).hostname === "api.deepseek.com";
+  const deepseekModel = deepseek || /^deepseek[-/]/i.test(modelName);
   // No operating-system backend, sandbox, Shell, network or delegated agents.
   registerHarnessProfile(`${deepseek ? "deepseek" : "openai"}:${modelName}`, {
     excludedTools: ["write_file", "edit_file", "delete_file", "execute", "eval", "task", "glob", "grep", "ls"],
@@ -67,7 +68,7 @@ export function createAppAgentHarness(checkpointer: BaseCheckpointSaver, modelOv
     // DeepSeek defaults to thinking mode, whose tool turns require replaying
     // reasoning_content. The installed provider adapter does not serialize it
     // back to messages, so use the documented non-thinking mode for page tools.
-    modelKwargs: { parallel_tool_calls: false, ...(deepseek ? { thinking: { type: "disabled" } } : {}) },
+    modelKwargs: { parallel_tool_calls: false, ...(deepseekModel ? { thinking: { type: "disabled" } } : {}) },
   };
   const model = modelOverride ?? (deepseek ? new ChatDeepSeek(modelOptions) : new ChatOpenAI(modelOptions));
   // The SDK's profile resolver currently reads modelName, whereas ChatOpenAI

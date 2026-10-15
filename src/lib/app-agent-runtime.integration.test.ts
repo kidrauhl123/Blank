@@ -3,13 +3,16 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { db, query } from "./db";
 import { controlAppAgent, getAppAgentRun, startAppAgent } from "./app-agent-runtime";
 import type { AppPage } from "./app-agent-protocol";
+import { registerCustomer } from "./auth";
+import { getSessionModel, setSessionModel } from "./model-settings";
+import { createHash } from "node:crypto";
 
 // Real Deep Agents loop and PostgreSQL checkpoints; only the model transport is fake.
 vi.mock("./app-agent-harness", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./app-agent-harness")>();
   const { ChatOpenAI } = await import("@langchain/openai");
-  return { ...actual, createAppAgentHarness: (saver: Parameters<typeof actual.createAppAgentHarness>[0]) => {
-    const model = new ChatOpenAI({ model: "bank-db-test", apiKey: "test-only", maxRetries: 0, configuration: {
+  return { ...actual, createAppAgentHarness: (saver: Parameters<typeof actual.createAppAgentHarness>[0], _override?: unknown, selected?: string) => {
+    const model = new ChatOpenAI({ model: selected ?? "bank-db-test", apiKey: "test-only", maxRetries: 0, configuration: {
       baseURL: "https://test.invalid/v1", fetch: async (_url, init) => {
         const request = JSON.parse(String(init?.body));
         const count = request.messages.filter((message: { role: string }) => message.role === "tool").length;
@@ -36,6 +39,10 @@ describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("visible Agent database 
   beforeAll(async () => {
     const url = new URL(process.env.DATABASE_URL!);
     if (url.hostname !== "127.0.0.1" || url.username !== "bankpilot_test") throw new Error("Use an isolated local bankpilot_test database role");
+    vi.stubEnv("AI_BASE_URL", "https://test.invalid/v1");
+    vi.stubEnv("AI_API_KEY", "test-only");
+    vi.stubEnv("AI_MODEL", "bank-db-test");
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => Response.json({ data: [{ id: "bank-db-test" }, { id: "bank-db-alternate" }] })));
     await query("INSERT INTO customers(id,display_name,phone) VALUES($1,'Visible Agent test',$2)", [customerId, randomUUID()]);
   });
   afterAll(async () => {
@@ -47,6 +54,7 @@ describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("visible Agent database 
     await query("DELETE FROM app_agent_runs WHERE customer_id=$1", [customerId]);
     await query("DELETE FROM customers WHERE id=$1", [customerId]);
     await db.end();
+    vi.unstubAllEnvs(); vi.unstubAllGlobals();
   });
   it("requires control consent, persists pauses and never interprets a choice as bank authorization", async () => {
     const started = await startAppAgent(owner, "看看我的卡片", page);
@@ -83,5 +91,40 @@ describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("visible Agent database 
   it("enforces a customer-wide start limit across login sessions", async () => {
     await query("INSERT INTO app_agent_runs(id,customer_id,session_hash) SELECT gen_random_uuid(),$1,'another-session' FROM generate_series(1,10)", [customerId]);
     await expect(startAppAgent({ ...owner, sessionHash: "yet-another-session" }, "查询", page)).rejects.toThrow("APP_AGENT_RATE_LIMIT");
+  });
+
+  it("pins the selected model across refreshes while session preferences remain isolated", async () => {
+    const person = await registerCustomer({ displayName: "Model settings fixture", phone: randomUUID(), password: "Test-only-123456" });
+    const customer = person.customer.id;
+    const tokenHash = createHash("sha256").update(person.token).digest("hex");
+    const session = { customerId: customer, sessionTokenHash: tokenHash };
+    const identity = { customerId: customer, sessionHash: "model-session" };
+    const ids: string[] = [];
+    try {
+      expect(await getSessionModel(session)).toBe("bank-db-test");
+      await setSessionModel(session, "bank-db-alternate");
+      expect(await getSessionModel(session)).toBe("bank-db-alternate");
+      const run = await startAppAgent(identity, "查看卡片", page, (await getSessionModel(session))!);
+      ids.push(run.id);
+      expect(run.model).toBe("bank-db-alternate");
+      expect((await query("SELECT model FROM app_agent_runs WHERE id=$1", [run.id])).rows[0].model).toBe("bank-db-alternate");
+      await setSessionModel(session, "bank-db-test");
+      await controlAppAgent(identity, run.id, "allow");
+      const next = await controlAppAgent(identity, run.id, "advance", run.pending!.id, outcome);
+      expect(next.model).toBe("bank-db-alternate");
+      expect((await getAppAgentRun(identity, run.id)).model).toBe("bank-db-alternate");
+      const fresh = await startAppAgent(identity, "查看卡片", page, (await getSessionModel(session))!);
+      ids.push(fresh.id); expect(fresh.model).toBe("bank-db-test");
+      await expect(setSessionModel({ ...session, sessionTokenHash: "another-session" }, "bank-db-test")).rejects.toThrow("SESSION_EXPIRED");
+      await expect(setSessionModel({ ...session, customerId }, "bank-db-test")).rejects.toThrow("SESSION_EXPIRED");
+      await expect(setSessionModel(session, "unlisted-model")).rejects.toThrow("AI_MODEL_NOT_AVAILABLE");
+      expect(await getSessionModel(session)).toBe("bank-db-test");
+    } finally {
+      for (const table of ["checkpoint_writes", "checkpoint_blobs", "checkpoints"]) if (ids.length) await query(`DELETE FROM langgraph.${table} WHERE thread_id=ANY($1::text[])`, [ids]);
+      await query("DELETE FROM app_agent_runs WHERE customer_id=$1", [customer]);
+      await query("DELETE FROM audit_events WHERE customer_id=$1", [customer]);
+      await query("DELETE FROM accounts WHERE customer_id=$1", [customer]);
+      await query("DELETE FROM customers WHERE id=$1", [customer]);
+    }
   });
 });

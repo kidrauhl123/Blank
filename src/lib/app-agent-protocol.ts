@@ -35,6 +35,7 @@ export type ActionResult = z.infer<typeof actionResultSchema>;
 export type AppAgentStatus = "RUNNING" | "CONSENT" | "ACTION" | "QUESTION" | "HANDOFF" | "PAUSED" | "COMPLETED" | "CANCELLED" | "FAILED";
 export type AppAgentView = {
   id: string;
+  model?: string;
   status: AppAgentStatus;
   message: string;
   pending: PendingAction | null;

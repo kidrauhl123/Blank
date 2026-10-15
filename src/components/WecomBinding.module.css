@@ -118,10 +118,11 @@
   gap: var(--space-2);
   margin: var(--space-5) 0 var(--space-4);
   padding: var(--space-3);
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: var(--radius-control);
   color: var(--muted);
   font-size: var(--text-xs);
+  background: var(--surface);
 }
 
 .primary,
@@ -143,7 +144,7 @@
 
 .primary + .secondary, .success + .primary, .success + .secondary { margin-top: var(--space-3); }
 .secondary + .secondary { margin-top: var(--space-2); }
-.account { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-4); margin-top: var(--space-5); border: 1px solid var(--line); border-radius: var(--radius-container); }
+.account { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-4); margin-top: var(--space-5); border: 0; border-radius: var(--radius-container); background: var(--surface); }
 .account b { font-size: var(--text-lg); }
 .account span { color: var(--muted); font-size: var(--text-sm); }
 .secondary { color: var(--ink); background: var(--accent-soft); }
@@ -173,7 +174,7 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 
 @media (hover: hover) and (pointer: fine) {
-  .primary:hover { background: var(--accent); }
+  .primary:hover { background: var(--accent-hover); }
   .secondary:hover { color: var(--accent); }
 }
 

@@ -1,24 +1,9 @@
-/* 卡面插画的全部色值留在这里，命名成一张卡的"正面"，不进全局 token 层 */
 .card {
-  --orb-a: #665782; --orb-b: #9e8cc0; --orb-c: #ddd2f4;
-  --face-base: #242131;
-  --face: linear-gradient(135deg, #252233, #453955);
-  --face-shade: linear-gradient(180deg, #17152508, #17152582);
-  --face-ink: #ffffff;
-  --face-shadow: 0 12px 26px -14px #3c2e6666;
   position: relative; isolation: isolate; overflow: hidden; contain: paint;
-  color: var(--face-ink); background: var(--face-base); border-radius: var(--radius-container);
-  box-shadow: var(--face-shadow);
+  color: var(--card-ink); background: var(--card-face); border-radius: var(--radius-container);
 }
-.surface { position: absolute; inset: 0; pointer-events: none; z-index: -1; background: var(--face); }
-.surface::after { content: ""; position: absolute; inset: 0; background: var(--face-shade); }
-.surface i { position: absolute; width: 85%; height: 135%; border-radius: 50%; filter: blur(42px); opacity: .8; }
-.surface i:first-child { top: -60%; left: -15%; background: var(--orb-a); }
-.surface i:nth-child(2) { right: -35%; bottom: -75%; background: var(--orb-b); }
-.surface .glow { width: 72%; height: 110%; left: 65%; top: 25%; transform: translate(-50%, -50%); background: var(--orb-c); opacity: .32; }
+.surface { position: absolute; inset: 0; pointer-events: none; z-index: -1; background: var(--card-face); }
+.surface i { display: none; }
 .content { height: 100%; position: relative; }
-.card[data-light] {
-  --orb-a: #c2b0db; --orb-b: #a8bfe0; --orb-c: #f0e9fa;
-  --face: linear-gradient(125deg, #504666, #3c536b);
-}
-.card[data-locked] .surface { filter: saturate(.25); }
+.card[data-light], .card[data-light] .surface { background: var(--card-face-alt); }
+.card[data-locked], .card[data-locked] .surface { background: var(--card-face-locked); }

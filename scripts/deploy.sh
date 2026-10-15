@@ -89,6 +89,11 @@ BEGIN
      OR to_regclass('public.mcp_invocations') IS NOT NULL THEN
     RAISE EXCEPTION 'External access retirement is incomplete';
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='014_app_agent_model.sql')
+     OR NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='app_agent_runs' AND column_name='model')
+     OR NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='user_sessions' AND column_name='ai_model') THEN
+    RAISE EXCEPTION 'Model settings migration is incomplete';
+  END IF;
 END;
 $$;
 SQL

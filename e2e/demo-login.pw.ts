@@ -13,7 +13,7 @@ test("five profiles enter real accounts and switch without carrying an Agent run
   const identities = new Set<string>();
   for (const name of names) {
     await page.getByRole("button", { name: `以${name}进入` }).click();
-    await expect(page.getByRole("button", { name: "打开悬浮助手" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "主导航" }).getByRole("button", { name: "AI 助手" })).toBeVisible();
     const overview = await (await page.request.get("/api/bootstrap")).json();
     expect(overview.customer.display_name).toBe(name);
     expect(overview.totalMinor).toBeGreaterThan(0);

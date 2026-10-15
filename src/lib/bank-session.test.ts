@@ -6,6 +6,8 @@ vi.mock("./db", () => ({ query: mocks.query, withTransaction: mocks.withTransact
 import { AuthError, authenticateRequest, SESSION_COOKIE } from "./auth";
 import { assertChannelAdapterRequest } from "./channels";
 import { assertSameOrigin } from "./http";
+import { requireAppSession } from "./app-session";
+import { createHash } from "node:crypto";
 
 const customerId = "147d683a-42bb-4f49-a17c-3f0e7a17e75f";
 const session = `${SESSION_COOKIE}=test-session-token`;
@@ -18,6 +20,15 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllEnvs(); });
 
 describe("bank session authentication", () => {
+  it("uses the same cookie value for authentication, settings and task ownership when cookie names repeat", async () => {
+    mocks.query.mockResolvedValue({ rows: [{ customer_id: customerId }], rowCount: 1 });
+    const identity = await requireAppSession(new Request("https://bank.example.com/api/agent/app", {
+      headers: { cookie: `${SESSION_COOKIE}=first; ${SESSION_COOKIE}=last` },
+    }));
+    const tokenHash = createHash("sha256").update("last").digest("hex");
+    expect(mocks.query.mock.calls[0][1]).toEqual([tokenHash]);
+    expect(identity).toEqual({ customerId, sessionTokenHash: tokenHash, sessionHash: createHash("sha256").update(`${SESSION_COOKIE}=last`).digest("hex") });
+  });
   for (const cookie of [undefined, session]) {
     it.each(authorizationValues)(`rejects Authorization %j ${cookie ? "even with a valid session cookie" : "without a cookie"} before reading any database identity`, async authorization => {
       mocks.query.mockResolvedValue({ rows: [{ customer_id: customerId }], rowCount: 1 });

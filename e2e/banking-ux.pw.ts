@@ -27,7 +27,7 @@ test("all assistant entry points preserve one conversation and reflect navigatio
   await expect(nav.getByRole("button", { name: "AI 助手" })).toHaveAttribute("aria-current", "page");
   await page.getByRole("button", { name: "收起助手" }).click();
   await nav.getByRole("button", { name: "首页", exact: true }).click();
-  await page.getByRole("button", { name: "打开 AI 助手" }).click();
+  await nav.getByRole("button", { name: "AI 助手" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(1);
   await expect(page.getByRole("dialog")).toContainText("查看我的卡");
 });

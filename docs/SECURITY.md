@@ -16,6 +16,7 @@ QQ 与企业微信属于受控用户渠道而不是新的银行核心。黄色�
 
 - 演示身份：只允许五个固定模拟 profile key；注册与密码登录 HTTP 路由已移除。这些是公开共享测试身份，不用于验证真实客户身份。
 - 会话：256 位随机不透明令牌，仅保存 SHA-256 摘要；HttpOnly、Secure（生产）、SameSite=Lax、7 天过期、可撤销。
+- 模型调试：设置绑定当前银行会话，目录只返回模型 ID，服务端密钥不下发。新任务记录模型并在恢复时沿用，换模型不改变银行授权边界。见 [模型设置](MODEL_SETTINGS.md)。
 - MFA：RFC 6238 TOTP，服务端密钥以 AES-256-GCM 加密；允许前后一个 30 秒窗口。
 - CSRF：Cookie 写操作必须携带正式 APP 的完整 Origin；不允许 Bearer 豁免，不依赖 Host/x-forwarded-host 授权。普通 GET/HEAD 可无 Origin，仍需银行会话。
 - 数据隔离：所有客户查询和写入都带已认证 `customer_id`，历史外部审计也按客户隔离。

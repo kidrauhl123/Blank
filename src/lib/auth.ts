@@ -85,6 +85,10 @@ function parseCookies(header: string | null) {
   return result;
 }
 
+export function getSessionToken(request: Request) {
+  return parseCookies(request.headers.get("cookie")).get(SESSION_COOKIE);
+}
+
 export function sessionCookieOptions(expires: Date) {
   return {
     httpOnly: true,
@@ -199,7 +203,7 @@ export async function authenticateRequest(request: Request): Promise<AuthPrincip
   // when a retired client token or an internal adapter credential is supplied.
   if (request.headers.has("authorization")) throw new AuthError("BANK_APP_SESSION_REQUIRED", 403);
 
-  const raw = parseCookies(request.headers.get("cookie")).get(SESSION_COOKIE);
+  const raw = getSessionToken(request);
   if (!raw) throw new AuthError("AUTHENTICATION_REQUIRED");
   const result = await query<{ customer_id: string }>(
     `UPDATE user_sessions s SET last_seen_at=now()
