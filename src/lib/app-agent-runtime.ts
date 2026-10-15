@@ -6,13 +6,14 @@ import { writeAudit } from "./audit";
 import { createAppAgentHarness } from "./app-agent-harness";
 import { appAgentSkillFiles } from "./app-agent-skills";
 import { getAIStatus } from "./ai";
-import { resolveAIModel } from "./ai-models";
+import { assertAIModelEnabled, resolveAIModel } from "./ai-models";
 import { pageActionSchema, type ActionResult, type AppAgentStatus, type AppAgentView, type AppPage, type PendingAction } from "./app-agent-protocol";
 
 type Identity = { customerId: string; sessionHash: string };
 type Row = Omit<AppAgentView, "model"> & { model: string | null; expires_at: Date };
 const harnesses = new Map<string, Promise<ReturnType<typeof createAppAgentHarness>>>();
 async function getHarness(model: string) {
+  assertAIModelEnabled(model);
   const cached = harnesses.get(model);
   if (cached) {
     harnesses.delete(model); harnesses.set(model, cached);

@@ -13,6 +13,7 @@ beforeEach(() => {
   vi.stubEnv("AI_BASE_URL", `${baseURL}/`);
   vi.stubEnv("AI_API_KEY", apiKey);
   vi.stubEnv("AI_MODEL", defaultModel);
+  vi.stubEnv("AI_BLOCKED_MODELS", "");
 });
 afterEach(() => {
   vi.restoreAllMocks();
@@ -22,6 +23,34 @@ afterEach(() => {
 });
 
 describe("AI model catalog boundary", () => {
+  it("excludes operator-blocked models even when the gateway advertises them, and invalidates the catalog cache", async () => {
+    fetchMock.mockImplementation(async () => response([{ id: defaultModel }, { id: "restricted-model" }]));
+    const { getAIModels, resolveAIModel, assertAIModelEnabled } = await import("./ai-models");
+    expect((await getAIModels()).models).toContain("restricted-model");
+    vi.stubEnv("AI_BLOCKED_MODELS", " restricted-model, ,restricted-model ");
+    expect(await getAIModels()).toEqual({ models: [defaultModel], defaultModel });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await expect(resolveAIModel("restricted-model")).rejects.toThrow("AI_MODEL_NOT_AVAILABLE");
+    expect(() => assertAIModelEnabled("restricted-model")).toThrow("AI_MODEL_NOT_AVAILABLE");
+    vi.stubEnv("AI_BLOCKED_MODELS", "");
+    expect((await getAIModels()).models).toContain("restricted-model");
+  });
+
+  it("cannot bypass a block by selecting the configured default or omitting the selection", async () => {
+    vi.stubEnv("AI_BLOCKED_MODELS", defaultModel);
+    const { resolveAIModel } = await import("./ai-models");
+    await expect(resolveAIModel()).rejects.toThrow("AI_MODEL_NOT_AVAILABLE");
+    await expect(resolveAIModel(defaultModel)).rejects.toThrow("AI_MODEL_NOT_AVAILABLE");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not invent an available model when every advertised model is blocked", async () => {
+    vi.stubEnv("AI_BLOCKED_MODELS", defaultModel);
+    fetchMock.mockResolvedValue(response([{ id: defaultModel }]));
+    const { getAIModels } = await import("./ai-models");
+    await expect(getAIModels()).rejects.toThrow("AI_MODEL_CATALOG_UNAVAILABLE");
+  });
+
   it("authenticates only to the configured upstream and exposes model IDs without upstream metadata", async () => {
     fetchMock.mockResolvedValue(response([
       { id: defaultModel, owned_by: "private-owner", api_key: apiKey, internal_url: "https://private.example" },

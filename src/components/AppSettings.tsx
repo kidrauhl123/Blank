@@ -22,7 +22,7 @@ export function AppSettings() {
       if (!active) return;
       setCatalog(models); setSaved(preference.model ?? models.defaultModel);
       setModel(preference.model && models.models.includes(preference.model) ? preference.model : models.defaultModel);
-      setError(preference.model && !models.models.includes(preference.model) ? "当前模型暂不可用，请重新选择并保存。" : "");
+      setError(preference.model && !models.models.includes(preference.model) ? "已保存的模型当前不可用，请选择其他模型并保存。" : "");
     }).catch((reason) => { if (active) setError(reason instanceof BankRequestError && reason.status === 401 ? "请先进入银行账户。" : "设置暂时无法读取，请重试。"); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };

@@ -5,12 +5,21 @@ export type AIModelCatalog = { models: string[]; defaultModel: string };
 let cache: { provider: string; expiresAt: number; catalog: AIModelCatalog } | undefined;
 let pending: { provider: string; request: Promise<AIModelCatalog> } | undefined;
 
+function blockedModels() {
+  return new Set((process.env.AI_BLOCKED_MODELS ?? "").split(",").map(id => id.trim()).filter(Boolean));
+}
+
+export function assertAIModelEnabled(model: string) {
+  if (blockedModels().has(model)) throw new Error("AI_MODEL_NOT_AVAILABLE");
+}
+
 export async function getAIModels(): Promise<AIModelCatalog> {
   if (!getAIStatus().configured) throw new AIConfigurationError();
   const baseURL = process.env.AI_BASE_URL!.replace(/\/$/, "");
   const key = process.env.AI_API_KEY!;
   const defaultModel = process.env.AI_MODEL!;
-  const provider = createHash("sha256").update(JSON.stringify([baseURL, key, defaultModel])).digest("hex");
+  const blocked = blockedModels();
+  const provider = createHash("sha256").update(JSON.stringify([baseURL, key, defaultModel, [...blocked].sort()])).digest("hex");
   if (cache?.provider === provider && cache.expiresAt > Date.now()) return cache.catalog;
   if (pending?.provider === provider) return pending.request;
   const request = (async () => {
@@ -24,7 +33,7 @@ export async function getAIModels(): Promise<AIModelCatalog> {
       if (!Array.isArray(data)) throw new Error("AI_MODEL_CATALOG_UNAVAILABLE");
       const models = [...new Set(data.flatMap((entry: unknown) => {
         const id = entry && typeof entry === "object" && "id" in entry ? entry.id : null;
-        return typeof id === "string" && /^[a-zA-Z0-9._:/+-]{1,160}$/.test(id) ? [id] : [];
+        return typeof id === "string" && /^[a-zA-Z0-9._:/+-]{1,160}$/.test(id) && !blocked.has(id) ? [id] : [];
       }))].sort().slice(0, 200);
       if (!models.length) throw new Error("AI_MODEL_CATALOG_UNAVAILABLE");
       const catalog = { models, defaultModel: models.includes(defaultModel) ? defaultModel : models[0] };
@@ -39,6 +48,7 @@ export async function getAIModels(): Promise<AIModelCatalog> {
 
 export async function resolveAIModel(requested?: string) {
   if (!getAIStatus().configured) throw new AIConfigurationError();
+  assertAIModelEnabled(requested || process.env.AI_MODEL!);
   if (!requested || requested === process.env.AI_MODEL) return process.env.AI_MODEL!;
   const { models } = await getAIModels();
   if (!models.includes(requested)) throw new Error("AI_MODEL_NOT_AVAILABLE");
