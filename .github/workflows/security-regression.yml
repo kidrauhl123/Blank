@@ -1,0 +1,42 @@
+name: Security regression
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: bankpilot_security_test
+          POSTGRES_USER: bankpilot_test
+          POSTGRES_PASSWORD: local-ci-fixture-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U bankpilot_test -d bankpilot_security_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DATABASE_URL: postgresql://bankpilot_test:local-ci-fixture-only@127.0.0.1:5432/bankpilot_security_test
+      PASSWORD_PEPPER: synthetic-ci-test-pepper
+      BANKPILOT_DB_TESTS: '1'
+      BANKPILOT_SECURITY_TESTS: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Migrate the disposable test database
+        run: |
+          for migration in db/migrations/*.sql; do
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
+          done
+      - run: npm test -- --no-file-parallelism
+      - run: npx next typegen && npx tsc --noEmit
+      - run: npm run lint
+
