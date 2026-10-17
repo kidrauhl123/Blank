@@ -26,6 +26,10 @@ export function visitorMemoryCookieOptions() {
 // Called only after a successful demo login, inside that login's transaction.
 // Unknown browser-supplied values are discarded rather than enrolled as owners.
 export async function ensureVisitorMemoryToken(rawToken: string | undefined, client: PoolClient) {
+  // Demo traffic provides a small, automatic cleanup opportunity. Reads also
+  // filter expired rows, so cleanup timing cannot make stale values usable.
+  await client.query("DELETE FROM visitor_memory_preferences WHERE expires_at<=now()");
+  await client.query("DELETE FROM visitor_memory_owners WHERE expires_at<=now()");
   if (rawToken && TOKEN_PATTERN.test(rawToken)) {
     const existing = await client.query<{ id: string }>(
       "UPDATE visitor_memory_owners SET last_seen_at=now(),expires_at=now()+interval '90 days' WHERE token_hash=$1 AND expires_at>now() RETURNING id",

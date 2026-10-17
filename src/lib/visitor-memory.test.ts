@@ -25,16 +25,16 @@ describe("visitor memory ownership", () => {
     const client = { query: vi.fn().mockResolvedValue({ rowCount: 1, rows: [{ id: "owner-a" }] }) } as unknown as PoolClient;
     expect(await ensureVisitorMemoryToken(tokenA, client)).toBe(tokenA);
     expect(client.query).toHaveBeenCalledWith(expect.stringContaining("WHERE token_hash=$1"), [hash(tokenA)]);
-    expect(client.query).toHaveBeenCalledTimes(1);
+    expect(client.query).toHaveBeenCalledTimes(3);
     expect(visitorMemoryCookieOptions()).toMatchObject({ httpOnly: true, sameSite: "lax", path: "/", maxAge: 90 * 86400 });
   });
 
   it("rotates an unknown browser-provided token instead of enrolling it", async () => {
-    const client = { query: vi.fn().mockResolvedValueOnce({ rowCount: 0, rows: [] }).mockResolvedValueOnce({ rowCount: 1 }) } as unknown as PoolClient;
+    const client = { query: vi.fn().mockResolvedValueOnce({ rowCount: 0 }).mockResolvedValueOnce({ rowCount: 0 }).mockResolvedValueOnce({ rowCount: 0, rows: [] }).mockResolvedValueOnce({ rowCount: 1 }) } as unknown as PoolClient;
     const issued = await ensureVisitorMemoryToken(tokenA, client);
     expect(issued).not.toBe(tokenA);
     expect(issued).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    expect(client.query).toHaveBeenNthCalledWith(2, expect.stringContaining("INSERT INTO visitor_memory_owners"), [hash(issued)]);
+    expect(client.query).toHaveBeenNthCalledWith(4, expect.stringContaining("INSERT INTO visitor_memory_owners"), [hash(issued)]);
     expect(JSON.stringify((client.query as ReturnType<typeof vi.fn>).mock.calls)).not.toContain(issued);
   });
 
@@ -42,7 +42,7 @@ describe("visitor memory ownership", () => {
     const client = { query: vi.fn().mockResolvedValue({ rowCount: 1 }) } as unknown as PoolClient;
     const issued = await ensureVisitorMemoryToken(undefined, client);
     expect(issued).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    expect(client.query).toHaveBeenCalledTimes(1);
+    expect(client.query).toHaveBeenCalledTimes(3);
   });
 
   it("binds the same demo customer to distinct visitor owners", async () => {
