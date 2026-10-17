@@ -94,6 +94,12 @@ BEGIN
      OR NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='user_sessions' AND column_name='ai_model') THEN
     RAISE EXCEPTION 'Model settings migration is incomplete';
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='015_visitor_memory.sql')
+     OR to_regclass('public.visitor_memory_owners') IS NULL
+     OR to_regclass('public.visitor_memory_scopes') IS NULL
+     OR to_regclass('public.visitor_memory_preferences') IS NULL THEN
+    RAISE EXCEPTION 'Visitor memory migration is incomplete';
+  END IF;
 END;
 $$;
 SQL

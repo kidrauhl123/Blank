@@ -111,6 +111,8 @@ docker volume rm bankpilot_nanobot
 
 模型调试设置需执行 `014_app_agent_model.sql`。切换 New API 时先在服务器私有文件备份原模型配置，更新 `AI_BASE_URL`（含 `/v1`）、`AI_API_KEY`、`AI_MODEL`，重新创建应用后检查模型目录及实际工具调用；不得把密钥写入命令参数、仓库或日志。发布脚本检查任务模型与会话偏好两列存在。模型目录、默认模型和会话选择的边界见 [模型设置](MODEL_SETTINGS.md)。
 
+新版演示登录依赖 `015_visitor_memory.sql`。先应用迁移再启动应用；自动发布脚本会检查访客归属、范围和偏好表存在。此迁移只建立长期偏好的归属与结构，保存/读取功能尚未启用。
+
 ```bash
 ssh CONTABO-jp 'cd /opt/bankpilot && \
   docker compose --env-file deploy/.env.production -f deploy/compose.production.yml ps && \

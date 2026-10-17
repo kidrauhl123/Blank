@@ -78,6 +78,7 @@ npm run db:verify
 
 - [系统提示词固定案例与真实模型验收](docs/PROMPT_EVALUATION.md)
 - [系统提示词与用户偏好规则（长期记忆尚未接入）](docs/AGENT_PROMPTS_AND_MEMORY.md)
+- [访客记忆归属与数据库结构](docs/VISITOR_MEMORY_STORAGE.md)
 - [系统架构](docs/ARCHITECTURE.md)
 - [可见页面助手与通用 Agent 复用](docs/VISIBLE_APP_AGENT.md)
 - [开发与参赛计划](docs/ROADMAP.md)

@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import { AuthError, createSession } from "./auth";
 import { query, withTransaction } from "./db";
 import { DEMO_PROFILES } from "./demo-catalog";
+import { ensureVisitorMemoryToken } from "./visitor-memory";
 
 export async function isDemoCustomer(customerId: string) {
   return Boolean((await query("SELECT 1 FROM demo_profiles WHERE customer_id=$1", [customerId])).rowCount);
@@ -75,7 +76,7 @@ export async function ensureDemoProfiles() {
   });
 }
 
-export async function loginDemoProfile(input: { profileKey: string; previousToken?: string; userAgent?: string | null }) {
+export async function loginDemoProfile(input: { profileKey: string; previousToken?: string; previousMemoryToken?: string; userAgent?: string | null }) {
   // Only the published fictional identities are selectable, never a customer UUID.
   if (!DEMO_PROFILES.some((profile) => profile.key === input.profileKey)) throw new AuthError("DEMO_PROFILE_NOT_FOUND", 404);
   await ensureDemoProfiles();
@@ -87,7 +88,8 @@ export async function loginDemoProfile(input: { profileKey: string; previousToke
     if (!customer) throw new AuthError("CUSTOMER_UNAVAILABLE", 403);
     if (input.previousToken) await client.query("UPDATE user_sessions SET revoked_at=now() WHERE token_hash=$1 AND revoked_at IS NULL", [createHash("sha256").update(input.previousToken).digest("hex")]);
     const session = await createSession(customer.id, input.userAgent, client);
+    const memoryToken = await ensureVisitorMemoryToken(input.previousMemoryToken, client);
     await client.query("INSERT INTO audit_events(customer_id,event_type,actor_type,event_summary,evidence) VALUES($1,'DEMO_SESSION_STARTED','USER','选择比赛模拟用户',$2::jsonb)", [customer.id, JSON.stringify({ demo: true, profileKey: input.profileKey })]);
-    return { customer, ...session };
+    return { customer, ...session, memoryToken };
   });
 }
