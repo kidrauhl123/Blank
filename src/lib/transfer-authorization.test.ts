@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   authenticateRequest: vi.fn(), commitTransfer: vi.fn(), commitPreparedCardLock: vi.fn(),
-  writeAudit: vi.fn(), resumeAgentRuntime: vi.fn(),
+  writeAudit: vi.fn(), resumeAgentRuntime: vi.fn(), inspectAgentRun: vi.fn(), resolveVisitorMemoryScope: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -13,7 +13,8 @@ vi.mock("@/lib/auth", () => ({
 }));
 vi.mock("@/lib/bank-core", () => ({ commitTransfer: mocks.commitTransfer, commitPreparedCardLock: mocks.commitPreparedCardLock }));
 vi.mock("@/lib/audit", () => ({ writeAudit: mocks.writeAudit }));
-vi.mock("@/lib/agent-runtime", () => ({ resumeAgentRuntime: mocks.resumeAgentRuntime }));
+vi.mock("@/lib/agent-runtime", () => ({ resumeAgentRuntime: mocks.resumeAgentRuntime, inspectAgentRun: mocks.inspectAgentRun }));
+vi.mock("@/lib/visitor-memory", () => ({ resolveVisitorMemoryScope: mocks.resolveVisitorMemoryScope }));
 
 import { POST as commit } from "../app/api/operations/[operationId]/commit/route";
 import { POST as authorize } from "../app/api/v1/operations/[operationId]/authorize/route";
@@ -37,6 +38,8 @@ describe.each(routes)("$name authorization boundary", ({ handler, path, body }) 
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.authenticateRequest.mockResolvedValue({ kind: "SESSION", customerId });
+    mocks.inspectAgentRun.mockResolvedValue({ operation_id: operationId });
+    mocks.resolveVisitorMemoryScope.mockResolvedValue(null);
   });
 
   it("returns persisted red authorization requirements as 409 without reporting success or resuming the Agent", async () => {

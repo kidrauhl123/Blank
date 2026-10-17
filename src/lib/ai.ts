@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { GROUNDED_REPLY_PROMPT, PLANNER_SYSTEM_PROMPT } from "./bank-agent-prompts";
+import { currentPreferenceData } from "./preference-runtime";
 
 export type ConversationMessage = { role: "user" | "assistant"; content: string };
 
@@ -95,6 +96,8 @@ async function requestJson<T>(
   schema: z.ZodType<T>,
 ) {
   const config = getConfig();
+  const preferenceData = await currentPreferenceData();
+  const modelMessages = preferenceData ? [messages[0], { role: "user" as const, content: preferenceData }, ...messages.slice(1)] : messages;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
   try {
@@ -106,7 +109,7 @@ async function requestJson<T>(
       },
       body: JSON.stringify({
         model: config.model,
-        messages,
+        messages: modelMessages,
         temperature: 0.1,
         response_format: { type: "json_object" },
       }),

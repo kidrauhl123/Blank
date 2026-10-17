@@ -1,5 +1,6 @@
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatDeepSeek } from "@langchain/deepseek";
+import { HumanMessage } from "@langchain/core/messages";
 import { tool, type ToolRuntime } from "@langchain/core/tools";
 import { interrupt, type BaseCheckpointSaver } from "@langchain/langgraph";
 import { createDeepAgent, registerHarnessProfile } from "deepagents";
@@ -9,6 +10,7 @@ import { AIConfigurationError, getAIStatus } from "./ai";
 import { actionResultSchema, type PageAction } from "./app-agent-protocol";
 import { appAgentSkillFiles } from "./app-agent-skills";
 import { APP_AGENT_PROMPT } from "./bank-agent-prompts";
+import { currentPreferenceData } from "./preference-runtime";
 
 export { APP_AGENT_PROMPT } from "./bank-agent-prompts";
 
@@ -69,7 +71,13 @@ export function createAppAgentHarness(checkpointer: BaseCheckpointSaver, modelOv
   const allowed = new Set([...appPageTools().map((entry) => entry.name), "read_file"]);
   const boundary = createMiddleware({
     name: "BankPageToolBoundary",
-    wrapModelCall: (request, handler) => handler({ ...request, tools: request.tools.filter((entry) => "name" in entry && typeof entry.name === "string" && allowed.has(entry.name)) }),
+    wrapModelCall: async (request, handler) => {
+      const data = await currentPreferenceData();
+      return handler({ ...request,
+        messages: data ? [new HumanMessage(data), ...request.messages] : request.messages,
+        tools: request.tools.filter((entry) => "name" in entry && typeof entry.name === "string" && allowed.has(entry.name)),
+      });
+    },
     wrapToolCall: (request, handler) => {
       if (!allowed.has(request.toolCall.name)) throw new Error("APP_AGENT_TOOL_NOT_ALLOWED");
       if (request.toolCall.name === "read_file" && !Object.hasOwn(appAgentSkillFiles(), String(request.toolCall.args.file_path))) throw new Error("APP_AGENT_SKILL_NOT_ALLOWED");

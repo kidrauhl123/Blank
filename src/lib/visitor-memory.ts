@@ -44,20 +44,28 @@ export async function ensureVisitorMemoryToken(rawToken: string | undefined, cli
 
 export type VisitorMemoryScope = { ownerId: string; profileKey: string };
 
-// Both identifiers come from authenticated server state; callers cannot choose
-// an owner ID or a profile key through a request body or query parameter.
-export async function requireVisitorMemoryScope(request: Request): Promise<VisitorMemoryScope> {
-  const session = await requireAppSession(request);
+// Missing or unknown visitor cookies produce no memory for ordinary assistant
+// requests. The preference management API uses the strict variant below.
+export async function resolveVisitorMemoryScope(request: Request, customerId: string): Promise<VisitorMemoryScope | null> {
   const token = getCookieValue(request, VISITOR_MEMORY_COOKIE);
-  if (!token || !TOKEN_PATTERN.test(token)) throw new AuthError("MEMORY_VISITOR_REQUIRED", 403);
+  if (!token || !TOKEN_PATTERN.test(token)) return null;
   const result = await query<{ owner_id: string; profile_key: string }>(
     `SELECT v.id AS owner_id, d.profile_key
      FROM visitor_memory_owners v
      CROSS JOIN demo_profiles d
      WHERE v.token_hash=$1 AND v.expires_at>now() AND d.customer_id=$2`,
-    [tokenHash(token), session.customerId],
+    [tokenHash(token), customerId],
   );
   const row = result.rows[0];
-  if (!row) throw new AuthError("MEMORY_VISITOR_REQUIRED", 403);
+  if (!row) return null;
   return { ownerId: row.owner_id, profileKey: row.profile_key };
+}
+
+// Both identifiers come from authenticated server state; callers cannot choose
+// an owner ID or a profile key through a request body or query parameter.
+export async function requireVisitorMemoryScope(request: Request): Promise<VisitorMemoryScope> {
+  const session = await requireAppSession(request);
+  const scope = await resolveVisitorMemoryScope(request, session.customerId);
+  if (!scope) throw new AuthError("MEMORY_VISITOR_REQUIRED", 403);
+  return scope;
 }

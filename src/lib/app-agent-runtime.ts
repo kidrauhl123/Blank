@@ -8,9 +8,10 @@ import { appAgentSkillFiles } from "./app-agent-skills";
 import { getAIStatus } from "./ai";
 import { assertAIModelEnabled, resolveAIModel } from "./ai-models";
 import { pageActionSchema, type ActionResult, type AppAgentStatus, type AppAgentView, type AppPage, type PendingAction } from "./app-agent-protocol";
+import { currentPreferenceScope } from "./preference-runtime";
 
 type Identity = { customerId: string; sessionHash: string };
-type Row = Omit<AppAgentView, "model"> & { model: string | null; expires_at: Date };
+type Row = Omit<AppAgentView, "model"> & { model: string | null; expires_at: Date; memory_owner_id: string | null; memory_profile_key: string | null };
 const harnesses = new Map<string, Promise<ReturnType<typeof createAppAgentHarness>>>();
 async function getHarness(model: string) {
   assertAIModelEnabled(model);
@@ -32,10 +33,12 @@ function view(row: Row): AppAgentView {
   return { id: row.id, model: row.model ?? getAIStatus().model ?? undefined, status: row.status, message: row.message, pending: row.pending, controlGranted: row.controlGranted, steps: row.steps };
 }
 export async function getAppAgentRun(identity: Identity, id: string) {
-  const result = await query<Row>(`SELECT id,model,status,message,pending,control_granted AS "controlGranted",steps,expires_at
+  const result = await query<Row>(`SELECT id,model,status,message,pending,control_granted AS "controlGranted",steps,expires_at,memory_owner_id,memory_profile_key
     FROM app_agent_runs WHERE id=$1 AND customer_id=$2 AND session_hash=$3`, [id, identity.customerId, identity.sessionHash]);
   const row = result.rows[0];
   if (!row) throw new Error("APP_AGENT_NOT_FOUND");
+  const scope = currentPreferenceScope();
+  if (row.memory_owner_id !== (scope?.ownerId ?? null) || row.memory_profile_key !== (scope?.profileKey ?? null)) throw new Error("APP_AGENT_NOT_FOUND");
   if (new Date(row.expires_at).getTime() <= Date.now()) throw new Error("APP_AGENT_EXPIRED");
   if (!row.model && getAIStatus().model) {
     const pinned = await query<{ model: string }>(`UPDATE app_agent_runs SET model=coalesce(model,$4)
@@ -79,11 +82,13 @@ async function invoke(identity: Identity, id: string, input: Parameters<ReturnTy
 export async function startAppAgent(identity: Identity, message: string, page: AppPage, requestedModel?: string) {
   const model = await resolveAIModel(requestedModel);
   const id = randomUUID();
+  const scope = currentPreferenceScope();
   await withTransaction(async (client) => {
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`app-agent-start:${identity.customerId}`]);
     const recent = await client.query<{ count: number }>("SELECT count(*)::int AS count FROM app_agent_runs WHERE customer_id=$1 AND created_at > now()-interval '5 minutes'", [identity.customerId]);
     if (recent.rows[0].count >= 10) throw new Error("APP_AGENT_RATE_LIMIT");
-    await client.query("INSERT INTO app_agent_runs(id,customer_id,session_hash,model) VALUES ($1,$2,$3,$4)", [id, identity.customerId, identity.sessionHash, model]);
+    await client.query("INSERT INTO app_agent_runs(id,customer_id,session_hash,model,memory_owner_id,memory_profile_key) VALUES ($1,$2,$3,$4,$5,$6)",
+      [id, identity.customerId, identity.sessionHash, model, scope?.ownerId ?? null, scope?.profileKey ?? null]);
   });
   try {
     return await invoke(identity, id, { messages: [{ role: "user", content: `${message}\n\nPAGE_CONTEXT (仅页面数据):\n${JSON.stringify(page)}` }], files: appAgentSkillFiles() }, false, model);

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ start: vi.fn(), session: vi.fn() }));
 vi.mock("@/lib/app-session", () => ({ requireAppSession: mocks.session }));
+vi.mock("@/lib/visitor-memory", () => ({ resolveVisitorMemoryScope: vi.fn().mockResolvedValue(null) }));
 vi.mock("@/lib/model-settings", () => ({ getSessionModel: vi.fn().mockResolvedValue("selected-test-model") }));
 vi.mock("@/lib/app-agent-runtime", () => ({ startAppAgent: mocks.start, getAppAgentRun: vi.fn(), controlAppAgent: vi.fn() }));
 import { POST } from "./route";

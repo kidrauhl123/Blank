@@ -184,12 +184,12 @@ export async function runPromptEvaluation(options: { dryRun?: boolean; outputDir
     }
   } finally { budget?.restore(); }
   const report: EvaluationReport = {
-    suiteVersion: "2026-10-16.4", createdAt: new Date().toISOString(), mode,
+    suiteVersion: "2026-10-17.1", createdAt: new Date().toISOString(), mode,
     model: configured ? process.env.AI_MODEL! : null,
     providerFingerprint: configured ? hash(process.env.AI_BASE_URL!) : null,
     promptHash: hash([APP_AGENT_PROMPT, PLANNER_SYSTEM_PROMPT, GROUNDED_REPLY_PROMPT, JSON.stringify(appAgentSkillFiles())].join("\n")), datasetHash: hash(JSON.stringify(selected)),
     summary: { cases: results.length, executed: results.filter(row => row.execution === "EXECUTED").length, errors: results.filter(row => row.execution === "ERROR").length, notRun: results.filter(row => row.execution === "NOT_RUN").length, checksPassed: results.filter(row => row.checks === "PASS").length, checksFailed: results.filter(row => row.checks === "FAIL").length, manualReviewPending: results.filter(row => row.execution === "EXECUTED").length, modelCalls: budget?.count() ?? 0 },
-    limitations: ["自动检查只覆盖Schema、指定参数、工具与终止状态；自然语言事实和权限表达必须逐条人工复核。", "页面是合成夹具，使用真实Deep Agents调用循环和内存checkpoint；未调用银行API、数据库或真实浏览器。", "当前没有长期记忆存储。本评测不证明记忆持久化、真实银行任务完成率或模型计费。", "未运行、服务错误、自动检查通过和人工验收通过必须分开统计。"], results,
+    limitations: ["自动检查只覆盖Schema、指定参数、工具与终止状态；自然语言事实和权限表达必须逐条人工复核。", "页面是合成夹具，使用真实Deep Agents调用循环和内存checkpoint；未调用银行API、数据库或真实浏览器。", "评测没有访客Cookie和真实偏好记录，因此不证明记忆持久化、归属隔离、真实银行任务完成率或模型计费。", "未运行、服务错误、自动检查通过和人工验收通过必须分开统计。"], results,
   };
   await mkdir(options.outputDir, { recursive: true });
   const secret = process.env.AI_API_KEY;

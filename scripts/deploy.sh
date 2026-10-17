@@ -100,6 +100,13 @@ BEGIN
      OR to_regclass('public.visitor_memory_preferences') IS NULL THEN
     RAISE EXCEPTION 'Visitor memory migration is incomplete';
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='016_app_agent_memory_scope.sql')
+     OR NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='app_agent_runs' AND column_name='memory_owner_id')
+     OR NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='app_agent_runs' AND column_name='memory_profile_key')
+     OR NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='agent_runtime_runs' AND column_name='memory_owner_id')
+     OR NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='agent_runtime_runs' AND column_name='memory_profile_key') THEN
+    RAISE EXCEPTION 'Agent memory scope migration is incomplete';
+  END IF;
 END;
 $$;
 SQL

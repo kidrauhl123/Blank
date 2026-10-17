@@ -111,7 +111,7 @@ docker volume rm bankpilot_nanobot
 
 模型调试设置需执行 `014_app_agent_model.sql`。切换 New API 时先在服务器私有文件备份原模型配置，更新 `AI_BASE_URL`（含 `/v1`）、`AI_API_KEY`、`AI_MODEL`，重新创建应用后检查模型目录及实际工具调用；不得把密钥写入命令参数、仓库或日志。发布脚本检查任务模型与会话偏好两列存在。模型目录、默认模型和会话选择的边界见 [模型设置](MODEL_SETTINGS.md)。
 
-新版演示登录和 `/api/v1/preferences` 依赖 `015_visitor_memory.sql`。先应用迁移再启动应用；自动发布脚本会检查访客归属、范围和偏好表存在。读写接口已具备，但页面助手和设置页尚未接入，不能向用户宣称已启用长期记忆。
+新版演示登录和 `/api/v1/preferences` 依赖 `015_visitor_memory.sql`；页面助手与业务助手的访客任务隔离依赖 `016_app_agent_memory_scope.sql`。先应用迁移再启动应用；自动发布脚本会检查访客表及任务归属列存在。银行 APP 模型已可按调用读取有效偏好，但设置页和对话写入工具尚未接入，不能向用户宣称在对话中已保存或删除偏好。
 
 ```bash
 ssh CONTABO-jp 'cd /opt/bankpilot && \

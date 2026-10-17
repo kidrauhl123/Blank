@@ -21,6 +21,7 @@ import { writeAudit } from "./audit";
 import { getOperation } from "./bank-core";
 import { enqueueChannelNotification, type AgentChannel, hashChannelValue } from "./channels";
 import { db, query, withTransaction } from "./db";
+import { currentPreferenceScope } from "./preference-runtime";
 
 type AuthorizationResume = {
   approved: boolean;
@@ -263,11 +264,12 @@ export async function runAgentRuntime(input: {
   const agentThreadId = await getOrCreateAgentThread(input);
   const runId = randomUUID();
   const graphThreadId = randomUUID();
+  const scope = currentPreferenceScope();
   await query(
     `INSERT INTO agent_runtime_runs
-      (id,agent_thread_id,customer_id,graph_thread_id,channel_type,status)
-     VALUES ($1,$2,$3,$4,$5,'RUNNING')`,
-    [runId, agentThreadId, input.customerId, graphThreadId, input.channelType],
+      (id,agent_thread_id,customer_id,graph_thread_id,channel_type,status,memory_owner_id,memory_profile_key)
+     VALUES ($1,$2,$3,$4,$5,'RUNNING',$6,$7)`,
+    [runId, agentThreadId, input.customerId, graphThreadId, input.channelType, scope?.ownerId ?? null, scope?.profileKey ?? null],
   );
   const graph = await getAgentGraph();
   try {
@@ -323,6 +325,8 @@ export async function resumeAgentRuntime(input: {
   operationId: string;
   approved: boolean;
 }) {
+  const scope = currentPreferenceScope();
+  const memoryKeys = [scope?.ownerId ?? null, scope?.profileKey ?? null];
   const run = await query<{
     id: string;
     graph_thread_id: string;
@@ -336,16 +340,20 @@ export async function resumeAgentRuntime(input: {
      FROM agent_threads t
      WHERE r.agent_thread_id=t.id AND r.customer_id=$1 AND r.task_id=$2
        AND r.operation_id=$3 AND r.status='INTERRUPTED'
+       AND r.memory_owner_id IS NOT DISTINCT FROM $4::uuid
+       AND r.memory_profile_key IS NOT DISTINCT FROM $5::text
      RETURNING r.id,r.graph_thread_id,r.status,r.operation_id,r.final_reply,
        r.channel_type,t.channel_identity_id`,
-    [input.customerId, input.taskId, input.operationId],
+    [input.customerId, input.taskId, input.operationId, ...memoryKeys],
   );
   const current = run.rows[0];
   if (!current) {
     const existing = await query<{ status: string; operation_id: string; final_reply: AgentReply | null }>(
       `SELECT status,operation_id,final_reply FROM agent_runtime_runs
-       WHERE customer_id=$1 AND task_id=$2`,
-      [input.customerId, input.taskId],
+       WHERE customer_id=$1 AND task_id=$2
+         AND memory_owner_id IS NOT DISTINCT FROM $3::uuid
+         AND memory_profile_key IS NOT DISTINCT FROM $4::text`,
+      [input.customerId, input.taskId, ...memoryKeys],
     );
     const found = existing.rows[0];
     if (!found || found.operation_id !== input.operationId) throw new Error("AGENT_RUN_NOT_FOUND");
@@ -402,6 +410,7 @@ export async function resumeAgentRuntime(input: {
 }
 
 export async function inspectAgentRun(customerId: string, taskId: string) {
+  const scope = currentPreferenceScope();
   const result = await query<{
     id: string;
     task_id: string;
@@ -416,8 +425,10 @@ export async function inspectAgentRun(customerId: string, taskId: string) {
     `SELECT r.id,r.task_id,r.status,r.interrupt_kind,r.operation_id,r.channel_type,
        t.channel_identity_id,r.created_at::text,r.updated_at::text
      FROM agent_runtime_runs r JOIN agent_threads t ON t.id=r.agent_thread_id
-     WHERE r.customer_id=$1 AND r.task_id=$2`,
-    [customerId, taskId],
+     WHERE r.customer_id=$1 AND r.task_id=$2
+       AND r.memory_owner_id IS NOT DISTINCT FROM $3::uuid
+       AND r.memory_profile_key IS NOT DISTINCT FROM $4::text`,
+    [customerId, taskId, scope?.ownerId ?? null, scope?.profileKey ?? null],
   );
   return result.rows[0] ?? null;
 }
