@@ -1,13 +1,15 @@
 import type { AppPage, PageAction } from "./app-agent-protocol";
 
-const monetaryOption = /(?:[¥￥]\s*\d|\d[\d,.]*\s*(?:元|块|角|分))/u;
+const monetaryOption = /(?:[¥￥]\s*\d[\d,.]*|\d[\d,.]*\s*(?:元|块|角|分))/u;
+const monetaryMentions = /(?:[¥￥]\s*\d[\d,.]*|\d[\d,.]*\s*(?:元|块|角|分))/gu;
 const bareAmount = /^\s*\d[\d,.]*\s*$/u;
 
 export function guardQuestion(action: PageAction, userMessage: string): PageAction {
   if (action.type !== "question") return action;
   const asksAmount = /金额|多少钱|转多少|汇多少/u.test(action.question);
   const invented = action.options.some((option) =>
-    (monetaryOption.test(option) || (asksAmount && bareAmount.test(option))) && !userMessage.includes(option.trim()));
+    (monetaryOption.test(option) || (asksAmount && bareAmount.test(option))) && !userMessage.includes(option.trim())) ||
+    [...action.question.matchAll(monetaryMentions)].some((match) => !userMessage.includes(match[0]));
   return invented ? { type: "question", question: "请自行输入具体金额，或暂不办理。", options: ["自行输入", "暂不办理"] } : action;
 }
 

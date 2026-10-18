@@ -68,7 +68,9 @@ describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("visitor preference life
       if (isolated) await isolated.end();
       if (createdDatabase) {
         if (!/^bankpilot_preference_[a-f0-9]{32}$/.test(databaseName)) throw new Error("Unsafe fixture database name");
-        await maintenance.query(`DROP DATABASE "${databaseName}" WITH (FORCE)`);
+        // Do not terminate a pooled connection while its error event can still
+        // reach the test worker. Pool.end() must release the fixture first.
+        await maintenance.query(`DROP DATABASE "${databaseName}"`);
       }
     } finally { if (maintenance) await maintenance.end(); }
   });

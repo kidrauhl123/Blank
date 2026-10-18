@@ -8,6 +8,8 @@ describe("page assistant output guards", () => {
       .toEqual({ type: "question", question: "请自行输入具体金额，或暂不办理。", options: ["自行输入", "暂不办理"] });
     expect(guardQuestion({ type: "question", question: "查看哪张卡？", options: ["日常卡", "旅行卡"] }, "看看卡片"))
       .toMatchObject({ options: ["日常卡", "旅行卡"] });
+    expect(guardQuestion({ type: "question", question: "要转100元还是500元？", options: ["自行输入", "暂不办理"] }, "给小苹果转点钱"))
+      .toMatchObject({ question: "请自行输入具体金额，或暂不办理。" });
   });
 
   it("uses a deterministic human handoff message when the model ends after preparing a confirmation page", () => {
