@@ -36,7 +36,9 @@ describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("visitor memory migratio
       if (isolated) await isolated.end();
       if (createdDatabase) {
         if (!/^bankpilot_memory_[a-f0-9]{32}$/.test(databaseName)) throw new Error("Unsafe fixture database name");
-        await db.query(`DROP DATABASE "${databaseName}" WITH (FORCE)`);
+        // Pool.end() must release every fixture connection. A plain DROP makes
+        // leaked clients visible instead of terminating them after the test.
+        await db.query(`DROP DATABASE "${databaseName}"`);
       }
     } finally { await db.end(); }
   });
