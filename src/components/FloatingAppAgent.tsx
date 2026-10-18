@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type RefObjec
 import { Check, ChevronDown, MousePointer2, Pause, Play, Send, Sparkles, Square, X } from "lucide-react";
 import { applyPageAction, captureAppPage, type PageMotion } from "@/lib/app-page";
 import type { AppAgentView } from "@/lib/app-agent-protocol";
+import { parsePreferenceCommand } from "@/lib/preference-command";
 import styles from "./FloatingAppAgent.module.css";
 
 type Message = { role: "user" | "assistant"; text: string };
@@ -61,6 +62,7 @@ export function FloatingAppAgent({ rootRef, configured, openSignal, closeSignal 
   const alive = useRef(true);
   const endRequested = useRef(false);
   const historyEnd = useRef<HTMLDivElement>(null);
+  const answerInput = useRef<HTMLInputElement>(null);
   const markStep = useCallback((id: string, state: StepState) => {
     setSteps((items) => items.map((item) => item.id === id && !(state === "paused" && ["done", "blocked"].includes(item.state)) ? { ...item, state } : item));
   }, []);
@@ -168,12 +170,13 @@ export function FloatingAppAgent({ rootRef, configured, openSignal, closeSignal 
 
   const send = async (text = input) => {
     const message = text.trim();
-    if (!message || busy || !rootRef.current) return;
+    const preferenceCommand = parsePreferenceCommand(message);
+    if (!message || busy || !rootRef.current || (!configured && !preferenceCommand)) return;
     setInput(""); setError(""); setBusy(true);
     setMessages((items) => [...items, { role: "user", text: message }]);
     const current = viewRef.current;
     try {
-      if (current?.pending?.action.type === "question") {
+      if (current?.pending?.action.type === "question" && !preferenceCommand) {
         paused.current = false;
         control.current = current.controlGranted;
         markStep(current.pending.id, "done");
@@ -252,15 +255,15 @@ export function FloatingAppAgent({ rootRef, configured, openSignal, closeSignal 
         {messages.map((message, index) => <p key={index} className={message.role === "user" ? styles.user : styles.assistant}>{message.text}</p>)}
         {run && <p className={styles.assistant}>{run.message}</p>}
         <StepList items={steps} />
-        {question && <div className={styles.choices} aria-label={question.question}>{question.options.map((option) => <button key={option} disabled={busy} onClick={() => send(option)}>{option}</button>)}<small>也可以在下方直接输入，无默认选项。</small></div>}
+        {question && <div className={styles.choices} aria-label={question.question}>{question.options.map((option) => <button key={option} disabled={busy} onClick={() => option === "自行输入" ? answerInput.current?.focus() : void send(option)}>{option}</button>)}<small>也可以在下方直接输入，无默认选项。</small></div>}
         {run?.status === "CONSENT" && <div className={styles.consent}><p>是否允许我接管页面？你操作页面时我会暂停，业务确认与强验证由你完成。</p><button disabled={busy} onClick={continueRun}>允许代操作</button><button disabled={busy} onClick={cancel}>暂不允许</button></div>}
         {(run?.status === "PAUSED" || run?.status === "HANDOFF") && !question && <div className={styles.controls}><button disabled={busy} onClick={continueRun}>{run.controlGranted ? "继续 · 重新读取页面" : run.status === "HANDOFF" ? "我已操作 · 查看页面" : "允许代操作"}</button><button disabled={busy} onClick={cancel}>结束</button></div>}
         {busy && <p className={styles.progress}>正在处理…</p>}
         {error && <p role="alert" className={styles.error}>{error}</p>}
-        {!configured && <p className={styles.error}>助手服务暂不可用，你仍可通过页面办理业务。</p>}
+        {!configured && <p className={styles.error}>助手模型暂不可用；仍可输入明确的偏好管理指令，或通过页面办理业务。</p>}
         <div ref={historyEnd} />
       </div>
-      <form onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}><input aria-label="向悬浮助手描述需求或回答问题" placeholder={question ? "选择选项，或直接输入…" : "描述你想办理的业务…"} value={input} onChange={(event) => setInput(event.target.value)} maxLength={1000} /><button aria-label="发送给悬浮助手" disabled={!configured || busy || !input.trim()}><Send size={18} /></button></form>
+      <form onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}><input ref={answerInput} aria-label="向悬浮助手描述需求或回答问题" placeholder={question ? "选择选项，或直接输入…" : "描述你想办理的业务…"} value={input} onChange={(event) => setInput(event.target.value)} maxLength={1000} /><button aria-label="发送给悬浮助手" disabled={(!configured && !parsePreferenceCommand(input)) || busy || !input.trim()}><Send size={18} /></button></form>
     </section>}
   </div>;
 }

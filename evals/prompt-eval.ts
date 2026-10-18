@@ -184,7 +184,7 @@ export async function runPromptEvaluation(options: { dryRun?: boolean; outputDir
     }
   } finally { budget?.restore(); }
   const report: EvaluationReport = {
-    suiteVersion: "2026-10-17.1", createdAt: new Date().toISOString(), mode,
+    suiteVersion: "2026-10-18.1", createdAt: new Date().toISOString(), mode,
     model: configured ? process.env.AI_MODEL! : null,
     providerFingerprint: configured ? hash(process.env.AI_BASE_URL!) : null,
     promptHash: hash([APP_AGENT_PROMPT, PLANNER_SYSTEM_PROMPT, GROUNDED_REPLY_PROMPT, JSON.stringify(appAgentSkillFiles())].join("\n")), datasetHash: hash(JSON.stringify(selected)),

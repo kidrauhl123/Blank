@@ -10,6 +10,8 @@ vi.mock("./db", () => database);
 
 import { ensureVisitorMemoryToken } from "./visitor-memory";
 import { clearPreferences, deletePreference, getActivePreferenceValues, getPreferenceState, savePreference, setPreferenceMemoryEnabled } from "./visitor-preferences";
+import { applyConversationPreference } from "./conversation-preferences";
+import { parsePreferenceCommand } from "./preference-command";
 
 describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("visitor preference lifecycle", () => {
   const databaseName = `bankpilot_preference_${randomUUID().replaceAll("-", "")}`;
@@ -78,6 +80,19 @@ describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("visitor preference life
     expect(saved.state.preferences.preferred_name?.source).toBe("USER_SETTINGS");
     expect((await getPreferenceState(scopeB)).preferences).toEqual({});
     expect((await getPreferenceState(otherProfile)).preferences).toEqual({});
+  });
+
+  it("commits an explicit conversation command and deletes only its visitor scope", async () => {
+    const save = parsePreferenceCommand("以后叫我小陈");
+    const forget = parsePreferenceCommand("忘掉我的称呼");
+    expect(save).not.toBeNull();
+    expect(forget).not.toBeNull();
+    await applyConversationPreference(scopeA, save!);
+    await savePreference(scopeB, "preferred_name", "小李", "0");
+    expect((await getPreferenceState(scopeA)).preferences.preferred_name).toMatchObject({ value: "小陈", source: "USER_EXPLICIT" });
+    await applyConversationPreference(scopeA, forget!);
+    expect((await getPreferenceState(scopeA)).preferences).toEqual({});
+    expect((await getPreferenceState(scopeB)).preferences.preferred_name?.value).toBe("小李");
   });
 
   it("rejects a stale update and preserves the newer explicit value", async () => {

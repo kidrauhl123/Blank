@@ -164,7 +164,7 @@ export async function composeGroundedReply(input: {
   state: "COMPLETED" | "AWAITING_INPUT" | "AWAITING_CONFIRMATION" | "AWAITING_MFA";
   facts: Record<string, unknown>;
 }) {
-  return requestJson(
+  const result = await requestJson(
     [
       { role: "system", content: GROUNDED_REPLY_PROMPT },
       {
@@ -179,4 +179,20 @@ export async function composeGroundedReply(input: {
     ],
     groundedReplySchema,
   );
+  const allowedActions = Array.isArray(input.facts.nextActions)
+    ? input.facts.nextActions.filter((action): action is string => typeof action === "string") : [];
+  const suggestions = result.value.suggestions.filter((suggestion) => allowedActions.includes(suggestion));
+  const bankVerified = input.state === "COMPLETED" && input.facts.operationExecuted === true &&
+    (input.facts.operationState === "SUCCEEDED" || input.facts.status === "SUCCEEDED");
+  const claimsOperationSuccess = /(?:转账|入金|锁卡|开卡|申请)(?:已)?(?:成功|完成)|(?:已经|已)(?:成功|完成)(?:转账|入金|锁卡|开卡)|(?:款项|资金)(?:已|已经)到账/u.test(result.value.message);
+  const money = typeof input.facts.amountMinor === "number" && Number.isSafeInteger(input.facts.amountMinor) && input.facts.currency === "CNY"
+    ? `${(input.facts.amountMinor / 100).toFixed(2)}元` : null;
+  const recipient = typeof input.facts.beneficiaryName === "string" ? `给${input.facts.beneficiaryName}` : "";
+  const operation = input.intent === "TRANSFER" ? `${recipient}${money ?? "这笔"}转账`
+    : input.intent === "CARD_LOCK" ? "锁卡操作" : "这项业务";
+  const fallback = input.state === "AWAITING_MFA" ? `${operation}仍需你本人完成强验证，银行尚未确认执行成功。`
+    : input.state === "AWAITING_CONFIRMATION" ? `${operation}待你本人确认，银行尚未执行。`
+      : "目前没有可核验的银行执行成功结果，请以银行页面或交易记录的实际状态为准。";
+  const message = claimsOperationSuccess && !bankVerified ? fallback : result.value.message;
+  return { ...result, value: { message, suggestions } };
 }
