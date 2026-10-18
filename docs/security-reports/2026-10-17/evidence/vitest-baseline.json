@@ -1,0 +1,1046 @@
+{
+  "schema_version": 1,
+  "label": "baseline-without-db",
+  "raw_sha256": "10899c57cad401b06793192eebdf3b936088c70ca872d3a4d233a1af0d601fb6",
+  "started_at_utc": "2026-10-16T19:27:53.883000+00:00",
+  "total": 172,
+  "passed": 133,
+  "failed": 0,
+  "skipped": 39,
+  "success": true,
+  "cases": [
+    {
+      "title": "excludes operator-blocked models even when the gateway advertises them, and invalidates the catalog cache",
+      "status": "passed",
+      "duration_ms": 555.8480999999999,
+      "failure_recorded": false
+    },
+    {
+      "title": "cannot bypass a block by selecting the configured default or omitting the selection",
+      "status": "passed",
+      "duration_ms": 9.036200000000008,
+      "failure_recorded": false
+    },
+    {
+      "title": "does not invent an available model when every advertised model is blocked",
+      "status": "passed",
+      "duration_ms": 5.8168000000000575,
+      "failure_recorded": false
+    },
+    {
+      "title": "authenticates only to the configured upstream and exposes model IDs without upstream metadata",
+      "status": "passed",
+      "duration_ms": 12.646900000000187,
+      "failure_recorded": false
+    },
+    {
+      "title": "deduplicates and sorts IDs while filtering malformed entries and unsafe characters",
+      "status": "passed",
+      "duration_ms": 5.360000000000127,
+      "failure_recorded": false
+    },
+    {
+      "title": "bounds a large catalog and supplies a usable listed default when the configured default is absent",
+      "status": "passed",
+      "duration_ms": 7.219200000000001,
+      "failure_recorded": false
+    },
+    {
+      "title": "caches a successful catalog for one minute and refreshes after expiry",
+      "status": "passed",
+      "duration_ms": 7.813099999999849,
+      "failure_recorded": false
+    },
+    {
+      "title": "shares one upstream request between simultaneous callers",
+      "status": "passed",
+      "duration_ms": 9.035599999999931,
+      "failure_recorded": false
+    },
+    {
+      "title": "invalidates a cached catalog after AI_API_KEY changes",
+      "status": "passed",
+      "duration_ms": 4.390599999999949,
+      "failure_recorded": false
+    },
+    {
+      "title": "invalidates a cached catalog after AI_BASE_URL changes",
+      "status": "passed",
+      "duration_ms": 5.287199999999984,
+      "failure_recorded": false
+    },
+    {
+      "title": "invalidates a cached catalog after AI_MODEL changes",
+      "status": "passed",
+      "duration_ms": 5.272200000000112,
+      "failure_recorded": false
+    },
+    {
+      "title": "does not share an in-flight catalog with a newly configured provider",
+      "status": "passed",
+      "duration_ms": 8.880800000000136,
+      "failure_recorded": false
+    },
+    {
+      "title": "returns a generic failure for http errors without exposing secrets",
+      "status": "passed",
+      "duration_ms": 5.251999999999953,
+      "failure_recorded": false
+    },
+    {
+      "title": "returns a generic failure for transport errors without exposing secrets",
+      "status": "passed",
+      "duration_ms": 4.098199999999906,
+      "failure_recorded": false
+    },
+    {
+      "title": "returns a generic failure for json errors without exposing secrets",
+      "status": "passed",
+      "duration_ms": 3.0925999999999476,
+      "failure_recorded": false
+    },
+    {
+      "title": "returns a generic failure for shape errors without exposing secrets",
+      "status": "passed",
+      "duration_ms": 3.847400000000107,
+      "failure_recorded": false
+    },
+    {
+      "title": "returns a generic failure for empty errors without exposing secrets",
+      "status": "passed",
+      "duration_ms": 8.527799999999843,
+      "failure_recorded": false
+    },
+    {
+      "title": "clears a failed in-flight request so another attempt can recover",
+      "status": "passed",
+      "duration_ms": 5.2733999999998105,
+      "failure_recorded": false
+    },
+    {
+      "title": "fails closed before making a request when AI_BASE_URL is missing",
+      "status": "passed",
+      "duration_ms": 4.188300000000027,
+      "failure_recorded": false
+    },
+    {
+      "title": "fails closed before making a request when AI_API_KEY is missing",
+      "status": "passed",
+      "duration_ms": 6.407200000000103,
+      "failure_recorded": false
+    },
+    {
+      "title": "fails closed before making a request when AI_MODEL is missing",
+      "status": "passed",
+      "duration_ms": 3.402499999999918,
+      "failure_recorded": false
+    },
+    {
+      "title": "uses the operator-configured default without requiring the optional catalog endpoint",
+      "status": "passed",
+      "duration_ms": 4.126299999999901,
+      "failure_recorded": false
+    },
+    {
+      "title": "allows a selected model returned by the current provider catalog",
+      "status": "passed",
+      "duration_ms": 4.395999999999958,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects unknown or injected model names instead of forwarding them upstream",
+      "status": "passed",
+      "duration_ms": 5.549099999999953,
+      "failure_recorded": false
+    },
+    {
+      "title": "fails explicitly when no model is configured instead of using rules",
+      "status": "passed",
+      "duration_ms": 14.994900000000143,
+      "failure_recorded": false
+    },
+    {
+      "title": "uses the configured model response as structured intent",
+      "status": "passed",
+      "duration_ms": 61.58109999999988,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects model output outside the banking schema",
+      "status": "passed",
+      "duration_ms": 4.480299999999943,
+      "failure_recorded": false
+    },
+    {
+      "title": "classifies provider status 401 without forwarding its diagnostic payload",
+      "status": "passed",
+      "duration_ms": 6.8337999999999965,
+      "failure_recorded": false
+    },
+    {
+      "title": "classifies provider status 403 without forwarding its diagnostic payload",
+      "status": "passed",
+      "duration_ms": 0.9148000000000138,
+      "failure_recorded": false
+    },
+    {
+      "title": "classifies provider status 402 without forwarding its diagnostic payload",
+      "status": "passed",
+      "duration_ms": 0.6931999999999334,
+      "failure_recorded": false
+    },
+    {
+      "title": "classifies provider status 429 without forwarding its diagnostic payload",
+      "status": "passed",
+      "duration_ms": 0.6661000000000286,
+      "failure_recorded": false
+    },
+    {
+      "title": "classifies provider status 408 without forwarding its diagnostic payload",
+      "status": "passed",
+      "duration_ms": 0.8293999999999642,
+      "failure_recorded": false
+    },
+    {
+      "title": "classifies provider status 504 without forwarding its diagnostic payload",
+      "status": "passed",
+      "duration_ms": 0.8405999999999949,
+      "failure_recorded": false
+    },
+    {
+      "title": "classifies provider status 400 without forwarding its diagnostic payload",
+      "status": "passed",
+      "duration_ms": 1.1345999999999776,
+      "failure_recorded": false
+    },
+    {
+      "title": "classifies provider status 404 without forwarding its diagnostic payload",
+      "status": "passed",
+      "duration_ms": 0.7857999999999947,
+      "failure_recorded": false
+    },
+    {
+      "title": "classifies provider status 422 without forwarding its diagnostic payload",
+      "status": "passed",
+      "duration_ms": 0.7074999999999818,
+      "failure_recorded": false
+    },
+    {
+      "title": "classifies provider status 500 without forwarding its diagnostic payload",
+      "status": "passed",
+      "duration_ms": 0.8155000000000427,
+      "failure_recorded": false
+    },
+    {
+      "title": "classifies provider status 503 without forwarding its diagnostic payload",
+      "status": "passed",
+      "duration_ms": 0.9231000000000904,
+      "failure_recorded": false
+    },
+    {
+      "title": "gives an actionable model selection message for upstream access denial",
+      "status": "passed",
+      "duration_ms": 0.7735999999999876,
+      "failure_recorded": false
+    },
+    {
+      "title": "recognizes APIConnectionTimeoutError without an HTTP status",
+      "status": "passed",
+      "duration_ms": 0.44249999999999545,
+      "failure_recorded": false
+    },
+    {
+      "title": "recognizes TimeoutError without an HTTP status",
+      "status": "passed",
+      "duration_ms": 0.2617999999999938,
+      "failure_recorded": false
+    },
+    {
+      "title": "recognizes AbortError without an HTTP status",
+      "status": "passed",
+      "duration_ms": 0.1996000000000322,
+      "failure_recorded": false
+    },
+    {
+      "title": "retains application errors instead of misclassifying them as provider errors",
+      "status": "passed",
+      "duration_ms": 0.3692999999999529,
+      "failure_recorded": false
+    },
+    {
+      "title": "bounds cyclic causes and keeps unknown failures generic",
+      "status": "passed",
+      "duration_ms": 0.3392000000000053,
+      "failure_recorded": false
+    },
+    {
+      "title": "preserves provider access-denial classification through the real middleware error wrappers",
+      "status": "passed",
+      "duration_ms": 126.31280000000015,
+      "failure_recorded": false
+    },
+    {
+      "title": "executes multiple Skill reads before advancing to the requested page action",
+      "status": "passed",
+      "duration_ms": 52.41520000000037,
+      "failure_recorded": false
+    },
+    {
+      "title": "discovers standard Skills, pauses page tools and feeds changed state back to the model",
+      "status": "passed",
+      "duration_ms": 73.61480000000029,
+      "failure_recorded": false
+    },
+    {
+      "title": "requires control consent, persists pauses and never interprets a choice as bank authorization",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects other customers, new login sessions, expired runs and simultaneous writers",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "enforces a customer-wide start limit across login sessions",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "pins the selected model across refreshes while session preferences remain isolated",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "shares the bank page and removes secrets and the assistant's own dialog",
+      "status": "passed",
+      "duration_ms": 41.16869999999972,
+      "failure_recorded": false
+    },
+    {
+      "title": "refuses to click a bank authorization button even if the model asks",
+      "status": "passed",
+      "duration_ms": 11.458000000000084,
+      "failure_recorded": false
+    },
+    {
+      "title": "does not replay an action against a changed page",
+      "status": "passed",
+      "duration_ms": 12.08640000000014,
+      "failure_recorded": false
+    },
+    {
+      "title": "stops before the highlighted click when the user takes control",
+      "status": "passed",
+      "duration_ms": 11.911099999999806,
+      "failure_recorded": false
+    },
+    {
+      "title": "types into the real field progressively and preserves the user's replacement on pause",
+      "status": "passed",
+      "duration_ms": 16.023200000000088,
+      "failure_recorded": false
+    },
+    {
+      "title": "completes animated input without treating its own edits as external page changes",
+      "status": "passed",
+      "duration_ms": 18.924399999999878,
+      "failure_recorded": false
+    },
+    {
+      "title": "respects reduced motion by filling once while keeping the same safety gate",
+      "status": "passed",
+      "duration_ms": 15.75019999999995,
+      "failure_recorded": false
+    },
+    {
+      "title": "uses the same cookie value for authentication, settings and task ownership when cookie names repeat",
+      "status": "passed",
+      "duration_ms": 13.407500000000027,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects Authorization \"Bearer external-token\" without a cookie before reading any database identity",
+      "status": "passed",
+      "duration_ms": 4.706199999999853,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects Authorization \"Basic dXNlcjpwYXNz\" without a cookie before reading any database identity",
+      "status": "passed",
+      "duration_ms": 1.586999999999989,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects Authorization \"\" without a cookie before reading any database identity",
+      "status": "passed",
+      "duration_ms": 1.6330000000000382,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects Authorization \"bearer external-token\" without a cookie before reading any database identity",
+      "status": "passed",
+      "duration_ms": 1.957400000000007,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects Authorization \"BEARER external-token\" without a cookie before reading any database identity",
+      "status": "passed",
+      "duration_ms": 1.4363000000000739,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects Authorization \"Bearer\" without a cookie before reading any database identity",
+      "status": "passed",
+      "duration_ms": 1.750099999999975,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects Authorization \"external-token\" without a cookie before reading any database identity",
+      "status": "passed",
+      "duration_ms": 1.425899999999956,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects Authorization \"Bearer external-token\" even with a valid session cookie before reading any database identity",
+      "status": "passed",
+      "duration_ms": 2.126800000000003,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects Authorization \"Basic dXNlcjpwYXNz\" even with a valid session cookie before reading any database identity",
+      "status": "passed",
+      "duration_ms": 1.28449999999998,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects Authorization \"\" even with a valid session cookie before reading any database identity",
+      "status": "passed",
+      "duration_ms": 1.0138999999999214,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects Authorization \"bearer external-token\" even with a valid session cookie before reading any database identity",
+      "status": "passed",
+      "duration_ms": 0.8665000000000873,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects Authorization \"BEARER external-token\" even with a valid session cookie before reading any database identity",
+      "status": "passed",
+      "duration_ms": 0.7641000000000986,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects Authorization \"Bearer\" even with a valid session cookie before reading any database identity",
+      "status": "passed",
+      "duration_ms": 0.8403999999998177,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects Authorization \"external-token\" even with a valid session cookie before reading any database identity",
+      "status": "passed",
+      "duration_ms": 0.816300000000183,
+      "failure_recorded": false
+    },
+    {
+      "title": "authenticates a valid session using only user_sessions and exposes no external token principal",
+      "status": "passed",
+      "duration_ms": 3.9535000000000764,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects a missing session cookie undefined without querying the database",
+      "status": "passed",
+      "duration_ms": 1.0429000000001452,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects a missing session cookie \"unrelated_cookie=value\" without querying the database",
+      "status": "passed",
+      "duration_ms": 0.9464000000000397,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects an expired or revoked session rather than using another identity",
+      "status": "passed",
+      "duration_ms": 1.5006999999998243,
+      "failure_recorded": false
+    },
+    {
+      "title": "requires an Origin for POST",
+      "status": "passed",
+      "duration_ms": 1.2592000000001917,
+      "failure_recorded": false
+    },
+    {
+      "title": "requires an Origin for PUT",
+      "status": "passed",
+      "duration_ms": 0.5765000000001237,
+      "failure_recorded": false
+    },
+    {
+      "title": "requires an Origin for PATCH",
+      "status": "passed",
+      "duration_ms": 0.5591999999999189,
+      "failure_recorded": false
+    },
+    {
+      "title": "requires an Origin for DELETE",
+      "status": "passed",
+      "duration_ms": 0.5788000000000011,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects untrusted or malformed Origin \"null\"",
+      "status": "passed",
+      "duration_ms": 3.266200000000026,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects untrusted or malformed Origin \"not-a-url\"",
+      "status": "passed",
+      "duration_ms": 1.0897999999999683,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects untrusted or malformed Origin \"https://evil.example\"",
+      "status": "passed",
+      "duration_ms": 1.1341999999999643,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects untrusted or malformed Origin \"https://bank.example.com.evil\"",
+      "status": "passed",
+      "duration_ms": 0.6494000000000142,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects untrusted or malformed Origin \"http://bank.example.com\"",
+      "status": "passed",
+      "duration_ms": 0.9512999999999465,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects untrusted or malformed Origin \"https://bank.example.com:444\"",
+      "status": "passed",
+      "duration_ms": 1.1071999999999207,
+      "failure_recorded": false
+    },
+    {
+      "title": "cannot be redirected to a foreign origin by x-forwarded-host or Host",
+      "status": "passed",
+      "duration_ms": 0.9420999999999822,
+      "failure_recorded": false
+    },
+    {
+      "title": "uses the configured public origin over an internal proxy URL and ignores forged forwarding headers",
+      "status": "passed",
+      "duration_ms": 5.23070000000007,
+      "failure_recorded": false
+    },
+    {
+      "title": "uses the request URL origin in development when no public origin is configured",
+      "status": "passed",
+      "duration_ms": 2.3722999999999956,
+      "failure_recorded": false
+    },
+    {
+      "title": "allows GET without Origin while still rejecting a supplied foreign Origin",
+      "status": "passed",
+      "duration_ms": 0.8755999999998494,
+      "failure_recorded": false
+    },
+    {
+      "title": "allows HEAD without Origin while still rejecting a supplied foreign Origin",
+      "status": "passed",
+      "duration_ms": 0.7409000000000106,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects Authorization \"Bearer external-token\" before same-origin validation on bank reads and writes",
+      "status": "passed",
+      "duration_ms": 0.8976999999999862,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects Authorization \"Basic dXNlcjpwYXNz\" before same-origin validation on bank reads and writes",
+      "status": "passed",
+      "duration_ms": 1.1404999999999745,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects Authorization \"\" before same-origin validation on bank reads and writes",
+      "status": "passed",
+      "duration_ms": 0.729799999999841,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects Authorization \"bearer external-token\" before same-origin validation on bank reads and writes",
+      "status": "passed",
+      "duration_ms": 2.1223999999999705,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects Authorization \"BEARER external-token\" before same-origin validation on bank reads and writes",
+      "status": "passed",
+      "duration_ms": 0.9204999999999472,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects Authorization \"Bearer\" before same-origin validation on bank reads and writes",
+      "status": "passed",
+      "duration_ms": 1.0282999999999447,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects Authorization \"external-token\" before same-origin validation on bank reads and writes",
+      "status": "passed",
+      "duration_ms": 0.8006000000000313,
+      "failure_recorded": false
+    },
+    {
+      "title": "accepts its own adapter credential without requiring bank cookies or an Origin",
+      "status": "passed",
+      "duration_ms": 2.0674999999998818,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects missing and incorrect credentials",
+      "status": "passed",
+      "duration_ms": 2.516300000000001,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects the other official channel's adapter credential",
+      "status": "passed",
+      "duration_ms": 0.9283000000000357,
+      "failure_recorded": false
+    },
+    {
+      "title": "does not accept a bank session cookie in place of adapter credentials",
+      "status": "passed",
+      "duration_ms": 0.9507999999998447,
+      "failure_recorded": false
+    },
+    {
+      "title": "fails closed with 503 when that channel has no configured adapter token",
+      "status": "passed",
+      "duration_ms": 1.0501999999999043,
+      "failure_recorded": false
+    },
+    {
+      "title": "accepts its own adapter credential without requiring bank cookies or an Origin",
+      "status": "passed",
+      "duration_ms": 1.11850000000004,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects missing and incorrect credentials",
+      "status": "passed",
+      "duration_ms": 10.626199999999926,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects the other official channel's adapter credential",
+      "status": "passed",
+      "duration_ms": 1.139599999999973,
+      "failure_recorded": false
+    },
+    {
+      "title": "does not accept a bank session cookie in place of adapter credentials",
+      "status": "passed",
+      "duration_ms": 0.9859000000001288,
+      "failure_recorded": false
+    },
+    {
+      "title": "fails closed with 503 when that channel has no configured adapter token",
+      "status": "passed",
+      "duration_ms": 1.090599999999995,
+      "failure_recorded": false
+    },
+    {
+      "title": "counts the full month, respects Shanghai boundaries, and excludes another customer",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "returns real empty results and rejects invalid months",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "keeps the overview recent limit separate from its complete monthly summary",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "cannot block another customer's subscription",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "serializes repeated confirmation and records one audit without an Agent task",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "uses Shanghai month boundaries even on a UTC server",
+      "status": "passed",
+      "duration_ms": 39.26890000000003,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects malformed and out-of-range months before querying",
+      "status": "passed",
+      "duration_ms": 0.9348999999999705,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects expired links without creating an identity",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects the wrong channel, binds once and rejects replay",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "does not move an existing IM identity to another customer's account",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "does not advertise an unavailable channel or invent a bot entry",
+      "status": "passed",
+      "duration_ms": 5.3962999999999965,
+      "failure_recorded": false
+    },
+    {
+      "title": "returns only configured public entry details, never bot credentials",
+      "status": "passed",
+      "duration_ms": 2.7578999999999496,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects executable URLs, userinfo, lookalike domains, HTTP and unexpected ports",
+      "status": "passed",
+      "duration_ms": 0.9149999999999636,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects arbitrary identities before seeding",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "concurrent initialization creates exactly five named users with usable history",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "historical transfers and balances are backed by balanced ledger entries",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "rotates real sessions and revokes the previous identity",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "re-entry preserves changed cards, existing data, and unrelated customers",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "removes live names and preserves retired credentials and customer-scoped history",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "retains the original foreign keys after renaming their target tables",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "leaves customers, accounts, sessions, completed transfers and double-entry banking records unchanged",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "cancels unfinished MCP runs and linked tasks, closes threads, and retains completed history",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects new retired-channel rows and attempts to reactivate old clients or tokens",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "continues to accept owned bank and official IM threads",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "preserves every historical row and closed MCP row when migration 013 runs again",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "requires confirmation for a trusted low-value transfer",
+      "status": "passed",
+      "duration_ms": 4.7993999999999915,
+      "failure_recorded": false
+    },
+    {
+      "title": "monitors a new recipient without bypassing the stated small-transfer tier",
+      "status": "passed",
+      "duration_ms": 2.3129000000000133,
+      "failure_recorded": false
+    },
+    {
+      "title": "uses the cumulative daily amount rather than the single transfer",
+      "status": "passed",
+      "duration_ms": 1.7251999999999725,
+      "failure_recorded": false
+    },
+    {
+      "title": "never lets a lower level downgrade a higher one",
+      "status": "passed",
+      "duration_ms": 0.46659999999997126,
+      "failure_recorded": false
+    },
+    {
+      "title": "keeps binding secrets in the QQ page URL fragment",
+      "status": "passed",
+      "duration_ms": 13.202599999999961,
+      "failure_recorded": false
+    },
+    {
+      "title": "deduplicates QQ events before invoking the model",
+      "status": "passed",
+      "duration_ms": 1.2788000000000466,
+      "failure_recorded": false
+    },
+    {
+      "title": "answers repeated binding commands from the verified identity without a model",
+      "status": "passed",
+      "duration_ms": 1.2544000000000324,
+      "failure_recorded": false
+    },
+    {
+      "title": "never executes an MFA operation inside QQ",
+      "status": "passed",
+      "duration_ms": 2.5160999999999376,
+      "failure_recorded": false
+    },
+    {
+      "title": "redirects a yellow confirmation upgraded by the bank core to APP MFA without resuming",
+      "status": "passed",
+      "duration_ms": 3.1649999999999636,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects a button click from another QQ identity",
+      "status": "passed",
+      "duration_ms": 7.815200000000004,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects foreign or missing origins and authorization headers before enrollment",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "requires explicit demo confirmation and refuses a client-supplied demo flag for ordinary accounts",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "requires a real dynamic code and cannot replace an enabled secret, including concurrent requests",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "returns persisted red authorization requirements as 409 without reporting success or resuming the Agent",
+      "status": "passed",
+      "duration_ms": 23.329200000000128,
+      "failure_recorded": false
+    },
+    {
+      "title": "returns challenge lockout as 423 without resuming the Agent",
+      "status": "passed",
+      "duration_ms": 2.1491000000000895,
+      "failure_recorded": false
+    },
+    {
+      "title": "keeps an already locked challenge at 423 when the core rejects a retry",
+      "status": "passed",
+      "duration_ms": 4.717100000000073,
+      "failure_recorded": false
+    },
+    {
+      "title": "returns persisted red authorization requirements as 409 without reporting success or resuming the Agent",
+      "status": "passed",
+      "duration_ms": 3.0440000000000964,
+      "failure_recorded": false
+    },
+    {
+      "title": "returns challenge lockout as 423 without resuming the Agent",
+      "status": "passed",
+      "duration_ms": 4.511200000000144,
+      "failure_recorded": false
+    },
+    {
+      "title": "keeps an already locked challenge at 423 when the core rejects a retry",
+      "status": "passed",
+      "duration_ms": 2.371599999999944,
+      "failure_recorded": false
+    },
+    {
+      "title": "upgrades a pre-created second 600 CNY draft and requires a new explicit MFA submission",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "serializes concurrent submissions across two payer accounts",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "allows exactly 1000 CNY but stops the next cent",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "posts one receipt when the same operation is confirmed concurrently",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "does not deadlock opposite-direction transfers",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "excludes insufficient-funds attempts and rolls back a failed ledger write",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "uses Shanghai half-open execution-day boundaries in any database session zone",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "captures the posting instant after waiting for the payer lock",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "does not refresh an expired upgraded challenge or downgrade its risk",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "keeps a draft red even when the prior transfers now belong to yesterday",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "updates a linked IM task to MFA without completing it",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "does not let another customer confirm a transfer",
+      "status": "skipped",
+      "duration_ms": null,
+      "failure_recorded": false
+    },
+    {
+      "title": "uses a fragment for one-time binding secrets",
+      "status": "passed",
+      "duration_ms": 11.02049999999997,
+      "failure_recorded": false
+    },
+    {
+      "title": "deduplicates inbound events before running the model",
+      "status": "passed",
+      "duration_ms": 2.3157999999999674,
+      "failure_recorded": false
+    },
+    {
+      "title": "never executes an MFA operation inside WeCom",
+      "status": "passed",
+      "duration_ms": 1.5659999999999172,
+      "failure_recorded": false
+    },
+    {
+      "title": "redirects a yellow confirmation upgraded by the bank core to APP MFA without resuming",
+      "status": "passed",
+      "duration_ms": 3.5331999999999653,
+      "failure_recorded": false
+    },
+    {
+      "title": "rejects authorization from a different channel identity",
+      "status": "passed",
+      "duration_ms": 5.496099999999956,
+      "failure_recorded": false
+    },
+    {
+      "title": "returns a safe, actionable response and logs only classification",
+      "status": "passed",
+      "duration_ms": 47.3107,
+      "failure_recorded": false
+    },
+    {
+      "title": "returns a safe, actionable response and logs only classification",
+      "status": "passed",
+      "duration_ms": 2.3255000000001473,
+      "failure_recorded": false
+    }
+  ],
+  "redaction": "No absolute source paths, stack traces, source excerpts, credentials or response bodies included."
+}

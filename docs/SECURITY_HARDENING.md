@@ -14,4 +14,4 @@
 
 真实模型注入/幻觉、多轮红队、真实渠道 E2E、完整依赖审计和部署复测本轮未做。跨草稿总失败熔断、绑定防重放、客户端所见内容签名绑定、独立审计存储仍待完善。
 
-正式《安全设计文档》《安全自评报告》、开源工具选型、原创待执行语料、独立 HTTP 探针和脱敏证据位于获用户授权的私有仓库 [sikonglei/bankpilot-security](https://github.com/sikonglei/bankpilot-security)。该库没有复制团队应用源码；访问权限由仓库所有者与团队确认。
+完整《安全设计文档》《安全自评报告》《红队测试与证据报告》及 Word 文件、开源工具与许可证调研、原创待执行语料、独立 HTTP 探针和脱敏证据已收录在本仓库的[完整安全报告目录](security-reports/2026-10-17/README.md)。其中 `evidence/team-sync.json` 记录历史评测提交、迁移文件改名及 Word 副本校验值；历史结果不代表后续分支合并后的重新验收。用户授权的私有仓库 [sikonglei/bankpilot-security](https://github.com/sikonglei/bankpilot-security) 保留独立安全成果，不含团队应用源码。

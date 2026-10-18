@@ -83,6 +83,7 @@ npm run db:verify
 - [企业微信智能机器人接入](docs/WECOM.md)
 - [QQ 官方机器人接入](docs/QQ.md)
 - [安全设计与已知风险](docs/SECURITY.md)
+- [完整安全报告与 Word 下载](docs/security-reports/2026-10-17/README.md)
 - [部署说明](docs/DEPLOYMENT.md)
 - [验收脚本](docs/DEMO_SCRIPT.md)
 

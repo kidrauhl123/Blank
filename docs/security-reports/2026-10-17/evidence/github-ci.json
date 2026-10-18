@@ -1,0 +1,83 @@
+{
+  "run_url": "https://github.com/kidrauhl123/AIbanking/actions/runs/38956599034",
+  "head_sha": "a1b5d99cd5856214a94d0d5eff6de696cc51e896",
+  "status": "completed",
+  "conclusion": "success",
+  "updated_at": "2026-10-16T19:41:33Z",
+  "jobs": [
+    {
+      "name": "regression",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-16T19:40:10Z",
+      "completed_at": "2026-10-16T19:41:32Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run npm ci --ignore-scripts",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Migrate the disposable test database",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run npm test -- --no-file-parallelism",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run npx next typegen && npx tsc --noEmit",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run npm run lint",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    }
+  ]
+}
