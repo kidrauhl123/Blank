@@ -6,7 +6,7 @@
 - 比对准备时已有的授权指纹，并检查收款账户所属客户。测试库篡改是内部状态故障注入，不代表已找到普通 HTTP 用户可改库的攻击链。
 - 交易 TOTP 原子消费时间步，与过账同事务提交/回滚。高风险第二笔需新时间步；同一操作成功后重试仍返回原回执。
 
-先应用新迁移 `015_totp_replay_protection.sql`，再部署应用。已有数据库只执行未应用迁移；不得重跑含 TRUNCATE 的旧初始化脚本。生产 compose 同时覆盖了新数据库的初始化映射。回滚代码时保留计数列；回滚会取消防重放保护。
+先应用新迁移 `018_totp_replay_protection.sql`，再部署应用。已有数据库只执行未应用迁移；不得重跑含 TRUNCATE 的旧初始化脚本。生产 compose 同时覆盖了新数据库的初始化映射；与偏好记忆分支和页面时间线分支合并时，须保留各自的 015、016、017 初始化映射。回滚代码时保留计数列；回滚会取消防重放保护。
 
 新增测试：`src/lib/security-redteam.integration.test.ts`。测试仅允许 127.0.0.1、bankpilot_test 角色、bankpilot_security_test 数据库。使用独立一次性实例；测试会留存模拟身份供核验。用测试专用 PASSWORD_PEPPER，设置 BANKPILOT_SECURITY_TESTS=1；全部数据库测试再设置 BANKPILOT_DB_TESTS=1，运行 `npm test -- --no-file-parallelism`。新工作流在隔离 PostgreSQL 服务运行相同检查，远端实际结果需单独确认。
 

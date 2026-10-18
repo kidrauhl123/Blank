@@ -26,7 +26,7 @@ services:
       - ../db/migrations/012_transfer_daily_quota.sql:/docker-entrypoint-initdb.d/120-transfer-daily-quota.sql:ro
       - ../db/migrations/013_retire_external_access.sql:/docker-entrypoint-initdb.d/130-retire-external-access.sql:ro
       - ../db/migrations/014_app_agent_model.sql:/docker-entrypoint-initdb.d/140-app-agent-model.sql:ro
-      - ../db/migrations/015_totp_replay_protection.sql:/docker-entrypoint-initdb.d/150-totp-replay-protection.sql:ro
+      - ../db/migrations/018_totp_replay_protection.sql:/docker-entrypoint-initdb.d/180-totp-replay-protection.sql:ro
     networks:
       - internal
     mem_limit: 512m
