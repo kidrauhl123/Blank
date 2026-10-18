@@ -92,4 +92,4 @@ npm run eval:prompts -- --env-file .env.eval.local --case page-confirm,page-otp 
 
 本轮确定性回归还验证：human 控件拒绝、猜测金额拒绝、旧页面版本拒绝、用户修改不能被覆盖、草稿参数完整性、未配置不计为通过、调用预算、仅模型网络端点、错误脱敏及无依据的金额选项。
 
-2026-10-18 本地验证：187 项 Vitest 通过；48 项数据库集成检查因本机没有 PostgreSQL 而跳过。lint、TypeScript 与生产构建通过。PR 已新增带 PostgreSQL 服务的 CI 工作流，远端执行结果需另行核验。这些代码检查不抵消上面的模型失败。
+2026-10-18 本地验证：187 项 Vitest 通过；48 项数据库集成检查因本机没有 PostgreSQL 而跳过。lint、TypeScript 与生产构建通过。PR 新增的 PostgreSQL CI 已验证 235 项全部通过、0 项跳过，lint 与生产构建通过。这些代码检查不抵消上面的模型失败。
