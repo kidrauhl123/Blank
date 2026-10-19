@@ -1,6 +1,6 @@
 # 语音与 Agent 执行过程：样机及 BankPilot 接入
 
-功能在独立分支 `codex/voice-agent-timeline-prototype` 和草稿 PR #3 开发。开发环境运行 `npm run dev` 后访问 `/preview/voice-trace` 可查看不调用银行 API、数据库或真实 Agent 的独立样机；生产构建中该预览路由返回 404。同一分支也已将语音和时间线接入现有 `FloatingAppAgent`，沿用 `/api/agent/app` 的会话权限与页面动作状态机。此分支尚未合并或部署。草稿 PR #1 的访客偏好与任务范围隔离改动仍需在合并时核对。
+功能在独立分支 `codex/voice-agent-timeline-prototype` 和草稿 PR #3 开发。开发环境运行 `npm run dev` 后访问 `/preview/voice-trace` 可查看不调用银行 API、数据库或真实 Agent 的独立样机；生产构建中该预览路由返回 404。同一分支也已将语音和时间线接入现有 `FloatingAppAgent`，沿用 `/api/agent/app` 的会话权限与页面动作状态机。该分支已作为 PR #3 合并到 `main`（合并提交 `2a56ca3`）并部署到生产；与 PR #1 访客偏好范围的合并核对已完成。
 
 ## 已实现的交互
 

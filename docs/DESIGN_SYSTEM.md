@@ -4,21 +4,43 @@ BankPilot borrows product-design principles from Wise—clear hierarchy, direct 
 transparent transaction details, high contrast, and accessible zoom—without copying
 Wise's proprietary font, logo, or exact brand palette.
 
+Tokens live in `src/app/globals.css`; this file must stay consistent with that source.
+Last synced: 2026-10-19.
+
+## Canvas
+
+- Every product route renders inside one fixed phone surface (`PhoneShell`, route group
+  `(phone)`): width `min(100vw, 430px)`, height `100dvh` on a narrow viewport. On a wider
+  viewport the same surface floats on the desk background with rounded corners and a
+  shadow; it never widens into a desktop layout.
+- The mouse pointer is a finger on that surface: interaction states use `:active` press
+  feedback. There are no hover-dependent affordances, and no component uses `100vw`,
+  `100dvh`, or `position: fixed` to reach outside the canvas. Overlays are absolute
+  within the canvas.
+
 ## Typography
 
 - Product font: Inter Variable (SIL Open Font License), with PingFang SC, Noto Sans CJK SC,
   and Microsoft YaHei as Chinese fallbacks.
-- Body: 16 px; supporting copy: 14–15 px; captions and technical metadata: 12–13 px.
-- Navigation: 12 px; controls: 14–16 px; display values: 38–54 px.
+- Sizes are fixed tokens: 12 / 14 / 16 / 20 / 24 px. Body copy is 14 or 16 px;
+  captions and technical metadata are 12 px; the largest display value is 24 px.
 - Monospace is reserved for operation IDs, tokens, statuses, and audit records.
 - Display text uses a tight line height and letter spacing; body text stays open and readable.
 
 ## Visual language
 
-- Ink `#17211b` anchors financial information and primary actions.
-- BankPilot lime `#dffd93` highlights AI entry points without imitating Wise's exact green.
-- Paper `#f5f7f2` separates the app surface from the device frame.
-- Borders and shadows remain quiet; size, spacing, and weight create hierarchy.
+- Ink `#262722` anchors financial information and primary actions; it is also the accent.
+- Paper `#efede8` is the app surface; desk `#e3e0d9` is what surrounds the canvas;
+  `#ffffff` is the raised card surface.
+- Status colors are used only for status: positive `#386451`, warning `#8b631c`,
+  danger `#ae4440`.
+- One container method at a time. Cards separate by fill only (raised surface on paper),
+  with no border; dividers are lines that separate rows, not containers. Inner elements
+  do not repeat the outer container's method.
+- Spacing uses only 4 / 8 / 12 / 16 / 24 / 32 / 48 px. Radii use at most two tiers:
+  `12px` for controls, `24px` for containers.
+- Dark mode switches variables only, follows the system setting, and keeps the same
+  container method.
 
 ## Product writing
 
@@ -39,9 +61,11 @@ Wise's proprietary font, logo, or exact brand palette.
 ## Accessibility
 
 - Browser zoom is not disabled.
-- Focus states are visible for keyboard users.
-- Touch targets are generally 44 px or larger.
-- Reduced-motion preferences disable non-essential motion.
+- Focus states are visible for keyboard users (`:focus-visible` outline, 2 px).
+- Pointer targets are at least 44 px (`--target-touch`); icon buttons reach that area
+  with padding.
+- Reduced-motion preferences disable non-essential motion; functional motion stays
+  within 150–250 ms and animates only height, opacity, or color.
 
 ## References
 

@@ -113,6 +113,14 @@ docker volume rm bankpilot_nanobot
 
 从服务器环境中删除 `MCP_ALLOWED_ORIGINS`；自动发布脚本会处理该项。QQ/企微内部适配令牌及模型服务密钥继续使用，不属于被退役的客户令牌。发布验收检查 013、归档凭据撤销、旧地址 404 和银行 APP 拒绝 Authorization 头。
 
+## 发布记录
+
+| 日期 | 提交 | 迁移 | 结果 |
+| --- | --- | --- | --- |
+| 2026-10-19 | `2a56ca3` | 到 `020_scheduled_tasks.sql`（9 项必需迁移到位） | 发布标记 `20261019T084641Z`；备份 `/opt/bankpilot/backups/release-20261019T084641Z/`（dump、env、source，权限 600）；`/api/health` 正常，账本不变量通过，退役表与退役路由不存在，`Authorization` 头返回 403，调度心跳正常；`https://bank.jung.edu.pl` 返回 200 且 TLS/安全响应头正常 |
+
+同步模板文件（`.env.example`、`deploy/.env.production.example`）会被部署脚本排除规则放过；私有 `.env`、`.env.local`、`deploy/.env.production` 仍被排除。
+
 ## 检查
 
 模型调试设置需执行 `014_app_agent_model.sql`。切换 New API 时先在服务器私有文件备份原模型配置，更新 `AI_BASE_URL`（含 `/v1`）、`AI_API_KEY`、`AI_MODEL`，重新创建应用后检查模型目录及实际工具调用；不得把密钥写入命令参数、仓库或日志。发布脚本检查任务模型与会话偏好两列存在。模型目录、默认模型和会话选择的边界见 [模型设置](MODEL_SETTINGS.md)。

@@ -20,7 +20,7 @@ QQ / 企业微信 ─ 官方 Worker ─ LangGraph ─ interrupt() / 授权链接
 
 ### PWA
 
-Next.js App Router + React。入口选择五位固定模拟用户，支持账户、流水、入金、转账、卡片、安全中心和 Agent 对话。银行接口只接受 HttpOnly SameSite Cookie 会话；写请求必须匹配正式 APP 完整 Origin，不信任转发 Host 作为来源授权。提供 Authorization 头时拒绝，不回落到 Cookie。
+Next.js App Router + React。全部产品页面位于 `(phone)` 路由组，由 `PhoneShell` 渲染成一块固定的手机画布（宽视口下浮在桌面上），布局与交互只按手机设计，鼠标等同手指。入口选择五位固定模拟用户，支持账户、流水、入金、转账、卡片、安全中心和 Agent 对话。银行接口只接受 HttpOnly SameSite Cookie 会话；写请求必须匹配正式 APP 完整 Origin，不信任转发 Host 作为来源授权。提供 Authorization 头时拒绝，不回落到 Cookie。
 
 主页面助手通过 Deep Agents SDK 在 LangGraph 上进行页面工具循环，持久化到 `app_agent_runs`。银行动作按钮区分导航、填写、准备和本人确认；模型动作完成不是银行回执。现有 IM 业务 Runtime 如下，尚未与页面对话线程合并。
 
@@ -48,7 +48,7 @@ APP 的 `/api/v1/*` 接口服务银行页面；QQ/企微通过各自认证的内
 - YELLOW：小额转账、虚拟卡申请、锁卡，先展示完整单据并获得明确确认。
 - RED：日累计转账超过 ¥1,000，要求 TOTP 动态码。设备与跨草稿行为画像尚未落实。
 
-模型提供的风险等级不被信任。策略裁决写入 `policy_decisions`；黄色和红色转账草稿统一为 10 分钟期限，提交前比对绑定金额、对象及期限的指纹。TOTP 在客户锁内消费时间步，认证失败使用 `mfa_auth_state` 共享预算。相关控制需执行 014；本次真实数据库与浏览器回归待完成，见 [授权补强](AUTHORIZATION_HARDENING.md)。
+模型提供的风险等级不被信任。策略裁决写入 `policy_decisions`；黄色和红色转账草稿统一为 10 分钟期限，提交前比对绑定金额、对象及期限的指纹。TOTP 在客户锁内消费时间步，认证失败使用 `mfa_auth_state` 共享预算。相关控制随 `2a56ca3` 上线，真实数据库与浏览器回归在 CI 中通过，见 [授权补强](AUTHORIZATION_HARDENING.md)。
 
 ### Bank Core 与 PostgreSQL
 

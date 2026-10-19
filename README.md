@@ -4,6 +4,10 @@ BankPilot 是为“银行 AI 智能体”赛题构建的可运行 PWA 沙箱银�
 
 比赛入口只有五位模拟用户：小土豆、小板栗、小苹果、小西瓜、小橘子。点击头像直接进入，无需注册或密码。五位用户拥有预置余额、历史账单、卡片、订阅和互相转账记录；访客共享这些模拟账户。
 
+线上演示：<https://bank.jung.edu.pl>。当前 `main`（`2a56ca3` 之后）已在 `CONTABO-jp` 运行，部署与发布记录见 [部署](docs/DEPLOYMENT.md)。
+
+界面只有手机形态：所有产品页面渲染在同一块 430px 宽的画布内，宽视口下画布浮在桌面上，鼠标指针等同手指（只用按下反馈，不用 hover）。见 [UI 重构](docs/UI_REFACTOR_PLAN.md) 与 [设计系统](docs/DESIGN_SYSTEM.md)。
+
 历史数据标记 `DEMO_SEED` 并记录双分录；初始化仅执行一次，重新进入不重置用户操作。会话归属、业务确认、强验证和审计仍保留，旧账户与数据不会被清空。
 
 ## 已实现能力
@@ -85,10 +89,13 @@ npm run db:verify
 - [系统提示词固定案例与真实模型验收](docs/PROMPT_EVALUATION.md)
 - [系统提示词与用户偏好规则（银行 APP 按调用读取偏好）](docs/AGENT_PROMPTS_AND_MEMORY.md)
 - [访客记忆归属与数据库结构](docs/VISITOR_MEMORY_STORAGE.md)
-- [访客偏好管理与接口（对话代写待接入）](docs/PREFERENCE_API.md)
+- [访客偏好管理与接口](docs/PREFERENCE_API.md)
 - [系统架构](docs/ARCHITECTURE.md)
 - [可见页面助手与通用 Agent 复用](docs/VISIBLE_APP_AGENT.md)
 - [开发与参赛计划](docs/ROADMAP.md)
+- [UI 重构方案与实施结果](docs/UI_REFACTOR_PLAN.md)
+- [产品设计系统](docs/DESIGN_SYSTEM.md)
+- [部署与发布记录](docs/DEPLOYMENT.md)
 - [外部接入退役与认证边界](docs/EXTERNAL_ACCESS_RETIREMENT.md)
 - [企业微信智能机器人接入](docs/WECOM.md)
 - [QQ 官方机器人接入](docs/QQ.md)

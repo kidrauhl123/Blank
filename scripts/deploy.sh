@@ -39,6 +39,7 @@ REMOTE_BACKUP
 
 rsync -az --delete \
   --exclude .git --exclude node_modules --exclude .next \
+  --include '.env.example' --include 'deploy/.env.production.example' \
   --exclude '.env' --exclude '.env.*' --exclude deploy/.env.production \
   --exclude backups --exclude releases --exclude DEPLOYED_COMMIT --exclude .playwright-cli \
   "$release_dir/" "$target:/opt/bankpilot/"

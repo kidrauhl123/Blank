@@ -8,10 +8,10 @@
 
 先应用新迁移 `018_totp_replay_protection.sql`，再部署应用。已有数据库只执行未应用迁移；不得重跑含 TRUNCATE 的旧初始化脚本。生产 compose 同时覆盖了新数据库的初始化映射；与偏好记忆分支和页面时间线分支合并时，须保留各自的 015、016、017 初始化映射。回滚代码时保留计数列；回滚会取消防重放保护。
 
-新增测试：`src/lib/security-redteam.integration.test.ts`。测试仅允许 127.0.0.1、bankpilot_test 角色、bankpilot_security_test 数据库。使用独立一次性实例；测试会留存模拟身份供核验。用测试专用 PASSWORD_PEPPER，设置 BANKPILOT_SECURITY_TESTS=1；全部数据库测试再设置 BANKPILOT_DB_TESTS=1，运行 `npm test -- --no-file-parallelism`。新工作流在隔离 PostgreSQL 服务运行相同检查，远端实际结果需单独确认。
+新增测试：`src/lib/security-redteam.integration.test.ts`。测试仅允许 127.0.0.1、bankpilot_test 角色、bankpilot_security_test 数据库。使用独立一次性实例；测试会留存模拟身份供核验。用测试专用 PASSWORD_PEPPER，设置 BANKPILOT_SECURITY_TESTS=1；全部数据库测试再设置 BANKPILOT_DB_TESTS=1，运行 `npm test -- --no-file-parallelism`。新工作流在隔离 PostgreSQL 服务运行相同检查；2026-10-19 在 `main` 上执行结果为 308/308 通过（`security-regression.yml`），部署复测已完成。
 
 本地证据：原有无 DB 基线 133 通过/39 跳过；新增 RT-01～07 修复前 2 通过/5 失败，首轮修复后 7 通过；新增 RT-08/09 后全套 181 通过、0 失败、0 跳过。TypeScript、ESLint 和八项本机 HTTP 边界探针通过。RT-08 验证账本失败时消费状态回滚，RT-09 验证单挑战熔断。
 
-真实模型注入/幻觉、多轮红队、真实渠道 E2E、完整依赖审计和部署复测本轮未做。跨草稿总失败熔断、绑定防重放、客户端所见内容签名绑定、独立审计存储仍待完善。
+真实模型注入/幻觉、多轮红队、真实渠道 E2E 与完整依赖审计本轮未做。跨草稿总失败熔断、绑定防重放、客户端所见内容签名绑定、独立审计存储仍待完善。
 
 完整《安全设计文档》《安全自评报告》《红队测试与证据报告》及 Word 文件、开源工具与许可证调研、原创待执行语料、独立 HTTP 探针和脱敏证据已收录在本仓库的[完整安全报告目录](security-reports/2026-10-17/README.md)。其中 `evidence/team-sync.json` 记录历史评测提交、迁移文件改名及 Word 副本校验值；历史结果不代表后续分支合并后的重新验收。用户授权的私有仓库 [sikonglei/bankpilot-security](https://github.com/sikonglei/bankpilot-security) 保留独立安全成果，不含团队应用源码。
