@@ -1,7 +1,8 @@
-import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, randomInt, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes, randomInt, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import type { PoolClient } from "pg";
 import { query, withTransaction } from "./db";
+import { matchingTotpStep } from "./totp";
 
 const scrypt = promisify(scryptCallback);
 export const SESSION_COOKIE = "bankpilot_session";
@@ -33,16 +34,6 @@ function base32Encode(input: Buffer) {
   return output;
 }
 
-function base32Decode(input: string) {
-  let bits = 0; let value = 0; const output: number[] = [];
-  for (const char of input.replace(/=+$/, "").toUpperCase()) {
-    const index = base32Alphabet.indexOf(char); if (index < 0) continue;
-    value = (value << 5) | index; bits += 5;
-    if (bits >= 8) { output.push((value >>> (bits - 8)) & 255); bits -= 8; }
-  }
-  return Buffer.from(output);
-}
-
 function mfaKey() {
   const pepper = process.env.PASSWORD_PEPPER;
   if (!pepper) throw new AuthError("SECURITY_CONFIGURATION_REQUIRED", 503);
@@ -60,20 +51,6 @@ function decryptSecret(value: string) {
   const decipher = createDecipheriv("aes-256-gcm", mfaKey(), Buffer.from(iv, "base64url"));
   decipher.setAuthTag(Buffer.from(tag, "base64url"));
   return Buffer.concat([decipher.update(Buffer.from(ciphertext, "base64url")), decipher.final()]).toString("utf8");
-}
-
-function totp(secret: string, counter = Math.floor(Date.now() / 30_000)) {
-  const buffer = Buffer.alloc(8); buffer.writeBigUInt64BE(BigInt(counter));
-  const digest = createHmac("sha1", base32Decode(secret)).update(buffer).digest();
-  const offset = digest[digest.length - 1] & 15;
-  const number = (digest.readUInt32BE(offset) & 0x7fffffff) % 1_000_000;
-  return String(number).padStart(6, "0");
-}
-
-function verifyTotp(secret: string, code: string) {
-  if (!/^\d{6}$/.test(code)) return false;
-  const counter = Math.floor(Date.now() / 30_000);
-  return [-1, 0, 1].some((offset) => timingSafeEqual(Buffer.from(totp(secret, counter + offset)), Buffer.from(code)));
 }
 
 function parseCookies(header: string | null) {
@@ -237,52 +214,86 @@ export async function beginTotpSetup(customerId: string) {
   const secret = base32Encode(randomBytes(20));
   const identity = await query<{ display_name: string; phone: string }>("SELECT display_name,phone FROM customers WHERE id=$1", [customerId]);
   if (!identity.rows[0]) throw new AuthError("CUSTOMER_UNAVAILABLE", 403);
-  const setup = await query(
-    `INSERT INTO mfa_totp (customer_id,encrypted_secret,enabled_at) VALUES ($1,$2,NULL)
-     ON CONFLICT (customer_id) DO UPDATE SET encrypted_secret=excluded.encrypted_secret,updated_at=now()
-     WHERE mfa_totp.enabled_at IS NULL RETURNING customer_id`,
-    [customerId, encryptSecret(secret)],
-  );
-  if (!setup.rows.length) throw new AuthError("MFA_ALREADY_CONFIGURED", 409);
+  await withTransaction(async (client) => {
+    await client.query("SELECT id FROM customers WHERE id=$1 FOR NO KEY UPDATE", [customerId]);
+    if (await mfaLocked(customerId, client)) throw new AuthError("AUTH_FUSE_ACTIVE", 423);
+    const setup = await client.query(
+      `INSERT INTO mfa_totp (customer_id,encrypted_secret,enabled_at) VALUES ($1,$2,NULL)
+       ON CONFLICT (customer_id) DO UPDATE SET encrypted_secret=excluded.encrypted_secret,updated_at=now()
+       WHERE mfa_totp.enabled_at IS NULL RETURNING customer_id`,
+      [customerId, encryptSecret(secret)],
+    );
+    if (!setup.rows.length) throw new AuthError("MFA_ALREADY_CONFIGURED", 409);
+  });
   const label = encodeURIComponent(`BankPilot:${identity.rows[0].phone}`);
   const uri = `otpauth://totp/${label}?secret=${secret}&issuer=BankPilot&algorithm=SHA1&digits=6&period=30`;
   return { secret, uri };
 }
 
 export async function confirmTotpSetup(customerId: string, code: string) {
-  const result = await query<{ encrypted_secret: string }>("SELECT encrypted_secret FROM mfa_totp WHERE customer_id=$1 AND enabled_at IS NULL", [customerId]);
-  if (!result.rows[0] || !verifyTotp(decryptSecret(result.rows[0].encrypted_secret), code)) throw new AuthError("MFA_INVALID", 401);
-  const enabled = await query("UPDATE mfa_totp SET enabled_at=now(),updated_at=now() WHERE customer_id=$1 AND enabled_at IS NULL AND encrypted_secret=$2 RETURNING customer_id", [customerId, result.rows[0].encrypted_secret]);
-  if (!enabled.rows.length) throw new AuthError("MFA_SETUP_CHANGED", 409);
-  await query(`INSERT INTO audit_events (customer_id,event_type,actor_type,event_summary,evidence) VALUES ($1,'MFA_ENABLED','USER','客户启用 TOTP 多因素认证','{}'::jsonb)`, [customerId]);
+  const outcome = await withTransaction(async (client) => {
+    const result = await consumeTotp(customerId, code, client, true);
+    if (result !== "VERIFIED") return result;
+    await client.query("UPDATE mfa_totp SET enabled_at=now(),updated_at=now() WHERE customer_id=$1", [customerId]);
+    await client.query(`INSERT INTO audit_events (customer_id,event_type,actor_type,event_summary,evidence) VALUES ($1,'MFA_ENABLED','USER','客户启用 TOTP 多因素认证','{}'::jsonb)`, [customerId]);
+    return result;
+  });
+  // Throw only after committing failed-attempt accounting.
+  if (outcome !== "VERIFIED") throw new AuthError(outcome === "LOCKED" ? "AUTH_FUSE_ACTIVE" : "MFA_INVALID", outcome === "LOCKED" ? 423 : 401);
   return { enabled: true };
 }
 
-export async function verifyCustomerTotp(customerId: string, code: string, client?: PoolClient) {
-  const sql = "SELECT encrypted_secret FROM mfa_totp WHERE customer_id=$1 AND enabled_at IS NOT NULL";
-  const result = client ? await client.query<{ encrypted_secret: string }>(sql, [customerId]) : await query<{ encrypted_secret: string }>(sql, [customerId]);
-  return Boolean(result.rows[0] && verifyTotp(decryptSecret(result.rows[0].encrypted_secret), code));
+async function mfaLocked(customerId: string, client: PoolClient) {
+  const result = await client.query<{ locked: boolean }>(
+    "SELECT locked_until>clock_timestamp() AS locked FROM mfa_auth_state WHERE customer_id=$1", [customerId],
+  );
+  return result.rows[0]?.locked === true;
 }
 
-// Consume a time step in the same transaction as the bank posting. A pure
-// verification is insufficient: another operation could reuse the valid code.
-export async function consumeCustomerTotp(customerId: string, code: string, client: PoolClient, at: Date) {
-  if (!/^\d{6}$/.test(code)) return false;
-  const result = await client.query<{ encrypted_secret: string }>(
-    "SELECT encrypted_secret FROM mfa_totp WHERE customer_id=$1 AND enabled_at IS NOT NULL", [customerId],
+export type TotpOutcome = "VERIFIED" | "INVALID" | "REPLAYED" | "LOCKED";
+
+async function consumeTotp(customerId: string, code: string, client: PoolClient, enrollment = false): Promise<TotpOutcome> {
+  // All MFA paths use the same customer lock as transfer execution. Enrollment,
+  // other accounts and official channels cannot race/reset the failure budget.
+  await client.query("SELECT id FROM customers WHERE id=$1 FOR NO KEY UPDATE", [customerId]);
+  if (await mfaLocked(customerId, client)) return "LOCKED";
+  const result = await client.query<{ encrypted_secret: string; last_used_step: string | null; at: Date }>(
+    `SELECT encrypted_secret,last_used_step,clock_timestamp() AS at FROM mfa_totp
+     WHERE customer_id=$1 AND ${enrollment ? "enabled_at IS NULL" : "enabled_at IS NOT NULL"} FOR UPDATE`, [customerId],
   );
   const row = result.rows[0];
-  if (!row) return false;
-  const secret = decryptSecret(row.encrypted_secret);
-  const current = Math.floor(at.getTime() / 30_000);
-  const matched = [1, 0, -1].map(offset => current + offset)
-    .find(counter => timingSafeEqual(Buffer.from(totp(secret, counter)), Buffer.from(code)));
-  if (matched === undefined) return false;
-  const consumed = await client.query(
-    `UPDATE mfa_totp SET last_used_counter=$2,updated_at=now()
-     WHERE customer_id=$1 AND enabled_at IS NOT NULL AND last_used_counter<$2 AND encrypted_secret=$3
-     RETURNING customer_id`, [customerId, matched, row.encrypted_secret],
+  const step = row ? matchingTotpStep(decryptSecret(row.encrypted_secret), code, row.at) : null;
+  const replayed = step !== null && row.last_used_step !== null && step <= Number(row.last_used_step);
+  if (step !== null && !replayed) {
+    await client.query("UPDATE mfa_totp SET last_used_step=$2,updated_at=now() WHERE customer_id=$1", [customerId, step]);
+    await client.query("DELETE FROM mfa_auth_state WHERE customer_id=$1", [customerId]);
+    return "VERIFIED";
+  }
+  const failure = await client.query<{ failed_attempts: number }>(
+    `INSERT INTO mfa_auth_state(customer_id,failed_attempts) VALUES($1,1)
+     ON CONFLICT(customer_id) DO UPDATE SET
+       failed_attempts=CASE WHEN mfa_auth_state.locked_until IS NOT NULL THEN 1 ELSE mfa_auth_state.failed_attempts+1 END,
+       locked_until=NULL,updated_at=now() RETURNING failed_attempts`, [customerId],
   );
-  return consumed.rowCount === 1;
+  const locked = failure.rows[0].failed_attempts >= 3;
+  if (locked) await client.query("UPDATE mfa_auth_state SET locked_until=clock_timestamp()+interval '15 minutes' WHERE customer_id=$1", [customerId]);
+  await client.query(`INSERT INTO audit_events(customer_id,event_type,actor_type,event_summary,evidence)
+    VALUES($1,'MFA_ATTEMPT_REJECTED','RISK_ENGINE','多因素认证失败，已计入客户级失败次数',$2::jsonb)`,
+  [customerId, JSON.stringify({ reason: replayed ? "REPLAYED" : "INVALID", enrollment, attempts: failure.rows[0].failed_attempts, locked })]);
+  return locked ? "LOCKED" : replayed ? "REPLAYED" : "INVALID";
 }
+
+export async function consumeCustomerTotp(customerId: string, code: string, client: PoolClient) {
+  return consumeTotp(customerId, code, client);
+}
+
+export async function verifyCustomerTotp(customerId: string, code: string, client?: PoolClient) {
+  const outcome = client ? await consumeTotp(customerId, code, client)
+    : await withTransaction(transaction => consumeTotp(customerId, code, transaction));
+  return outcome === "VERIFIED";
+}
+
+// Superseded by consumeTotp above: the PR #2 CAS-only variant (fourth arg `at`,
+// boolean result, no cooldown) is retired. Its migration 018 column stays for
+// already-deployed databases, but the customer-level cooldown path is authoritative.
 

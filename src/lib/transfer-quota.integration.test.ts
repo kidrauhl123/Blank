@@ -1,15 +1,16 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { beginTotpSetup, confirmTotpSetup, registerCustomer } from "./auth";
+import { transferFingerprint } from "./transfer-binding";
 import { commitTransfer, getOperation, prepareTransfer, recordDeposit } from "./bank-core";
 import { db, query } from "./db";
 import { readDailyTransferTotal } from "./transfer-quota";
 
-function totp(secret: string) {
+function totp(secret: string, offset = 0) {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
   const bits = [...secret].map(char => alphabet.indexOf(char).toString(2).padStart(5, "0")).join("");
   const key = Buffer.from((bits.match(/.{8}/g) ?? []).map(value => parseInt(value, 2)));
-  const counter = Buffer.alloc(8); counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30_000)));
+  const counter = Buffer.alloc(8); counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30_000) + offset));
   const digest = createHmac("sha1", key).update(counter).digest();
   return ((digest.readUInt32BE(digest[19] & 15) & 0x7fffffff) % 1_000_000).toString().padStart(6, "0");
 }
@@ -78,7 +79,7 @@ describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("transfer daily quota ex
     const before = (await query("SELECT id,expires_at,attempts FROM authorization_challenges WHERE operation_id=$1", [second.operationId])).rows;
     expect(await commitTransfer(payer.id, second.operationId, {})).toMatchObject({ authError: "AUTH_REQUIRED" });
     expect((await query("SELECT id,expires_at,attempts FROM authorization_challenges WHERE operation_id=$1", [second.operationId])).rows).toEqual(before);
-    expect(await commitTransfer(payer.id, second.operationId, { totpCode: totp(secret) })).toMatchObject({ status: "SUCCEEDED" });
+    expect(await commitTransfer(payer.id, second.operationId, { totpCode: totp(secret, 1) })).toMatchObject({ status: "SUCCEEDED" });
     expect(await succeeded(payer.id)).toEqual({ count: 2, total: "120000" });
     expect((await query("SELECT count(*)::int AS count FROM audit_events WHERE operation_id=$1 AND event_type='TRANSFER_AUTH_UPGRADED'", [second.operationId])).rows[0].count).toBe(1);
   });
@@ -223,5 +224,90 @@ describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("transfer daily quota ex
     const draft = await prepare(60000);
     await expect(commitTransfer(recipient.id, draft.operationId, {})).rejects.toThrow("OPERATION_NOT_FOUND");
     expect(await succeeded(payer.id)).toEqual({ count: 0, total: "0" });
+  });
+
+  it.each([
+    ["amount", "UPDATE transfers SET amount_minor=amount_minor+1 WHERE operation_id=$1"],
+    ["note", "UPDATE transfers SET note='changed' WHERE operation_id=$1"],
+    ["expiry", "UPDATE transfers SET authorization_expires_at=authorization_expires_at+interval '1 hour' WHERE operation_id=$1"],
+    ["recipient", "UPDATE beneficiaries SET name='Changed recipient' WHERE id=(SELECT beneficiary_id FROM transfers WHERE operation_id=$1)"],
+  ])("rejects changed %s before posting or consuming MFA", async (_field, sql) => {
+    const { payer, prepare } = await pair();
+    const draft = await prepare(60000);
+    await query(sql, [draft.operationId]);
+    await expect(commitTransfer(payer.id, draft.operationId, {})).rejects.toThrow("AUTHORIZATION_MISMATCH");
+    expect(await succeeded(payer.id)).toEqual({ count: 0, total: "0" });
+    expect((await query("SELECT available_balance_minor::text AS balance FROM accounts WHERE id=$1", [payer.account])).rows[0].balance).toBe("200000");
+  });
+
+  it("rejects an expired correctly-bound yellow draft", async () => {
+    const { payer, prepare } = await pair();
+    const draft = await prepare(60000);
+    // Simulate the server's original draft expiring without sleeping ten minutes.
+    const row = (await query(`SELECT t.*,b.name,b.phone,b.masked_account,b.recipient_customer_id,b.settlement_account_id
+      FROM transfers t JOIN beneficiaries b ON b.id=t.beneficiary_id WHERE t.operation_id=$1`, [draft.operationId])).rows[0];
+    const expiresAt = new Date(Date.now() - 1000);
+    const fingerprint = transferFingerprint({ operationId: draft.operationId, customerId: payer.id, source: row.from_account_id,
+      target: row.settlement_account_id, recipientCustomerId: row.recipient_customer_id, recipientName: row.name,
+      recipientPhone: row.phone, recipientMasked: row.masked_account, amountMinor: Number(row.amount_minor), currency: row.currency, note: row.note, expiresAt });
+    await query("UPDATE transfers SET authorization_expires_at=$2,authorization_fingerprint=$3 WHERE operation_id=$1", [draft.operationId, expiresAt, fingerprint]);
+    await expect(commitTransfer(payer.id, draft.operationId, {})).rejects.toThrow("AUTH_EXPIRED");
+    expect(await succeeded(payer.id)).toEqual({ count: 0, total: "0" });
+  });
+
+  it("allows one concurrent transfer per TOTP step across different drafts", async () => {
+    const { payer, prepare } = await pair(500000);
+    const { secret } = await beginTotpSetup(payer.id);
+    await confirmTotpSetup(payer.id, totp(secret));
+    const drafts = await Promise.all([prepare(120000), prepare(120000)]);
+    const code = totp(secret, 1);
+    const results = await Promise.all(drafts.map(draft => commitTransfer(payer.id, draft.operationId, { totpCode: code })));
+    expect(results.filter(result => "status" in result && result.status === "SUCCEEDED")).toHaveLength(1);
+    expect(results.filter(result => "authError" in result && result.authError === "AUTH_INVALID")).toHaveLength(1);
+    expect(await succeeded(payer.id)).toEqual({ count: 1, total: "120000" });
+    // A network retry of the posted operation returns its receipt without OTP.
+    const postedIndex = results.findIndex(result => "status" in result && result.status === "SUCCEEDED");
+    expect(await commitTransfer(payer.id, drafts[postedIndex].operationId, { totpCode: code })).toMatchObject({ alreadyExecuted: true, status: "SUCCEEDED" });
+  });
+
+  it("shares the failure budget across drafts and enforces cooldown without consuming valid codes", async () => {
+    const { payer, prepare } = await pair(500000);
+    const { secret } = await beginTotpSetup(payer.id);
+    await confirmTotpSetup(payer.id, totp(secret));
+    const validCodes = new Set([-2, -1, 0, 1, 2].map(offset => totp(secret, offset)));
+    let incorrect = 0;
+    while (validCodes.has(String(incorrect).padStart(6, "0"))) incorrect++;
+    const code = String(incorrect).padStart(6, "0");
+    const results = [];
+    for (let index = 0; index < 3; index++) {
+      const draft = await prepare(120000);
+      results.push(await commitTransfer(payer.id, draft.operationId, { totpCode: code }));
+    }
+    expect(results.map(result => "authError" in result ? result.authError : null)).toEqual(["AUTH_INVALID", "AUTH_INVALID", "AUTH_FUSE_ACTIVE"]);
+    const fourth = await prepare(120000);
+    const before = (await query("SELECT last_used_step FROM mfa_totp WHERE customer_id=$1", [payer.id])).rows[0];
+    expect(await commitTransfer(payer.id, fourth.operationId, { totpCode: totp(secret, 1) })).toMatchObject({ authError: "AUTH_FUSE_ACTIVE" });
+    expect((await query("SELECT last_used_step FROM mfa_totp WHERE customer_id=$1", [payer.id])).rows[0]).toEqual(before);
+    await expect(beginTotpSetup(payer.id)).rejects.toThrow("AUTH_FUSE_ACTIVE");
+    expect(await succeeded(payer.id)).toEqual({ count: 0, total: "0" });
+    await query("UPDATE mfa_auth_state SET locked_until=clock_timestamp()-interval '1 second' WHERE customer_id=$1", [payer.id]);
+    expect(await commitTransfer(payer.id, fourth.operationId, { totpCode: totp(secret, 1) })).toMatchObject({ status: "SUCCEEDED" });
+    expect((await query("SELECT 1 FROM mfa_auth_state WHERE customer_id=$1", [payer.id])).rowCount).toBe(0);
+  });
+
+  it("rolls back TOTP consumption when posting fails", async () => {
+    const { payer, prepare } = await pair(500000);
+    const { secret } = await beginTotpSetup(payer.id);
+    await confirmTotpSetup(payer.id, totp(secret));
+    const draft = await prepare(120000);
+    const before = (await query("SELECT last_used_step FROM mfa_totp WHERE customer_id=$1", [payer.id])).rows[0];
+    // A duplicate ledger reference forces a failure after MFA consumption.
+    await query("INSERT INTO ledger_transactions(reference,transaction_type) VALUES($1,'TEST')", [`LED-${draft.operationId}`]);
+    try {
+      await expect(commitTransfer(payer.id, draft.operationId, { totpCode: totp(secret, 1) })).rejects.toThrow();
+      expect((await query("SELECT last_used_step FROM mfa_totp WHERE customer_id=$1", [payer.id])).rows[0]).toEqual(before);
+      expect(await succeeded(payer.id)).toEqual({ count: 0, total: "0" });
+    } finally { await query("DELETE FROM ledger_transactions WHERE reference=$1", [`LED-${draft.operationId}`]); }
+    expect(await commitTransfer(payer.id, draft.operationId, { totpCode: totp(secret, 1) })).toMatchObject({ status: "SUCCEEDED" });
   });
 });

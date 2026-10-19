@@ -124,18 +124,18 @@ async function aiReply(
   await addNode(
     taskId,
     "compose_response",
-    "ai.response.grounded",
+    "bank.facts.render",
     [dependency],
     { factKeys: Object.keys(facts), state },
-    { model: result.meta.model, promptTokens: result.meta.promptTokens, completionTokens: result.meta.completionTokens },
+    { renderer: result.meta.renderer ?? "bank-facts-v1", model: result.meta.model, promptTokens: result.meta.promptTokens, completionTokens: result.meta.completionTokens },
   );
   await writeAudit({
     customerId,
-    eventType: "AI_RESPONSE_GROUNDED",
-    actorType: "AGENT",
-    summary: "大模型仅基于已验证银行事实生成回复",
+    eventType: "BANK_FACTS_RENDERED",
+    actorType: "SYSTEM",
+    summary: "服务端根据银行事实生成确定性回执",
     taskId,
-    evidence: { model: result.meta.model, factKeys: Object.keys(facts), state },
+    evidence: { renderer: result.meta.renderer ?? "bank-facts-v1", model: result.meta.model, factKeys: Object.keys(facts), state },
   });
   return result.value;
 }
@@ -263,6 +263,7 @@ async function handleCardLock(customerId: string, message: string, understanding
   );
   const facts = {
     operationState: "PREPARED_NOT_EXECUTED",
+    operationExecuted: false,
     cardName: selected.card_name,
     maskedNo: selected.masked_no,
     currentStatus: selected.status,

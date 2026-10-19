@@ -1,15 +1,12 @@
-import { createHash, randomInt, randomUUID } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { query, withTransaction } from "./db";
 import { evaluateTransferRisk } from "./policy";
 import { readDailyTransferTotal } from "./transfer-quota";
 import { consumeCustomerTotp } from "./auth";
+import { transferFingerprint } from "./transfer-binding";
 import { writeAudit } from "./audit";
 import { getBankStatement } from "./bank-statements";
-
-function transferFingerprint(operationId: string, customerId: string, source: string, target: string, amountMinor: number, currency: string) {
-  return createHash("sha256").update(JSON.stringify({ operationId, customerId, source, target, amountMinor, currency })).digest("hex");
-}
 
 export async function getBankingOverview(customerId: string) {
   const [customer, accounts, transactions, cards, subscriptions, statement] = await Promise.all([
@@ -126,6 +123,7 @@ async function resolveRecipient(customerId: string, recipient: string) {
 }
 
 export async function prepareTransfer(customerId: string, input: { fromAccountId: string; recipient: string; amountMinor: number; note?: string | null }) {
+  if (!Number.isSafeInteger(input.amountMinor) || input.amountMinor <= 0 || input.amountMinor > 100_000_000) throw new Error("INVALID_TRANSFER_AMOUNT");
   const [sourceResult, recipient] = await Promise.all([
     query<{ id: string; name: string; masked_no: string; available_balance_minor: string }>(
       `SELECT id,name,masked_no,available_balance_minor FROM accounts
@@ -140,23 +138,27 @@ export async function prepareTransfer(customerId: string, input: { fromAccountId
   const clock = await query<{ at: string }>("SELECT clock_timestamp()::text AS at");
   const dailyTotalMinor = await readDailyTransferTotal(customerId, clock.rows[0].at);
   const known = await query("SELECT trusted FROM beneficiaries WHERE customer_id=$1 AND settlement_account_id=$2", [customerId, recipient.account_id]);
-  const risk = evaluateTransferRisk({ amountMinor: input.amountMinor, dailyTotalMinor, trustedBeneficiary: Boolean(known.rows[0]?.trusted), trustedDevice: true });
+  const risk = evaluateTransferRisk({ amountMinor: input.amountMinor, dailyTotalMinor, trustedBeneficiary: Boolean(known.rows[0]?.trusted) });
   const operationId = `TRF-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`;
-  const fingerprint = transferFingerprint(operationId, customerId, source.id, recipient.account_id, input.amountMinor, "CNY");
 
   return withTransaction(async (client) => {
+    const expiry = await client.query<{ expires_at: Date }>("SELECT clock_timestamp()+interval '10 minutes' AS expires_at");
+    const expiresAt = expiry.rows[0].expires_at.toISOString();
+    const fingerprint = transferFingerprint({ operationId, customerId, source: source.id, target: recipient.account_id,
+      recipientCustomerId: recipient.customer_id, recipientName: recipient.display_name, recipientPhone: recipient.phone,
+      recipientMasked: recipient.masked_no, amountMinor: input.amountMinor, currency: "CNY", note: input.note ?? null, expiresAt });
     const beneficiary = await client.query<{ id: string }>(
       `INSERT INTO beneficiaries (customer_id,name,phone,bank_name,masked_account,settlement_account_id,recipient_customer_id,trusted)
        VALUES ($1,$2,$3,'BankPilot',$4,$5,$6,false)
-       ON CONFLICT (customer_id,settlement_account_id) DO UPDATE SET name=excluded.name,phone=excluded.phone,recipient_customer_id=excluded.recipient_customer_id
+       ON CONFLICT (customer_id,settlement_account_id) DO UPDATE SET name=excluded.name,phone=excluded.phone,masked_account=excluded.masked_account,recipient_customer_id=excluded.recipient_customer_id
        RETURNING id`,
       [customerId, recipient.display_name, recipient.phone, recipient.masked_no, recipient.account_id, recipient.customer_id],
     );
-    const prepared = await client.query<{ prepared_at: Date }>(
+    await client.query(
       `INSERT INTO transfers
-       (operation_id,idempotency_key,customer_id,from_account_id,beneficiary_id,amount_minor,currency,note,risk_level,required_auth,status,authorization_fingerprint)
-       VALUES ($1,$2,$3,$4,$5,$6,'CNY',$7,$8,$9,'AWAITING_AUTH',$10) RETURNING prepared_at`,
-      [operationId, randomUUID(), customerId, source.id, beneficiary.rows[0].id, input.amountMinor, input.note ?? null, risk.finalLevel, risk.requiredAuth, fingerprint],
+       (operation_id,idempotency_key,customer_id,from_account_id,beneficiary_id,amount_minor,currency,note,risk_level,required_auth,status,authorization_fingerprint,authorization_expires_at)
+       VALUES ($1,$2,$3,$4,$5,$6,'CNY',$7,$8,$9,'AWAITING_AUTH',$10,$11)`,
+      [operationId, randomUUID(), customerId, source.id, beneficiary.rows[0].id, input.amountMinor, input.note ?? null, risk.finalLevel, risk.requiredAuth, fingerprint, expiresAt],
     );
     await client.query(
       `INSERT INTO policy_decisions (operation_id,base_level,final_level,matched_rules,evidence)
@@ -166,8 +168,8 @@ export async function prepareTransfer(customerId: string, input: { fromAccountId
     if (risk.requiredAuth === "MFA") {
       await client.query(
         `INSERT INTO authorization_challenges (customer_id,operation_id,method,code_hash,expires_at)
-         VALUES ($1,$2,'TOTP',NULL,now()+interval '10 minutes')`,
-        [customerId, operationId],
+         VALUES ($1,$2,'TOTP',NULL,$3)`,
+        [customerId, operationId, expiresAt],
       );
     }
     await writeAudit({ customerId, eventType: "TRANSFER_PREPARED", actorType: "USER", summary: "客户创建转账草稿，资金尚未转出", operationId, evidence: { fromAccountId: source.id, recipientCustomerId: recipient.customer_id, amountMinor: input.amountMinor, riskLevel: risk.finalLevel, fingerprint } }, client);
@@ -176,7 +178,7 @@ export async function prepareTransfer(customerId: string, input: { fromAccountId
       status: "AWAITING_AUTH" as const,
       riskLevel: risk.finalLevel,
       requiredAuth: risk.requiredAuth,
-      authorizationExpiresAt: new Date(prepared.rows[0].prepared_at.getTime() + 10 * 60 * 1000).toISOString(),
+      authorizationExpiresAt: expiresAt,
       details: {
         amountMinor: input.amountMinor,
         currency: "CNY",
@@ -193,8 +195,8 @@ type TransferRow = {
   amount_minor: string; currency: string; risk_level: "YELLOW" | "RED"; required_auth: "CONFIRM" | "MFA";
   status: string; authorization_fingerprint: string; beneficiary_name: string; recipient_customer_id: string;
   target_account_id: string;
-  trusted_beneficiary: boolean;
-  prepared_at: Date;
+  trusted_beneficiary: boolean; prepared_at: Date;
+  beneficiary_phone: string | null; masked_account: string; note: string | null; authorization_expires_at: Date;
 };
 
 export async function commitTransfer(customerId: string, operationId: string, input: { totpCode?: string | null; taskId?: string | null }) {
@@ -208,9 +210,9 @@ export async function commitTransfer(customerId: string, operationId: string, in
     const customer = await client.query("SELECT id FROM customers WHERE id=$1 AND status='ACTIVE' FOR NO KEY UPDATE", [customerId]);
     if (!customer.rowCount) throw new Error("ACCOUNT_NOT_FOUND");
     const result = await client.query<TransferRow>(
-      `SELECT t.*,b.name AS beneficiary_name,b.recipient_customer_id,b.settlement_account_id AS target_account_id,b.trusted AS trusted_beneficiary
+      `SELECT t.*,b.name AS beneficiary_name,b.phone AS beneficiary_phone,b.masked_account,b.recipient_customer_id,b.settlement_account_id AS target_account_id,b.trusted AS trusted_beneficiary
        FROM transfers t JOIN beneficiaries b ON b.id=t.beneficiary_id
-       WHERE t.operation_id=$1 AND t.customer_id=$2 FOR UPDATE OF t`,
+       WHERE t.operation_id=$1 AND t.customer_id=$2 FOR UPDATE OF t,b`,
       [operationId, customerId],
     );
     const row = result.rows[0];
@@ -220,8 +222,10 @@ export async function commitTransfer(customerId: string, operationId: string, in
       return { alreadyExecuted: true, operationId, status: "SUCCEEDED", receipt: receipt.rows[0] };
     }
     if (row.status !== "AWAITING_AUTH") throw new Error("OPERATION_NOT_EXECUTABLE");
-    const fingerprint = transferFingerprint(operationId, customerId, row.from_account_id, row.target_account_id, Number(row.amount_minor), row.currency);
-    if (fingerprint !== row.authorization_fingerprint) throw new Error("AUTHORIZATION_MISMATCH");
+    const expectedFingerprint = transferFingerprint({ operationId, customerId, source: row.from_account_id, target: row.target_account_id,
+      recipientCustomerId: row.recipient_customer_id, recipientName: row.beneficiary_name, recipientPhone: row.beneficiary_phone,
+      recipientMasked: row.masked_account, amountMinor: Number(row.amount_minor), currency: row.currency, note: row.note, expiresAt: row.authorization_expires_at });
+    if (expectedFingerprint !== row.authorization_fingerprint) throw new Error("AUTHORIZATION_MISMATCH");
     const challenge = row.required_auth === "MFA"
       ? await client.query<{ id: string; attempts: number; expires_at: Date; status: string }>(
         `SELECT id,attempts,expires_at,status FROM authorization_challenges
@@ -235,21 +239,24 @@ export async function commitTransfer(customerId: string, operationId: string, in
     );
     const source = accounts.rows.find((item) => item.id === row.from_account_id);
     const target = accounts.rows.find((item) => item.id === row.target_account_id);
-    if (!source || source.customer_id !== customerId || source.status !== "ACTIVE" || !target || target.status !== "ACTIVE" || target.customer_id !== row.recipient_customer_id) throw new Error("ACCOUNT_NOT_FOUND");
+    if (!source || source.customer_id !== customerId || source.status !== "ACTIVE" || !target || target.customer_id !== row.recipient_customer_id || target.status !== "ACTIVE") throw new Error("ACCOUNT_NOT_FOUND");
     if (Number(source.available_balance_minor) < Number(row.amount_minor)) throw new Error("INSUFFICIENT_FUNDS");
     // Capture once after contended customer/operation/challenge/account locks.
     // Use this same instant for classification and all posting timestamps.
     const clock = await client.query<{ at: string }>("SELECT clock_timestamp()::text AS at");
     const postingAt = clock.rows[0].at;
-    if (new Date(postingAt).getTime() >= row.prepared_at.getTime() + 10 * 60 * 1000) throw new Error("AUTH_EXPIRED");
+    if (row.authorization_expires_at <= new Date(postingAt)
+      // Defense in depth: the bound expiry is authoritative, but a draft whose
+      // preparation itself aged out must never survive an expires_at anomaly.
+      || new Date(row.prepared_at).getTime() + 10 * 60 * 1000 <= new Date(postingAt).getTime()) throw new Error("AUTH_EXPIRED");
     const dailyTotalMinor = await readDailyTransferTotal(customerId, postingAt, client);
     const risk = evaluateTransferRisk({ amountMinor: Number(row.amount_minor), dailyTotalMinor, trustedBeneficiary: row.trusted_beneficiary });
     if (row.required_auth !== "MFA" && risk.requiredAuth === "MFA") {
       await client.query("UPDATE transfers SET risk_level='RED',required_auth='MFA',version=version+1 WHERE id=$1", [row.id]);
       const upgraded = await client.query<{ expires_at: Date }>(
         `INSERT INTO authorization_challenges(customer_id,operation_id,method,code_hash,expires_at)
-         VALUES($1,$2,'TOTP',NULL,LEAST($3::timestamptz+interval '10 minutes',$4::timestamptz+interval '10 minutes')) RETURNING expires_at`,
-        [customerId, operationId, postingAt, row.prepared_at],
+         VALUES($1,$2,'TOTP',NULL,$3) RETURNING expires_at`,
+        [customerId, operationId, row.authorization_expires_at],
       );
       const evidence = { amountMinor: Number(row.amount_minor), dailyTotalMinor, postingAt, timeZone: "Asia/Shanghai", operationExecuted: false };
       await client.query(
@@ -278,11 +285,12 @@ export async function commitTransfer(customerId: string, operationId: string, in
       if (auth && auth.attempts >= 3) throw new Error("AUTH_FUSE_ACTIVE");
       if (!auth || auth.expires_at <= new Date(postingAt) || auth.status !== "PENDING") throw new Error("AUTH_EXPIRED");
       if (!input.totpCode) return { authError: "AUTH_REQUIRED", operationId, status: "AWAITING_AUTH", riskLevel: "RED", requiredAuth: "MFA", authorizationExpiresAt: auth.expires_at.toISOString() } as const;
-      if (!(await consumeCustomerTotp(customerId, input.totpCode, client, new Date(postingAt)))) {
+      const verification = await consumeCustomerTotp(customerId, input.totpCode, client);
+      if (verification !== "VERIFIED") {
         const attempts = auth.attempts + 1;
         await client.query("UPDATE authorization_challenges SET attempts=$2,status=CASE WHEN $2>=3 THEN 'LOCKED' ELSE status END WHERE id=$1", [auth.id, attempts]);
-        await writeAudit({ customerId, eventType: "MFA_REJECTED", actorType: "RISK_ENGINE", summary: "高风险交易 TOTP 验证失败", operationId, evidence: { attempts, fuseActive: attempts >= 3 } }, client);
-        return { authError: attempts >= 3 ? "AUTH_FUSE_ACTIVE" : "AUTH_INVALID" } as const;
+        await writeAudit({ customerId, eventType: "MFA_REJECTED", actorType: "RISK_ENGINE", summary: "高风险交易 TOTP 验证失败", operationId, evidence: { attempts, reason: verification, fuseActive: verification === "LOCKED" || attempts >= 3 } }, client);
+        return { authError: verification === "LOCKED" || attempts >= 3 ? "AUTH_FUSE_ACTIVE" : "AUTH_INVALID" } as const;
       }
       await client.query("UPDATE authorization_challenges SET status='VERIFIED',verified_at=$2 WHERE id=$1", [auth.id, postingAt]);
     }
@@ -317,10 +325,10 @@ export async function commitTransfer(customerId: string, operationId: string, in
 export async function getOperation(customerId: string, operationId: string) {
   const transfer = await query<{
     operation_id: string; amount_minor: string; currency: string; risk_level: "YELLOW" | "RED"; required_auth: "CONFIRM" | "MFA";
-    status: string; prepared_at: string; executed_at: string | null; beneficiary_name: string; beneficiary_phone: string;
+    status: string; prepared_at: string; executed_at: string | null; beneficiary_name: string; beneficiary_phone: string; authorization_expires_at: Date;
     masked_account: string; source_name: string; source_masked_no: string; note: string | null;
   }>(
-    `SELECT t.operation_id,t.amount_minor,t.currency,t.risk_level,t.required_auth,t.status,t.prepared_at::text,t.executed_at::text,t.note,
+    `SELECT t.operation_id,t.amount_minor,t.currency,t.risk_level,t.required_auth,t.status,t.prepared_at::text,t.executed_at::text,t.note,t.authorization_expires_at,
             b.name AS beneficiary_name,b.phone AS beneficiary_phone,b.masked_account,a.name AS source_name,a.masked_no AS source_masked_no
      FROM transfers t JOIN beneficiaries b ON b.id=t.beneficiary_id JOIN accounts a ON a.id=t.from_account_id
      WHERE t.customer_id=$1 AND t.operation_id=$2`,
@@ -331,7 +339,7 @@ export async function getOperation(customerId: string, operationId: string) {
   return {
     operationId: row.operation_id, status: row.status, riskLevel: row.risk_level, requiredAuth: row.required_auth,
     preparedAt: row.prepared_at, executedAt: row.executed_at,
-    authorizationExpiresAt: new Date(new Date(row.prepared_at).getTime() + 10 * 60 * 1000).toISOString(),
+    authorizationExpiresAt: row.authorization_expires_at.toISOString(),
     details: {
       amountMinor: Number(row.amount_minor), currency: row.currency,
       sourceAccount: { name: row.source_name, maskedNo: row.source_masked_no },
@@ -419,4 +427,3 @@ export async function commitPreparedCardLock(
     };
   });
 }
-

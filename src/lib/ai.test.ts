@@ -59,15 +59,20 @@ describe("real AI boundary", () => {
   });
 
   it("does not expose unsupported success claims or invented follow-up actions", async () => {
-    process.env.AI_BASE_URL = "https://model.example/v1";
-    process.env.AI_API_KEY = "test-key";
-    process.env.AI_MODEL = "test-model";
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ choices: [{ message: {
+    // The reply is rendered deterministically from bank facts; a hostile model
+    // response must never be fetched or shown.
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({ choices: [{ message: {
       content: JSON.stringify({ message: "转账成功，款项已到账。", suggestions: ["开启自动转账", "查看转账记录"] }),
-    } }] })));
+    } }] }));
+    vi.stubGlobal("fetch", fetchMock);
     const result = await composeGroundedReply({ userMessage: "给张伟转账", intent: "TRANSFER", state: "AWAITING_CONFIRMATION",
-      facts: { operationState: "AWAITING_AUTH", amountMinor: 20_000, currency: "CNY", beneficiaryName: "张伟", nextActions: ["查看转账记录"] } });
-    expect(result.value.message).toContain("给张伟200.00元转账待你本人确认");
-    expect(result.value.suggestions).toEqual(["查看转账记录"]);
+      facts: { operationState: "PREPARED_NOT_EXECUTED", operationExecuted: false, amountMinor: 20_000, currency: "CNY", recipient: { name: "张伟" }, nextActions: ["查看转账记录"] } });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.value.message).not.toMatch(/成功|到账|已完成/);
+    expect(result.value.message).toContain("200.00 元");
+    expect(result.value.message).toContain("张伟");
+    expect(result.value.message).toContain("资金未转出");
+    expect(result.meta.model).toBeNull();
+    expect(result.value.suggestions).toEqual([]);
   });
 });

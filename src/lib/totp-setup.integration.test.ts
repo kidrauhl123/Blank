@@ -67,6 +67,10 @@ describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("first-time verifier enr
     const attempts = await Promise.all(Array.from({ length: 3 }, () => prepare(request(demo.token, { demoConfirmed: true }))));
     expect(attempts.map(result => result.status)).toEqual([409, 409, 409]);
     expect((await query("SELECT encrypted_secret,enabled_at FROM mfa_totp WHERE customer_id=$1", [demo.customer.id])).rows[0]).toEqual(before);
-    expect(await verifyCustomerTotp(demo.customer.id, code(secret))).toBe(true);
+    // Enrollment consumes its step. The next window is accepted once only.
+    expect(await verifyCustomerTotp(demo.customer.id, code(secret))).toBe(false);
+    const nextCode = code(secret, 1);
+    expect(await verifyCustomerTotp(demo.customer.id, nextCode)).toBe(true);
+    expect(await verifyCustomerTotp(demo.customer.id, nextCode)).toBe(false);
   });
 });

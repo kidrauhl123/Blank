@@ -5,12 +5,12 @@ import { commitTransfer, prepareTransfer, recordDeposit } from "./bank-core";
 import { db, query } from "./db";
 
 // Synthetic identities only. Never point this suite at a deployed database.
-function code(secret: string) {
+function code(secret: string, stepOffset = 0) {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
   const bits = [...secret].map(c => alphabet.indexOf(c).toString(2).padStart(5, "0")).join("");
   const key = Buffer.from((bits.match(/.{8}/g) ?? []).map(v => parseInt(v, 2)));
   const counter = Buffer.alloc(8);
-  counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30_000)));
+  counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30_000) + stepOffset));
   const digest = createHmac("sha1", key).update(counter).digest();
   return ((digest.readUInt32BE(digest[19] & 15) & 0x7fffffff) % 1_000_000).toString().padStart(6, "0");
 }
@@ -62,7 +62,7 @@ describe.skipIf(process.env.BANKPILOT_SECURITY_TESTS !== "1")("security red-team
   it("RT-04 refuses the same TOTP on a second high-risk transaction", async () => {
     const { payer, prepare } = await fixture();
     const { secret } = await beginTotpSetup(payer.id); await confirmTotpSetup(payer.id, code(secret));
-    const first = await prepare(110000), second = await prepare(110000); const otp = code(secret);
+    const first = await prepare(110000), second = await prepare(110000); const otp = code(secret, 1);
     expect(await commitTransfer(payer.id, first.operationId, { totpCode: otp })).toMatchObject({ status: "SUCCEEDED" });
     expect(await commitTransfer(payer.id, second.operationId, { totpCode: otp })).toMatchObject({ authError: "AUTH_INVALID" });
     expect(await postingCount(second.operationId)).toBe(0);
@@ -70,7 +70,7 @@ describe.skipIf(process.env.BANKPILOT_SECURITY_TESTS !== "1")("security red-team
   it("RT-05 permits at most one posting when two drafts race with the same TOTP", async () => {
     const { payer, prepare } = await fixture();
     const { secret } = await beginTotpSetup(payer.id); await confirmTotpSetup(payer.id, code(secret));
-    const drafts = await Promise.all([prepare(110000), prepare(110000)]); const otp = code(secret);
+    const drafts = await Promise.all([prepare(110000), prepare(110000)]); const otp = code(secret, 1);
     const results = await Promise.all(drafts.map(d => commitTransfer(payer.id, d.operationId, { totpCode: otp })));
     expect(results.filter(r => "status" in r && r.status === "SUCCEEDED")).toHaveLength(1);
     expect(results.filter(r => "authError" in r && r.authError === "AUTH_INVALID")).toHaveLength(1);
@@ -91,11 +91,14 @@ describe.skipIf(process.env.BANKPILOT_SECURITY_TESTS !== "1")("security red-team
   it("RT-08 rolls back TOTP consumption when the ledger transaction fails", async () => {
     const { payer, prepare } = await fixture();
     const { secret } = await beginTotpSetup(payer.id); await confirmTotpSetup(payer.id, code(secret));
-    const draft = await prepare(110000); const otp = code(secret);
+    const draft = await prepare(110000); const otp = code(secret, 1);
+    // Enrollment consumed its own step; capture that baseline so the
+    // assertion below tests exactly the failed transfer's consumption.
+    const baseline = (await query<{ step: string | null }>("SELECT last_used_step::text AS step FROM mfa_totp WHERE customer_id=$1", [payer.id])).rows[0].step;
     const blocker = (await query<{ id: string }>("INSERT INTO ledger_transactions(reference,transaction_type) VALUES($1,'TEST') RETURNING id", [`LED-${draft.operationId}`])).rows[0].id;
     try {
       await expect(commitTransfer(payer.id, draft.operationId, { totpCode: otp })).rejects.toMatchObject({ code: "23505" });
-      expect((await query("SELECT last_used_counter::text AS step FROM mfa_totp WHERE customer_id=$1", [payer.id])).rows[0].step).toBe("-1");
+      expect((await query<{ step: string | null }>("SELECT last_used_step::text AS step FROM mfa_totp WHERE customer_id=$1", [payer.id])).rows[0].step).toBe(baseline);
       expect(await postingCount(draft.operationId)).toBe(0);
     } finally { await query("DELETE FROM ledger_transactions WHERE id=$1", [blocker]); }
     expect(await commitTransfer(payer.id, draft.operationId, { totpCode: otp })).toMatchObject({ status: "SUCCEEDED" });
