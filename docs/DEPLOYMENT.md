@@ -118,7 +118,7 @@ docker volume rm bankpilot_nanobot
 | 日期 | 提交 | 迁移 | 结果 |
 | --- | --- | --- | --- |
 | 2026-10-19 | `2a56ca3` | 到 `020_scheduled_tasks.sql`（9 项必需迁移到位） | 发布标记 `20261019T084641Z`；备份 `/opt/bankpilot/backups/release-20261019T084641Z/`（dump、env、source，权限 600）；`/api/health` 正常，账本不变量通过，退役表与退役路由不存在，`Authorization` 头返回 403，调度心跳正常；`https://bank.jung.edu.pl` 返回 200 且 TLS/安全响应头正常 |
-| 2026-10-19 | `18d0cdf`（手机画布 UI、文档状态校正、付款人锁用例修复） | 无新增迁移，全部为 `skip` | 发布标记 `20261019T170100Z`；备份 `/opt/bankpilot/backups/release-20261019T170100Z/`；账本不变量通过，`/api/health` 为 `{"status":"ok","database":"connected","agentRuntime":"ready","ai":{"configured":true}}`，应用与调度容器健康；线上八个产品路由均 200、三个退役路由 404；`.env` 模板文件已随源码同步（校验和一致）。此前 `0e3e705` 已同流程发布，仅源码与文档不同 |
+| 2026-10-19 | `18d0cdf`（手机画布 UI、文档状态校正、付款人锁用例修复）；其后的文档提交未再重新部署 | 无新增迁移，全部为 `skip` | 发布标记 `20261019T170100Z`；备份 `/opt/bankpilot/backups/release-20261019T170100Z/`；账本不变量通过，`/api/health` 为 `{"status":"ok","database":"connected","agentRuntime":"ready","ai":{"configured":true}}`，应用与调度容器健康；线上八个产品路由均 200、三个退役路由 404；`.env` 模板文件已随源码同步（校验和一致）。此前 `0e3e705` 已同流程发布，仅源码与文档不同 |
 
 同步模板文件（`.env.example`、`deploy/.env.production.example`）会被部署脚本排除规则放过；私有 `.env`、`.env.local`、`deploy/.env.production` 仍被排除。
 
