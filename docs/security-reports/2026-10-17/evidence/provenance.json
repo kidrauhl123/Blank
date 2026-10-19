@@ -1,0 +1,46 @@
+{
+  "baseline_repository": "kidrauhl123/AIbanking",
+  "baseline_commit": "aa1b8d874641e996af403b553a605d297ae49eed",
+  "baseline_tree": "2ff4244d90ad1211f41930f099c37c71143a4732",
+  "snapshot": "180 text files fetched by pinned GitHub API ref; line endings may be normalized; binary assets and full git history excluded",
+  "local_branch": "security/authorization-hardening-20261017",
+  "environment": {
+    "os": "Windows x64",
+    "node": "24.19.0",
+    "next": "16.3.8",
+    "vitest": "4.1.11",
+    "postgresql": "17.6",
+    "database_host": "127.0.0.1",
+    "database_name": "bankpilot_security_test",
+    "model_transport": "deterministic test doubles only"
+  },
+  "tested_files": [
+    {
+      "path": "src/lib/auth.ts",
+      "sha256": "b94d6d0c484c0a7a1ddf307af7c535c2213d358d11d0270ab448663ce7ce4a14"
+    },
+    {
+      "path": "src/lib/bank-core.ts",
+      "sha256": "943f679df16195d492ab05ba9b4c00dde31d3cf509f9338b44eeb53e7465f4cc"
+    },
+    {
+      "path": "src/lib/security-redteam.integration.test.ts",
+      "sha256": "c5be15d8d4bb3a7774717ec0f13c82a0ee92dce295b1e48a4d8f87fe9dc79abc"
+    },
+    {
+      "path": "db/migrations/015_totp_replay_protection.sql",
+      "sha256": "4a2925f1165058cb8ea04f77febaa1b11a65104ffac297925131e49284a43e82"
+    }
+  ],
+  "application_lock_sha256": "60fcec45ea5d9b08131c1f505a84eee561ffc9274df229f4157d1e828c6a4598",
+  "local_converted_lock_sha256": "0832692e873e200409f8c85e7d1c3db22c2db963d70dc2412cbea9566722f0aa",
+  "new_application_dependencies": false,
+  "limitations": [
+    "No live-model redteam",
+    "No production deployment or production data",
+    "No external channel E2E",
+    "No full git history or fresh dependency vulnerability audit"
+  ],
+  "source_fix_commit": "a1b5d99cd5856214a94d0d5eff6de696cc51e896",
+  "source_pull_request": "https://github.com/kidrauhl123/AIbanking/pull/2"
+}

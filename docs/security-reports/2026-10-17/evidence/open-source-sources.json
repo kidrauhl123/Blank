@@ -1,0 +1,30 @@
+{
+  "checked_on": "2026-10-17",
+  "sources": [
+    {
+      "repo": "NVIDIA/garak",
+      "sha": "1b54bb8a51ffce547e56df22ba73a0abbaa56982",
+      "license": "Apache-2.0",
+      "defaultBranch": "main"
+    },
+    {
+      "repo": "Azure/PyRIT",
+      "sha": "bec7cb5d6089481d75fb8df143793de3da6905f5",
+      "license": "MIT",
+      "defaultBranch": "main"
+    },
+    {
+      "repo": "promptfoo/promptfoo",
+      "sha": "8398ca76d5a6b0b7b7495edd8561b2fcdea66eb5",
+      "license": "MIT",
+      "defaultBranch": "main"
+    },
+    {
+      "repo": "confident-ai/deepteam",
+      "sha": "d76a51df3b56ef186d81bd847008946d8656ab1c",
+      "license": "Apache-2.0",
+      "defaultBranch": "main"
+    }
+  ],
+  "status": "researched, not scanned"
+}

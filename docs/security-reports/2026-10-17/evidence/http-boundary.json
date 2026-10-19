@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "mode": "live-local-http",
+  "target": "http://127.0.0.1:3017",
+  "note": "No login, real model, real funds, or authenticated mutation is performed.",
+  "cases": [
+    {
+      "id": "HTTP-01",
+      "method": "GET",
+      "path": "/api/bootstrap",
+      "started_at": "2026-10-16T19:33:55.793944+00:00",
+      "expected_http": 401,
+      "actual_http": 401,
+      "expected_code": "AUTHENTICATION_REQUIRED",
+      "actual_code": "AUTHENTICATION_REQUIRED",
+      "response_sha256": "84f338348dca8485e1ed08c500846d09dd50e4075f741ac6c8ec7e00229f393b",
+      "status": "PASS"
+    },
+    {
+      "id": "HTTP-02",
+      "method": "POST",
+      "path": "/api/v1/transfers/prepare",
+      "started_at": "2026-10-16T19:33:56.789794+00:00",
+      "expected_http": 403,
+      "actual_http": 403,
+      "expected_code": "INVALID_ORIGIN",
+      "actual_code": "INVALID_ORIGIN",
+      "response_sha256": "ed88a2b79165130346286d6dec0031608a2678b88c00ed9e3239c3bc8114bd66",
+      "status": "PASS"
+    },
+    {
+      "id": "HTTP-03",
+      "method": "POST",
+      "path": "/api/v1/transfers/prepare",
+      "started_at": "2026-10-16T19:33:57.056569+00:00",
+      "expected_http": 403,
+      "actual_http": 403,
+      "expected_code": "INVALID_ORIGIN",
+      "actual_code": "INVALID_ORIGIN",
+      "response_sha256": "ed88a2b79165130346286d6dec0031608a2678b88c00ed9e3239c3bc8114bd66",
+      "status": "PASS"
+    },
+    {
+      "id": "HTTP-04",
+      "method": "POST",
+      "path": "/api/v1/transfers/prepare",
+      "started_at": "2026-10-16T19:33:57.067648+00:00",
+      "expected_http": 401,
+      "actual_http": 401,
+      "expected_code": "AUTHENTICATION_REQUIRED",
+      "actual_code": "AUTHENTICATION_REQUIRED",
+      "response_sha256": "84f338348dca8485e1ed08c500846d09dd50e4075f741ac6c8ec7e00229f393b",
+      "status": "PASS"
+    },
+    {
+      "id": "HTTP-05",
+      "method": "POST",
+      "path": "/api/v1/transfers/prepare",
+      "started_at": "2026-10-16T19:33:57.085671+00:00",
+      "expected_http": 403,
+      "actual_http": 403,
+      "expected_code": "BANK_APP_SESSION_REQUIRED",
+      "actual_code": "BANK_APP_SESSION_REQUIRED",
+      "response_sha256": "e9298dbb3f0456799e9af284b2cd23b4b9951fdbdae33a585f81ea3b604bee9e",
+      "status": "PASS"
+    },
+    {
+      "id": "HTTP-06",
+      "method": "GET",
+      "path": "/api/bootstrap",
+      "started_at": "2026-10-16T19:33:57.118223+00:00",
+      "expected_http": 403,
+      "actual_http": 403,
+      "expected_code": "BANK_APP_SESSION_REQUIRED",
+      "actual_code": "BANK_APP_SESSION_REQUIRED",
+      "response_sha256": "e9298dbb3f0456799e9af284b2cd23b4b9951fdbdae33a585f81ea3b604bee9e",
+      "status": "PASS"
+    },
+    {
+      "id": "HTTP-07",
+      "method": "POST",
+      "path": "/api/agent/app",
+      "started_at": "2026-10-16T19:33:57.149838+00:00",
+      "expected_http": 401,
+      "actual_http": 401,
+      "expected_code": "AUTHENTICATION_REQUIRED",
+      "actual_code": "AUTHENTICATION_REQUIRED",
+      "response_sha256": "ac935d8790bdf53003aafbd143eb5cff9d97b4b98a16bfb9dfed7ab54b2244a7",
+      "status": "PASS"
+    },
+    {
+      "id": "HTTP-08",
+      "method": "GET",
+      "path": "/api/v1/statements",
+      "started_at": "2026-10-16T19:33:59.512825+00:00",
+      "expected_http": 401,
+      "actual_http": 401,
+      "expected_code": "AUTHENTICATION_REQUIRED",
+      "actual_code": "AUTHENTICATION_REQUIRED",
+      "response_sha256": "84f338348dca8485e1ed08c500846d09dd50e4075f741ac6c8ec7e00229f393b",
+      "status": "PASS"
+    }
+  ]
+}

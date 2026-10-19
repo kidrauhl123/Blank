@@ -3,9 +3,13 @@ import type { PoolClient } from "pg";
 import { query, withTransaction } from "./db";
 import { evaluateTransferRisk } from "./policy";
 import { readDailyTransferTotal } from "./transfer-quota";
-import { verifyCustomerTotp } from "./auth";
+import { consumeCustomerTotp } from "./auth";
 import { writeAudit } from "./audit";
 import { getBankStatement } from "./bank-statements";
+
+function transferFingerprint(operationId: string, customerId: string, source: string, target: string, amountMinor: number, currency: string) {
+  return createHash("sha256").update(JSON.stringify({ operationId, customerId, source, target, amountMinor, currency })).digest("hex");
+}
 
 export async function getBankingOverview(customerId: string) {
   const [customer, accounts, transactions, cards, subscriptions, statement] = await Promise.all([
@@ -138,7 +142,7 @@ export async function prepareTransfer(customerId: string, input: { fromAccountId
   const known = await query("SELECT trusted FROM beneficiaries WHERE customer_id=$1 AND settlement_account_id=$2", [customerId, recipient.account_id]);
   const risk = evaluateTransferRisk({ amountMinor: input.amountMinor, dailyTotalMinor, trustedBeneficiary: Boolean(known.rows[0]?.trusted), trustedDevice: true });
   const operationId = `TRF-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`;
-  const fingerprint = createHash("sha256").update(JSON.stringify({ operationId, customerId, source: source.id, target: recipient.account_id, amountMinor: input.amountMinor, currency: "CNY" })).digest("hex");
+  const fingerprint = transferFingerprint(operationId, customerId, source.id, recipient.account_id, input.amountMinor, "CNY");
 
   return withTransaction(async (client) => {
     const beneficiary = await client.query<{ id: string }>(
@@ -148,10 +152,10 @@ export async function prepareTransfer(customerId: string, input: { fromAccountId
        RETURNING id`,
       [customerId, recipient.display_name, recipient.phone, recipient.masked_no, recipient.account_id, recipient.customer_id],
     );
-    await client.query(
+    const prepared = await client.query<{ prepared_at: Date }>(
       `INSERT INTO transfers
        (operation_id,idempotency_key,customer_id,from_account_id,beneficiary_id,amount_minor,currency,note,risk_level,required_auth,status,authorization_fingerprint)
-       VALUES ($1,$2,$3,$4,$5,$6,'CNY',$7,$8,$9,'AWAITING_AUTH',$10)`,
+       VALUES ($1,$2,$3,$4,$5,$6,'CNY',$7,$8,$9,'AWAITING_AUTH',$10) RETURNING prepared_at`,
       [operationId, randomUUID(), customerId, source.id, beneficiary.rows[0].id, input.amountMinor, input.note ?? null, risk.finalLevel, risk.requiredAuth, fingerprint],
     );
     await client.query(
@@ -172,7 +176,7 @@ export async function prepareTransfer(customerId: string, input: { fromAccountId
       status: "AWAITING_AUTH" as const,
       riskLevel: risk.finalLevel,
       requiredAuth: risk.requiredAuth,
-      authorizationExpiresAt: risk.requiredAuth === "MFA" ? new Date(Date.now() + 10 * 60 * 1000).toISOString() : null,
+      authorizationExpiresAt: new Date(prepared.rows[0].prepared_at.getTime() + 10 * 60 * 1000).toISOString(),
       details: {
         amountMinor: input.amountMinor,
         currency: "CNY",
@@ -190,6 +194,7 @@ type TransferRow = {
   status: string; authorization_fingerprint: string; beneficiary_name: string; recipient_customer_id: string;
   target_account_id: string;
   trusted_beneficiary: boolean;
+  prepared_at: Date;
 };
 
 export async function commitTransfer(customerId: string, operationId: string, input: { totpCode?: string | null; taskId?: string | null }) {
@@ -215,6 +220,8 @@ export async function commitTransfer(customerId: string, operationId: string, in
       return { alreadyExecuted: true, operationId, status: "SUCCEEDED", receipt: receipt.rows[0] };
     }
     if (row.status !== "AWAITING_AUTH") throw new Error("OPERATION_NOT_EXECUTABLE");
+    const fingerprint = transferFingerprint(operationId, customerId, row.from_account_id, row.target_account_id, Number(row.amount_minor), row.currency);
+    if (fingerprint !== row.authorization_fingerprint) throw new Error("AUTHORIZATION_MISMATCH");
     const challenge = row.required_auth === "MFA"
       ? await client.query<{ id: string; attempts: number; expires_at: Date; status: string }>(
         `SELECT id,attempts,expires_at,status FROM authorization_challenges
@@ -228,20 +235,21 @@ export async function commitTransfer(customerId: string, operationId: string, in
     );
     const source = accounts.rows.find((item) => item.id === row.from_account_id);
     const target = accounts.rows.find((item) => item.id === row.target_account_id);
-    if (!source || source.customer_id !== customerId || source.status !== "ACTIVE" || !target || target.status !== "ACTIVE") throw new Error("ACCOUNT_NOT_FOUND");
+    if (!source || source.customer_id !== customerId || source.status !== "ACTIVE" || !target || target.status !== "ACTIVE" || target.customer_id !== row.recipient_customer_id) throw new Error("ACCOUNT_NOT_FOUND");
     if (Number(source.available_balance_minor) < Number(row.amount_minor)) throw new Error("INSUFFICIENT_FUNDS");
     // Capture once after contended customer/operation/challenge/account locks.
     // Use this same instant for classification and all posting timestamps.
     const clock = await client.query<{ at: string }>("SELECT clock_timestamp()::text AS at");
     const postingAt = clock.rows[0].at;
+    if (new Date(postingAt).getTime() >= row.prepared_at.getTime() + 10 * 60 * 1000) throw new Error("AUTH_EXPIRED");
     const dailyTotalMinor = await readDailyTransferTotal(customerId, postingAt, client);
     const risk = evaluateTransferRisk({ amountMinor: Number(row.amount_minor), dailyTotalMinor, trustedBeneficiary: row.trusted_beneficiary });
     if (row.required_auth !== "MFA" && risk.requiredAuth === "MFA") {
       await client.query("UPDATE transfers SET risk_level='RED',required_auth='MFA',version=version+1 WHERE id=$1", [row.id]);
       const upgraded = await client.query<{ expires_at: Date }>(
         `INSERT INTO authorization_challenges(customer_id,operation_id,method,code_hash,expires_at)
-         VALUES($1,$2,'TOTP',NULL,$3::timestamptz+interval '10 minutes') RETURNING expires_at`,
-        [customerId, operationId, postingAt],
+         VALUES($1,$2,'TOTP',NULL,LEAST($3::timestamptz+interval '10 minutes',$4::timestamptz+interval '10 minutes')) RETURNING expires_at`,
+        [customerId, operationId, postingAt, row.prepared_at],
       );
       const evidence = { amountMinor: Number(row.amount_minor), dailyTotalMinor, postingAt, timeZone: "Asia/Shanghai", operationExecuted: false };
       await client.query(
@@ -270,7 +278,7 @@ export async function commitTransfer(customerId: string, operationId: string, in
       if (auth && auth.attempts >= 3) throw new Error("AUTH_FUSE_ACTIVE");
       if (!auth || auth.expires_at <= new Date(postingAt) || auth.status !== "PENDING") throw new Error("AUTH_EXPIRED");
       if (!input.totpCode) return { authError: "AUTH_REQUIRED", operationId, status: "AWAITING_AUTH", riskLevel: "RED", requiredAuth: "MFA", authorizationExpiresAt: auth.expires_at.toISOString() } as const;
-      if (!(await verifyCustomerTotp(customerId, input.totpCode, client))) {
+      if (!(await consumeCustomerTotp(customerId, input.totpCode, client, new Date(postingAt)))) {
         const attempts = auth.attempts + 1;
         await client.query("UPDATE authorization_challenges SET attempts=$2,status=CASE WHEN $2>=3 THEN 'LOCKED' ELSE status END WHERE id=$1", [auth.id, attempts]);
         await writeAudit({ customerId, eventType: "MFA_REJECTED", actorType: "RISK_ENGINE", summary: "高风险交易 TOTP 验证失败", operationId, evidence: { attempts, fuseActive: attempts >= 3 } }, client);
@@ -323,6 +331,7 @@ export async function getOperation(customerId: string, operationId: string) {
   return {
     operationId: row.operation_id, status: row.status, riskLevel: row.risk_level, requiredAuth: row.required_auth,
     preparedAt: row.prepared_at, executedAt: row.executed_at,
+    authorizationExpiresAt: new Date(new Date(row.prepared_at).getTime() + 10 * 60 * 1000).toISOString(),
     details: {
       amountMinor: Number(row.amount_minor), currency: row.currency,
       sourceAccount: { name: row.source_name, maskedNo: row.source_masked_no },
@@ -410,3 +419,4 @@ export async function commitPreparedCardLock(
     };
   });
 }
+

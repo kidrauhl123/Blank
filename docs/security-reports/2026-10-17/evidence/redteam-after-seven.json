@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "label": "redteam-after-seven",
+  "raw_sha256": "76bc1b8b3290217c92ba939e76b7aa14e611dabceef72b52550c594be6181e8b",
+  "started_at_utc": "2026-10-16T19:30:49.915000+00:00",
+  "total": 7,
+  "passed": 7,
+  "failed": 0,
+  "skipped": 0,
+  "success": true,
+  "cases": [
+    {
+      "title": "RT-01 rejects a yellow draft older than ten minutes with no ledger posting",
+      "status": "passed",
+      "duration_ms": 339.19450000000006,
+      "failure_recorded": false
+    },
+    {
+      "title": "RT-02 rejects a draft whose stored amount was changed after preparation",
+      "status": "passed",
+      "duration_ms": 121.82730000000004,
+      "failure_recorded": false
+    },
+    {
+      "title": "RT-03 rejects beneficiary destination substitution after preparation",
+      "status": "passed",
+      "duration_ms": 131.47350000000006,
+      "failure_recorded": false
+    },
+    {
+      "title": "RT-04 refuses the same TOTP on a second high-risk transaction",
+      "status": "passed",
+      "duration_ms": 125.07060000000001,
+      "failure_recorded": false
+    },
+    {
+      "title": "RT-05 permits at most one posting when two drafts race with the same TOTP",
+      "status": "passed",
+      "duration_ms": 204.70029999999997,
+      "failure_recorded": false
+    },
+    {
+      "title": "RT-06 keeps customer isolation at the core transaction boundary",
+      "status": "passed",
+      "duration_ms": 94.44999999999982,
+      "failure_recorded": false
+    },
+    {
+      "title": "RT-07 returns the original receipt on retry without double posting",
+      "status": "passed",
+      "duration_ms": 101.16160000000013,
+      "failure_recorded": false
+    }
+  ],
+  "redaction": "No absolute source paths, stack traces, source excerpts, credentials or response bodies included."
+}
