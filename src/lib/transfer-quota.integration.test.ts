@@ -165,17 +165,21 @@ describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("transfer daily quota ex
     const draft = await prepare(10000);
     const locker = await db.connect();
     let pending: ReturnType<typeof commitTransfer> | undefined;
+    let settled = false;
     try {
       await locker.query("BEGIN");
       await locker.query("SELECT id FROM customers WHERE id=$1 FOR NO KEY UPDATE", [payer.id]);
-      pending = commitTransfer(payer.id, draft.operationId, {});
+      pending = commitTransfer(payer.id, draft.operationId, {}).finally(() => { settled = true; });
+      // Observing the wait is a hint that shortens the test, not the assertion:
+      // pg_stat_activity sampling depends on runner load and role privileges.
       const deadline = Date.now() + 8000;
-      while (true) {
-        const waiters = await locker.query<{ count: number }>("SELECT count(*)::int AS count FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE 'SELECT id FROM customers%'");
-        if (waiters.rows[0].count) break;
-        if (Date.now() > deadline) throw new Error("Commit did not wait on payer lock");
+      while (!settled) {
+        const waiters = await locker.query<{ count: number }>(`SELECT count(*)::int AS count FROM pg_locks l
+          JOIN pg_stat_activity a ON a.pid=l.pid WHERE NOT l.granted AND a.datname=current_database()`);
+        if (waiters.rows[0].count || Date.now() > deadline) break;
         await new Promise(resolve => setTimeout(resolve, 10));
       }
+      // The lock is still held here, so a commit that already posted did not wait.
       const released = (await locker.query<{ at: string }>("SELECT clock_timestamp()::text AS at")).rows[0].at;
       await locker.query("COMMIT");
       expect(await pending).toMatchObject({ status: "SUCCEEDED" });
