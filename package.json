@@ -8,6 +8,7 @@
     "start": "next start",
     "wecom:dev": "node workers/wecom.mjs",
     "qq:dev": "node workers/qq.mjs",
+    "scheduler:dev": "node --env-file=.env.local workers/scheduler.mjs",
     "lint": "eslint",
     "test": "vitest run",
     "test:e2e": "playwright test",
