@@ -38,6 +38,11 @@ jobs:
           for migration in db/migrations/*.sql; do
             psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
           done
+      # Invariants assert production-shaped data (e.g. every customer has
+      # credentials). Run them on the freshly migrated database, before the
+      # test suites insert deliberately incomplete fixture customers.
+      - name: Check bank invariants
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/invariants.sql
       - run: npm run lint
       - run: npm test -- --no-file-parallelism
       - run: bash scripts/test-migrate-stdin.sh
@@ -46,5 +51,3 @@ jobs:
       - run: npm run test:e2e
         env:
           BANKPILOT_PUBLIC_URL: http://localhost:3109
-      - name: Check bank invariants
-        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/invariants.sql
