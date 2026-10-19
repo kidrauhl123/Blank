@@ -184,7 +184,11 @@ export async function composeGroundedReply(input: {
   const suggestions = result.value.suggestions.filter((suggestion) => allowedActions.includes(suggestion));
   const bankVerified = input.state === "COMPLETED" && input.facts.operationExecuted === true &&
     (input.facts.operationState === "SUCCEEDED" || input.facts.status === "SUCCEEDED");
-  const claimsOperationSuccess = /(?:转账|入金|锁卡|开卡|申请)(?:已)?(?:成功|完成)|(?:已经|已)(?:成功|完成)(?:转账|入金|锁卡|开卡)|(?:款项|资金)(?:已|已经)到账/u.test(result.value.message);
+  // Any completed/succeeded wording about money movement counts as a success claim unless the bank
+  // receipt verified it. The blocklist is deliberately broad: missing a synonym lets the model
+  // restate an unverified draft as done, so unknown phrasings must fall through to the safe text.
+  const successClaim = /(?:已|已经|成功|完成)[^。！？\n]{0,8}(?:到账|入账|转出|转入|划出|划转|汇出|汇款|付款|扣款|支付|执行|办理|办好|搞定|成功|完成)|(?:到账|入账|转出|转入|划出|划转|汇出|汇款|付款|扣款|支付)[^。！？\n]{0,4}(?:成功|完成|了)|(?:款项|资金|钱)(?:已|已经)(?:到|划|转|汇|付|扣|出|入)|(?:转账|入金|锁卡|开卡|申请|挂失|解挂|改密|绑定)(?:已)?(?:成功|完成|办好)|(?:已|已经)(?:成功|完成)(?:转账|入金|锁卡|开卡|申请|办理)|(?:办理|执行|汇款|付款|扣款|支付|转出|划出)(?:成功|完成|好了|结束)/u;
+  const claimsOperationSuccess = successClaim.test(result.value.message);
   const money = typeof input.facts.amountMinor === "number" && Number.isSafeInteger(input.facts.amountMinor) && input.facts.currency === "CNY"
     ? `${(input.facts.amountMinor / 100).toFixed(2)}元` : null;
   const recipient = typeof input.facts.beneficiaryName === "string" ? `给${input.facts.beneficiaryName}` : "";

@@ -1,8 +1,12 @@
 import type { AppPage, PageAction } from "./app-agent-protocol";
 
-const monetaryOption = /(?:[¥￥]\s*\d[\d,.]*|\d[\d,.]*\s*(?:元|块|角|分))/u;
-const monetaryMentions = /(?:[¥￥]\s*\d[\d,.]*|\d[\d,.]*\s*(?:元|块|角|分))/gu;
-const bareAmount = /^\s*\d[\d,.]*\s*$/u;
+// Arabic and Chinese numerals alike: invented amount options are a known model
+// failure mode (the prompt eval's UNGROUNDED_AMOUNT_OPTION uses the same coverage).
+const arabicAmount = "(?:[¥￥]\\s*\\d[\\d,.]*|\\d[\\d,.]*\\s*(?:元|块|角|分))";
+const chineseAmount = "[零一二三四五六七八九十百千万亿两几]+\\s*(?:元|块|角|分)";
+const monetaryOption = new RegExp(`(?:${arabicAmount}|${chineseAmount})`, "u");
+const monetaryMentions = new RegExp(`(?:${arabicAmount}|${chineseAmount})`, "gu");
+const bareAmount = /^\s*[\d,.，]+\s*(?:元|块)?\s*$|^\s*[零一二三四五六七八九十百千万亿两几]+\s*(?:元|块)?\s*$/u;
 
 export function guardQuestion(action: PageAction, userMessage: string): PageAction {
   if (action.type !== "question") return action;
