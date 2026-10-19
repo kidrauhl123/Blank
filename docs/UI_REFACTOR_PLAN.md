@@ -82,3 +82,12 @@
 | 回归 | `npm run lint`、`npx tsc --noEmit`、`npm test`、`npm run build`、Playwright | 全部通过：lint 无输出，类型检查通过，Vitest 232 通过 / 76 跳过，构建成功，浏览器套件 35 通过 / 5 跳过 |
 
 尚未完成：200% 缩放逐页核对、真机软键盘遮挡输入检查、与 `a220ee5` 的逐页像素对比基线。
+
+## 证据截图
+
+线上 `https://bank.jung.edu.pl` 实拍，已登录小土豆：
+
+- [桌面 1440×900 的固定手机画布](screenshots/phone-canvas-desktop.png)
+- [手机 390×844 的整屏画布](screenshots/phone-canvas-mobile.png)
+- [个人中心底部抽屉贴合画布](screenshots/profile-sheet.png)
+- [审计台单列布局](screenshots/audit-single-column.png)
