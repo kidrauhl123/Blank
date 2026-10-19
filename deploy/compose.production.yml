@@ -28,6 +28,7 @@ services:
       - ../db/migrations/014_app_agent_model.sql:/docker-entrypoint-initdb.d/140-app-agent-model.sql:ro
       - ../db/migrations/015_visitor_memory.sql:/docker-entrypoint-initdb.d/150-visitor-memory.sql:ro
       - ../db/migrations/016_app_agent_memory_scope.sql:/docker-entrypoint-initdb.d/160-app-agent-memory-scope.sql:ro
+      - ../db/migrations/017_app_agent_timeline.sql:/docker-entrypoint-initdb.d/170-app-agent-timeline.sql:ro
       - ../db/migrations/018_totp_replay_protection.sql:/docker-entrypoint-initdb.d/180-totp-replay-protection.sql:ro
     networks:
       - internal
