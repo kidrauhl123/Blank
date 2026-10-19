@@ -33,6 +33,8 @@ export const actionResultSchema = z.object({
 });
 export type ActionResult = z.infer<typeof actionResultSchema>;
 export type AppAgentStatus = "RUNNING" | "CONSENT" | "ACTION" | "QUESTION" | "HANDOFF" | "PAUSED" | "COMPLETED" | "CANCELLED" | "FAILED";
+export type TimelineState = "running" | "done" | "waiting" | "paused" | "blocked" | "failed" | "cancelled";
+export type TimelineEvent = { id: string; sequence: number; at: string; title: string; detail?: string; state: TimelineState };
 export type AppAgentView = {
   id: string;
   model?: string;
@@ -41,6 +43,7 @@ export type AppAgentView = {
   pending: PendingAction | null;
   controlGranted: boolean;
   steps: number;
+  timeline?: TimelineEvent[];
 };
 
 // Page tools deliberately cannot approve a bank operation, read OTPs or execute JS.

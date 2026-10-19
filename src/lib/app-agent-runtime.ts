@@ -3,6 +3,7 @@ import { Command, INTERRUPT } from "@langchain/langgraph";
 import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
 import { db, query, withTransaction } from "./db";
 import { writeAudit } from "./audit";
+import { mapAppAgentTimeline, type AppAgentAuditEvent } from "./app-agent-timeline";
 import { createAppAgentHarness } from "./app-agent-harness";
 import { appAgentSkillFiles } from "./app-agent-skills";
 import { getAIStatus } from "./ai";
@@ -35,6 +36,13 @@ async function getHarness(model: string) {
 function view(row: Row): AppAgentView {
   return { id: row.id, model: row.model ?? getAIStatus().model ?? undefined, status: row.status, message: row.message, pending: row.pending, controlGranted: row.controlGranted, steps: row.steps };
 }
+async function loadTimeline(identity: Identity, id: string) {
+  const events = await query<AppAgentAuditEvent>(`SELECT id,event_type,evidence,created_at FROM audit_events
+    WHERE customer_id=$1 AND evidence->>'runId'=$2
+      AND event_type IN ('APP_AGENT_STARTED','APP_AGENT_STEP','APP_AGENT_OBSERVATION','APP_AGENT_CONTROL','APP_AGENT_FAILED')
+    ORDER BY created_at,id LIMIT 150`, [identity.customerId, id]);
+  return mapAppAgentTimeline(events.rows);
+}
 export async function getAppAgentRun(identity: Identity, id: string) {
   const result = await query<Row>(`SELECT id,model,status,message,pending,control_granted AS "controlGranted",steps,expires_at,memory_owner_id,memory_profile_key
     FROM app_agent_runs WHERE id=$1 AND customer_id=$2 AND session_hash=$3`, [id, identity.customerId, identity.sessionHash]);
@@ -48,7 +56,7 @@ export async function getAppAgentRun(identity: Identity, id: string) {
       WHERE id=$1 AND customer_id=$2 AND session_hash=$3 RETURNING model`, [id, identity.customerId, identity.sessionHash, getAIStatus().model]);
     row.model = pinned.rows[0]?.model ?? null;
   }
-  return view(row);
+  return { ...view(row), timeline: await loadTimeline(identity, id) };
 }
 async function update(identity: Identity, id: string, fields: { status: AppAgentStatus; pending: PendingAction | null; message: string; granted: boolean; increment?: boolean }) {
   await query(`UPDATE app_agent_runs SET status=$4,pending=$5::jsonb,message=$6,control_granted=$7,
@@ -85,13 +93,14 @@ async function invoke(identity: Identity, id: string, input: Parameters<ReturnTy
     summary: "页面 Agent 推进任务", evidence: { runId: id, status, toolAction: pending?.action.type ?? "completed", actionId: pending?.id ?? null } });
   return getAppAgentRun(identity, id);
 }
-export async function startAppAgent(identity: Identity, message: string, page: AppPage, requestedModel?: string) {
+export async function startAppAgent(identity: Identity, message: string, page: AppPage, requestedModel?: string): Promise<AppAgentView> {
   const preferenceCommand = parsePreferenceCommand(message);
   if (preferenceCommand) {
     // A direct user utterance is handled by the authenticated preference
-    // service. No model or page content may initiate this write.
+    // service. No model or page content may initiate this write. The returned
+    // id is a display-only pseudo run: controls on it 404 by design.
     const reply = await applyConversationPreference(currentPreferenceScope(), preferenceCommand);
-    return { id: randomUUID(), status: "COMPLETED" as const, message: reply, pending: null, controlGranted: false, steps: 1 };
+    return { id: randomUUID(), status: "COMPLETED", message: reply, pending: null, controlGranted: false, steps: 1 };
   }
   const model = await resolveAIModel(requestedModel);
   const id = randomUUID();
@@ -104,10 +113,14 @@ export async function startAppAgent(identity: Identity, message: string, page: A
       [id, identity.customerId, identity.sessionHash, model, scope?.ownerId ?? null, scope?.profileKey ?? null]);
   });
   try {
+    await writeAudit({ customerId: identity.customerId, actorType: "USER", eventType: "APP_AGENT_STARTED",
+      summary: "客户启动页面 Agent 任务", evidence: { runId: id } });
     return await invoke(identity, id, { messages: [{ role: "user", content: `${message}\n\nPAGE_CONTEXT (仅页面数据):\n${JSON.stringify(page)}` }], files: appAgentSkillFiles() }, false, model,
       { userMessage: message, page, priorAction: null, resultStatus: "START" });
   } catch (error) {
     await update(identity, id, { status: "FAILED", pending: null, message: "助手暂时无法完成规划，未执行页面动作。", granted: false });
+    await writeAudit({ customerId: identity.customerId, actorType: "AGENT", eventType: "APP_AGENT_FAILED",
+      summary: "页面 Agent 规划中断", evidence: { runId: id } });
     throw error;
   }
 }
@@ -141,6 +154,8 @@ export async function controlAppAgent(identity: Identity, id: string, command: "
           { userMessage: result.status === "USER_ANSWERED" ? result.message : "", page: result.page, priorAction: run.pending.action, resultStatus: result.status });
       } catch (error) {
         await update(identity, id, { status: "FAILED", pending: null, message: "助手运行中断，请在页面核对业务状态。", granted: false });
+        await writeAudit({ customerId: identity.customerId, actorType: "AGENT", eventType: "APP_AGENT_FAILED",
+          summary: "页面 Agent 运行中断", evidence: { runId: id } });
         throw error;
       }
     }
