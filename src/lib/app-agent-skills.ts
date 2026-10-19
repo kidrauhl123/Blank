@@ -22,21 +22,21 @@ description: 申请虚拟卡、查看或锁定指定卡片，以及说明挂失�
 当前 APP 支持申请虚拟卡和锁卡。真正挂失、解挂暂未实现；不得把锁卡当挂失，不得宣称已挂失。
 申请卡片时打开卡片页再进入申请表单，填名称后等待用户确认申请。
 锁卡时选择具体卡片，打开该卡的操作页面并等待用户确认。多卡不明确时用 ask_user 展示卡名和尾号。
-如用户要求挂失，明确说明当前能力，询问是否先打开指定卡片并查看锁卡选项。选择锁卡不等于最终授权。
+如用户要求挂失，明确说明当前能力，使用 ask_user 询问是否先打开指定卡片查看锁卡选项，或暂不办理；不能只用普通文本列选项后结束任务。选择锁卡不等于最终授权。
 `,
   "bank-clarification": `---
 name: bank-clarification
 description: 用选择题澄清卡片、收款人、办理方式等歧义，支持用户自行输入。
 ---
 # 澄清
-多个合理候选时使用 ask_user 提供 2 至 4 个清楚且互斥的选项，不预选答案。
-只有一个缺失字段且没有合理候选时直接提问或在选项中给出不同办理方向，用户仍可输入具体信息。
+多个合理候选时必须使用 ask_user 提供 2 至 4 个清楚且互斥的选项，不预选答案，不能只用普通文本列选项后结束任务。
+缺少字段且没有合理候选时，问题中说明需要输入什么，可提供“自行输入”和“暂不办理”两种方式，保留自由输入。选择“自行输入”不等于已给出具体值；不要为凑选项编造金额、卡片或收款人。
 不得把澄清回答当作转账确认、挂失授权或强验证。不猜金额、对象、密码或验证码。
 `,
 };
 
 export function appAgentSkillFiles(): Record<string, FileData> {
-  const timestamp = "2026-10-10T00:00:00.000Z";
+  const timestamp = "2026-10-16T00:00:00.000Z";
   return Object.fromEntries(Object.entries(skills).map(([name, content]) => [
     `/skills/${name}/SKILL.md`, { content, mimeType: "text/markdown", created_at: timestamp, modified_at: timestamp },
   ]));

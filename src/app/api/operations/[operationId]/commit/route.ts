@@ -2,8 +2,10 @@ import { z } from "zod";
 import { AuthError, authenticateRequest } from "@/lib/auth";
 import { commitPreparedCardLock, commitTransfer } from "@/lib/bank-core";
 import { writeAudit } from "@/lib/audit";
-import { resumeAgentRuntime } from "@/lib/agent-runtime";
+import { inspectAgentRun, resumeAgentRuntime } from "@/lib/agent-runtime";
 import { apiError, assertSameOrigin } from "@/lib/http";
+import { withPreferenceScope } from "@/lib/preference-runtime";
+import { resolveVisitorMemoryScope } from "@/lib/visitor-memory";
 
 const schema = z.object({
   confirmed: z.literal(true),
@@ -21,6 +23,29 @@ export async function POST(request: Request, context: RouteContext<"/api/operati
     if (principal.kind !== "SESSION") throw new AuthError("AUTHORIZATION_REQUIRES_BANK_APP", 403);
     const input = schema.parse(await request.json());
     const { operationId } = await context.params;
+    const scope = await resolveVisitorMemoryScope(request, principal.customerId);
+    if (input.taskId) {
+      // The visitor scope can legitimately disappear (cookie cleared, expired, or a
+      // fresh browser). That must not block committing an operation the customer
+      // already prepared: fall back to an unscoped inspection and only fail when
+      // the task itself does not match, with an actionable message.
+      const run = await withPreferenceScope(scope, () => inspectAgentRun(principal.customerId, input.taskId!));
+      if (!run || run.operation_id !== operationId) {
+        const unscoped = await withPreferenceScope(null, () => inspectAgentRun(principal.customerId, input.taskId!));
+        if (!unscoped || unscoped.operation_id !== operationId) {
+          throw new Error("AGENT_RUN_NOT_FOUND");
+        }
+        await writeAudit({
+          customerId: principal.customerId,
+          taskId: input.taskId,
+          operationId,
+          eventType: "AGENT_SCOPE_FALLBACK",
+          actorType: "SYSTEM",
+          summary: "访客记忆标识已变化，转账提交改用无访客范围的任务校验",
+          evidence: { reason: "VISITOR_SCOPE_MISMATCH" },
+        });
+      }
+    }
     if (input.type === "SUBSCRIPTION_CANCEL") throw new Error("NOT_IMPLEMENTED");
     let result;
     if (input.type === "TRANSFER") {
@@ -39,12 +64,13 @@ export async function POST(request: Request, context: RouteContext<"/api/operati
     let agentRuntime = input.taskId ? "PENDING_FINALIZATION" : "NOT_APPLICABLE";
     if (input.taskId) {
       try {
-        agent = await resumeAgentRuntime({
+        const taskId = input.taskId;
+        agent = await withPreferenceScope(scope, () => resumeAgentRuntime({
           customerId: principal.customerId,
-          taskId: input.taskId,
+          taskId,
           operationId,
           approved: true,
-        });
+        }));
         agentRuntime = "COMPLETED";
       } catch (resumeError) {
         await writeAudit({

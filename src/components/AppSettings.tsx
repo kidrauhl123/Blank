@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, ChevronDown, RefreshCw } from "lucide-react";
 import { bankRequest, BankRequestError } from "@/lib/client-request";
 import type { AIModelCatalog } from "@/lib/ai-models";
+import { PreferenceSettings } from "./PreferenceSettings";
 import styles from "./AppSettings.module.css";
 
 export function AppSettings() {
@@ -38,6 +39,7 @@ export function AppSettings() {
   };
   return <main className={styles.page}>
     <header className={styles.header}><Link href="/"><ArrowLeft size={18} />返回银行</Link><h1>设置</h1></header>
+    <PreferenceSettings />
     <section className={styles.section} aria-labelledby="debug-settings"><h2 id="debug-settings">调试</h2>
       <form className={styles.form} onSubmit={save}>
         <label htmlFor="assistant-model">助手模型</label>

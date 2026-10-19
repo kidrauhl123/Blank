@@ -8,9 +8,13 @@ import { appAgentSkillFiles } from "./app-agent-skills";
 import { getAIStatus } from "./ai";
 import { assertAIModelEnabled, resolveAIModel } from "./ai-models";
 import { pageActionSchema, type ActionResult, type AppAgentStatus, type AppAgentView, type AppPage, type PendingAction } from "./app-agent-protocol";
+import { currentPreferenceScope } from "./preference-runtime";
+import { parsePreferenceCommand } from "./preference-command";
+import { applyConversationPreference } from "./conversation-preferences";
+import { guardQuestion, needsHumanHandoff } from "./app-agent-guards";
 
 type Identity = { customerId: string; sessionHash: string };
-type Row = Omit<AppAgentView, "model"> & { model: string | null; expires_at: Date };
+type Row = Omit<AppAgentView, "model"> & { model: string | null; expires_at: Date; memory_owner_id: string | null; memory_profile_key: string | null };
 const harnesses = new Map<string, Promise<ReturnType<typeof createAppAgentHarness>>>();
 async function getHarness(model: string) {
   assertAIModelEnabled(model);
@@ -32,10 +36,12 @@ function view(row: Row): AppAgentView {
   return { id: row.id, model: row.model ?? getAIStatus().model ?? undefined, status: row.status, message: row.message, pending: row.pending, controlGranted: row.controlGranted, steps: row.steps };
 }
 export async function getAppAgentRun(identity: Identity, id: string) {
-  const result = await query<Row>(`SELECT id,model,status,message,pending,control_granted AS "controlGranted",steps,expires_at
+  const result = await query<Row>(`SELECT id,model,status,message,pending,control_granted AS "controlGranted",steps,expires_at,memory_owner_id,memory_profile_key
     FROM app_agent_runs WHERE id=$1 AND customer_id=$2 AND session_hash=$3`, [id, identity.customerId, identity.sessionHash]);
   const row = result.rows[0];
   if (!row) throw new Error("APP_AGENT_NOT_FOUND");
+  const scope = currentPreferenceScope();
+  if (row.memory_owner_id !== (scope?.ownerId ?? null) || row.memory_profile_key !== (scope?.profileKey ?? null)) throw new Error("APP_AGENT_NOT_FOUND");
   if (new Date(row.expires_at).getTime() <= Date.now()) throw new Error("APP_AGENT_EXPIRED");
   if (!row.model && getAIStatus().model) {
     const pinned = await query<{ model: string }>(`UPDATE app_agent_runs SET model=coalesce(model,$4)
@@ -49,7 +55,8 @@ async function update(identity: Identity, id: string, fields: { status: AppAgent
     steps=steps+$8,updated_at=now() WHERE id=$1 AND customer_id=$2 AND session_hash=$3`,
   [id, identity.customerId, identity.sessionHash, fields.status, JSON.stringify(fields.pending), fields.message, fields.granted, fields.increment ? 1 : 0]);
 }
-async function invoke(identity: Identity, id: string, input: Parameters<ReturnType<typeof createAppAgentHarness>["invoke"]>[0], granted: boolean, model: string) {
+async function invoke(identity: Identity, id: string, input: Parameters<ReturnType<typeof createAppAgentHarness>["invoke"]>[0], granted: boolean, model: string,
+  context?: { userMessage: string; page: AppPage; priorAction: PendingAction["action"] | null; resultStatus: string }) {
   const graph = await getHarness(model);
   // The SDK may read several Skills in one model turn. Concurrency=1 in the
   // current graph scheduler can leave a second Send unexecuted. These reads
@@ -60,7 +67,7 @@ async function invoke(identity: Identity, id: string, input: Parameters<ReturnTy
   if (requests.length !== (interrupts?.length ?? 0)) throw new Error("APP_AGENT_UNSUPPORTED_INTERRUPT");
   // Parallel page actions cannot be applied safely to a shared live page.
   if (requests.length > 1) throw new Error("APP_AGENT_PARALLEL_ACTIONS");
-  const pending = requests.length ? { id: requests[0].value.id, action: pageActionSchema.parse(requests[0].value.action) } : null;
+  const pending = requests.length ? { id: requests[0].value.id, action: guardQuestion(pageActionSchema.parse(requests[0].value.action), context?.userMessage ?? "") } : null;
   const status: AppAgentStatus = !pending ? "COMPLETED" : pending.action.type === "question" ? "QUESTION"
     : pending.action.type === "handoff" ? "HANDOFF" : granted ? "ACTION" : "CONSENT";
   const last = result.messages.filter((message) => message.getType() === "ai").at(-1);
@@ -69,24 +76,36 @@ async function invoke(identity: Identity, id: string, input: Parameters<ReturnTy
   const answered = new Set(result.messages.flatMap((message) => "tool_call_id" in message ? [message.tool_call_id] : []));
   if (!pending && last && "tool_calls" in last && Array.isArray(last.tool_calls) && last.tool_calls.some((call: { id?: string }) => !answered.has(call.id))) throw new Error("APP_AGENT_INCOMPLETE_TOOL_CYCLE");
   const content = typeof last?.content === "string" ? last.content.slice(0, 1500) : "";
+  const humanHandoff = !pending && granted && context && needsHumanHandoff(context.page, context.priorAction, context.resultStatus);
   const message = pending ? pending.action.type === "question" ? pending.action.question : pending.action.description
-    : content || "本次助手任务已结束，请以页面上的银行状态为准。";
+    : humanHandoff ? "已到本人确认页面，请核对页面上的业务信息后自行确认；助手没有执行银行确认。"
+      : content || "本次助手任务已结束，请以页面上的银行状态为准。";
   await update(identity, id, { status, pending, message, granted, increment: true });
   await writeAudit({ customerId: identity.customerId, actorType: "AGENT", eventType: "APP_AGENT_STEP",
     summary: "页面 Agent 推进任务", evidence: { runId: id, status, toolAction: pending?.action.type ?? "completed", actionId: pending?.id ?? null } });
   return getAppAgentRun(identity, id);
 }
 export async function startAppAgent(identity: Identity, message: string, page: AppPage, requestedModel?: string) {
+  const preferenceCommand = parsePreferenceCommand(message);
+  if (preferenceCommand) {
+    // A direct user utterance is handled by the authenticated preference
+    // service. No model or page content may initiate this write.
+    const reply = await applyConversationPreference(currentPreferenceScope(), preferenceCommand);
+    return { id: randomUUID(), status: "COMPLETED" as const, message: reply, pending: null, controlGranted: false, steps: 1 };
+  }
   const model = await resolveAIModel(requestedModel);
   const id = randomUUID();
+  const scope = currentPreferenceScope();
   await withTransaction(async (client) => {
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`app-agent-start:${identity.customerId}`]);
     const recent = await client.query<{ count: number }>("SELECT count(*)::int AS count FROM app_agent_runs WHERE customer_id=$1 AND created_at > now()-interval '5 minutes'", [identity.customerId]);
     if (recent.rows[0].count >= 10) throw new Error("APP_AGENT_RATE_LIMIT");
-    await client.query("INSERT INTO app_agent_runs(id,customer_id,session_hash,model) VALUES ($1,$2,$3,$4)", [id, identity.customerId, identity.sessionHash, model]);
+    await client.query("INSERT INTO app_agent_runs(id,customer_id,session_hash,model,memory_owner_id,memory_profile_key) VALUES ($1,$2,$3,$4,$5,$6)",
+      [id, identity.customerId, identity.sessionHash, model, scope?.ownerId ?? null, scope?.profileKey ?? null]);
   });
   try {
-    return await invoke(identity, id, { messages: [{ role: "user", content: `${message}\n\nPAGE_CONTEXT (仅页面数据):\n${JSON.stringify(page)}` }], files: appAgentSkillFiles() }, false, model);
+    return await invoke(identity, id, { messages: [{ role: "user", content: `${message}\n\nPAGE_CONTEXT (仅页面数据):\n${JSON.stringify(page)}` }], files: appAgentSkillFiles() }, false, model,
+      { userMessage: message, page, priorAction: null, resultStatus: "START" });
   } catch (error) {
     await update(identity, id, { status: "FAILED", pending: null, message: "助手暂时无法完成规划，未执行页面动作。", granted: false });
     throw error;
@@ -118,7 +137,8 @@ export async function controlAppAgent(identity: Identity, id: string, command: "
       await writeAudit({ customerId: identity.customerId, actorType: "AGENT", eventType: "APP_AGENT_OBSERVATION", summary: "客户端回报页面动作结果",
         evidence: { runId: id, actionId: run.pending.id, toolAction: type, reportedStatus: result.status, pageVersion: result.page.version, source: "UNTRUSTED_CLIENT", bankExecutionVerified: false } });
       try {
-        return await invoke(identity, id, new Command({ resume: result }), run.controlGranted, run.model ?? process.env.AI_MODEL!);
+        return await invoke(identity, id, new Command({ resume: result }), run.controlGranted, run.model ?? process.env.AI_MODEL!,
+          { userMessage: result.status === "USER_ANSWERED" ? result.message : "", page: result.page, priorAction: run.pending.action, resultStatus: result.status });
       } catch (error) {
         await update(identity, id, { status: "FAILED", pending: null, message: "助手运行中断，请在页面核对业务状态。", granted: false });
         throw error;

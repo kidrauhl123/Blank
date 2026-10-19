@@ -69,6 +69,11 @@ function authMessage(code: string) {
     MFA_SETUP_REQUIRES_BANK_APP: "多因素认证只能在银行 APP 内设置",
     INVALID_ORIGIN: "请求来源未获允许",
     BANK_APP_SESSION_REQUIRED: "此功能只能在银行 APP 登录后使用",
+    MEMORY_VISITOR_REQUIRED: "访客记忆标识已失效，请重新选择模拟用户",
+    PREFERENCE_INVALID: "偏好内容或操作格式无效，请检查后重试",
+    PREFERENCE_VERSION_CONFLICT: "偏好已在别处更新，请刷新后重试",
+    PREFERENCE_MEMORY_DISABLED: "长期偏好记忆已关闭，请先启用后再保存",
+    PREFERENCE_SCOPE_CHANGED: "当前模拟用户已切换，请重新读取偏好后再操作",
   };
   return messages[code] ?? "身份验证失败";
 }

@@ -80,13 +80,20 @@ function parseCookies(header: string | null) {
   const result = new Map<string, string>();
   for (const part of (header ?? "").split(";")) {
     const [rawName, ...rest] = part.trim().split("=");
-    if (rawName && rest.length) result.set(rawName, decodeURIComponent(rest.join("=")));
+    if (rawName && rest.length) {
+      try { result.set(rawName, decodeURIComponent(rest.join("="))); }
+      catch { /* Ignore malformed cookie values. */ }
+    }
   }
   return result;
 }
 
+export function getCookieValue(request: Request, name: string) {
+  return parseCookies(request.headers.get("cookie")).get(name);
+}
+
 export function getSessionToken(request: Request) {
-  return parseCookies(request.headers.get("cookie")).get(SESSION_COOKIE);
+  return getCookieValue(request, SESSION_COOKIE);
 }
 
 export function sessionCookieOptions(expires: Date) {
