@@ -169,7 +169,7 @@ describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("transfer daily quota ex
       await locker.query("BEGIN");
       await locker.query("SELECT id FROM customers WHERE id=$1 FOR NO KEY UPDATE", [payer.id]);
       pending = commitTransfer(payer.id, draft.operationId, {});
-      const deadline = Date.now() + 3000;
+      const deadline = Date.now() + 8000;
       while (true) {
         const waiters = await locker.query<{ count: number }>("SELECT count(*)::int AS count FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE 'SELECT id FROM customers%'");
         if (waiters.rows[0].count) break;

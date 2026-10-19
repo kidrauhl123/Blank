@@ -122,7 +122,7 @@ export function BankingApp() {
       </header>
       {error && <div className={styles.connectionError} role="alert"><span>{error}</span><button disabled={loading} onClick={() => void load()}><RefreshCw size={15} />重新读取</button></div>}
       {notice && <div className={styles.confirmedNotice} role="status">{notice}<button onClick={() => setNotice("")} aria-label="关闭操作提示">关闭</button></div>}
-      {loading && <p className={styles.refreshStatus} role="status">正在更新账户信息，以下为上次读取的数据…</p>}
+      {loading && <p className={styles.refreshStatus} role="note">正在更新账户信息，以下为上次读取的数据…</p>}
       <div className={styles.viewport} ref={viewportRef} data-agent-viewport>
         {tab === "home" && <HomeView data={data} loading={loading} visible={balanceVisible} toggleVisible={() => setBalanceVisible(!balanceVisible)} onDeposit={() => setDialog("deposit")} onTransfer={() => setDialog("transfer")} />}
         {tab === "activity" && <ActivityView data={data} />}
