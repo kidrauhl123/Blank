@@ -10,7 +10,7 @@ test("preview animates controlled React form fields and hands off final confirma
   const bankRequests: string[] = [];
   page.on("request", (request) => { if (new URL(request.url()).pathname.startsWith("/api/")) bankRequests.push(request.url()); });
   await page.goto("/preview/agent");
-  await page.getByRole("navigation", { name: "演示主导航" }).getByRole("button", { name: "AI 助手" }).click();
+  await page.getByRole("button", { name: "AI 助手", exact: true }).click();
   await send(page);
   await page.getByRole("button", { name: "刘敏 · 尾号 1234" }).click();
   await page.getByRole("button", { name: "允许代操作", exact: true }).click();

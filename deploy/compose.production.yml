@@ -30,6 +30,8 @@ services:
       - ../db/migrations/016_app_agent_memory_scope.sql:/docker-entrypoint-initdb.d/160-app-agent-memory-scope.sql:ro
       - ../db/migrations/017_app_agent_timeline.sql:/docker-entrypoint-initdb.d/170-app-agent-timeline.sql:ro
       - ../db/migrations/018_totp_replay_protection.sql:/docker-entrypoint-initdb.d/180-totp-replay-protection.sql:ro
+      - ../db/migrations/019_authorization_hardening.sql:/docker-entrypoint-initdb.d/190-authorization-hardening.sql:ro
+      - ../db/migrations/020_scheduled_tasks.sql:/docker-entrypoint-initdb.d/200-scheduled-tasks.sql:ro
     networks:
       - internal
     mem_limit: 512m
@@ -50,6 +52,7 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      SCHEDULER_TOKEN: ${SCHEDULER_TOKEN:-}
       PASSWORD_PEPPER: ${PASSWORD_PEPPER}
       AI_BASE_URL: ${AI_BASE_URL:-}
       AI_API_KEY: ${AI_API_KEY:-}
@@ -80,6 +83,24 @@ services:
       timeout: 5s
       retries: 12
       start_period: 20s
+
+  scheduler:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.scheduler
+    image: bankpilot-scheduler:latest
+    container_name: bankpilot-scheduler
+    restart: unless-stopped
+    environment:
+      BANKPILOT_INTERNAL_URL: http://app:3000
+      SCHEDULER_TOKEN: ${SCHEDULER_TOKEN:-}
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - internal
+    mem_limit: 128m
+    cpus: 0.25
 
   wecom:
     profiles: ["wecom"]

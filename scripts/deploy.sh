@@ -52,7 +52,18 @@ trap 'echo "Deployment stopped. Backups: $backup_dir. No database restore was at
 compose=(docker compose --env-file deploy/.env.production -f deploy/compose.production.yml)
 
 # Build while the old application is still running.
-"${compose[@]}" build app
+# Provision one private scheduler credential on first upgrade; never print it.
+if ! grep -Eq '^SCHEDULER_TOKEN=.{32,}$' deploy/.env.production; then
+  sed '/^SCHEDULER_TOKEN=/d' deploy/.env.production > "$backup_dir/scheduler.env"
+  printf '\nSCHEDULER_TOKEN=%s\n' "$(openssl rand -hex 32)" >> "$backup_dir/scheduler.env"
+  chmod 600 "$backup_dir/scheduler.env"
+  cp "$backup_dir/scheduler.env" deploy/.env.production
+  chmod 600 deploy/.env.production
+fi
+"${compose[@]}" build app scheduler
+if docker container inspect bankpilot-scheduler >/dev/null 2>&1; then
+  docker stop bankpilot-scheduler >/dev/null
+fi
 if docker container inspect bankpilot-nanobot >/dev/null 2>&1; then
   docker stop bankpilot-nanobot >/dev/null
 fi
@@ -82,6 +93,12 @@ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='009_retire_legacy_agent.sql') THEN
     RAISE EXCEPTION 'Retirement migration is missing';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='020_scheduled_tasks.sql') THEN
+    RAISE EXCEPTION 'Scheduled task migration is missing';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='019_authorization_hardening.sql') THEN
+    RAISE EXCEPTION 'Authorization hardening migration is missing';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='013_retire_external_access.sql')
      OR to_regclass('public.api_tokens') IS NOT NULL
@@ -140,6 +157,21 @@ if docker container inspect bankpilot-nanobot >/dev/null 2>&1; then
 fi
 if docker volume inspect bankpilot_nanobot >/dev/null 2>&1; then
   docker volume rm bankpilot_nanobot >/dev/null
+fi
+# Start the scheduler only after migration and invariant checks passed.
+scheduler_start_epoch="$(date +%s)"
+"${compose[@]}" up -d scheduler
+scheduler_ready=false
+for attempt in 1 2 3 4 5 6; do
+  if [[ "$(docker exec bankpilot-postgres psql -U bankpilot -d bankpilot -Atc "SELECT count(*) FROM scheduler_heartbeat WHERE last_tick_at>=to_timestamp($scheduler_start_epoch)")" == "1" ]]; then
+    scheduler_ready=true
+    break
+  fi
+  sleep 5
+done
+if [[ "$scheduler_ready" != true ]]; then
+  echo "Scheduler heartbeat unavailable; deployment verification failed." >&2
+  exit 1
 fi
 printf '%s\n' "$release_commit" > DEPLOYED_COMMIT
 echo "Deployed $release_commit. Backups: $backup_dir"

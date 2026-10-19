@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>BankPilot · JungUI 草案</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
+      --r1: 8px; --r2: 16px; --t1: 12px; --t2: 14px; --t3: 16px; --t4: 20px; --t5: 24px;
+      --page: #ffffff; --surface: #f5f5f5; --ink: #171717; --muted: #666666; --line: #e5e5e5; --field-line: #8a8a8a;
+      --accent: #6d28d9; --accent-fill: #f3effc; --on-accent: #ffffff; --positive: #166534;
+      --scrim: #00000066; --dialog-border: 0; --dialog-shadow: 0 16px 48px #00000026;
+      --width: 1200px; --form-width: 640px; --rail-width: 208px; --target: 44px; --nav-height: 72px;
+      --line-width: 1px; --focus-width: 2px; --motion: 200ms; --disabled-opacity: .45; --pressed-opacity: .7;
+      --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --page: #0d0d0d; --surface: #ffffff0f; --ink: #f5f5f5; --muted: #a3a3a3; --line: #ffffff1a; --field-line: #858585; --accent: #c4b5fd; --accent-fill: #ffffff0f; --on-accent: #171717; --positive: #86efac; --scrim: #00000099; --dialog-border: var(--line-width) solid var(--line); --dialog-shadow: none; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--page); color: var(--ink); font: var(--t3)/1.5 var(--font); }
+    button, input { font: inherit; color: inherit; }
+    button { cursor: pointer; border: 0; background: transparent; min-height: var(--target); border-radius: var(--r1); padding: var(--s2) var(--s4); transition: background-color var(--motion), color var(--motion), opacity var(--motion); }
+    button:disabled { cursor: default; opacity: var(--disabled-opacity); }
+    button:focus-visible, input:focus-visible { outline: var(--focus-width) solid var(--accent); outline-offset: var(--s1); }
+    button:not(:disabled):active { opacity: var(--pressed-opacity); }
+    svg { width: var(--t4); height: var(--t4); fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+    .symbols { position: absolute; width: 0; height: 0; overflow: hidden; }
+    .draft { padding: var(--s2) var(--s4); background: var(--surface); color: var(--muted); font-size: var(--t1); text-align: center; }
+    .shell { max-width: var(--width); margin: auto; min-height: 100dvh; padding: 0 var(--s6); }
+    header { display: flex; align-items: center; justify-content: space-between; padding: var(--s4) 0; border-bottom: var(--line-width) solid var(--line); }
+    .brand { display: flex; align-items: center; gap: var(--s3); font-weight: 650; }
+    .brandmark, .avatar { display: grid; place-items: center; width: var(--target); height: var(--target); border-radius: var(--r1); background: var(--surface); }
+    .brandmark { color: var(--accent); font-size: var(--t4); }
+    .account { display: flex; align-items: center; gap: var(--s3); font-size: var(--t2); color: var(--muted); }
+    .layout { display: grid; grid-template-columns: var(--rail-width) minmax(0, 1fr); gap: var(--s7); }
+    nav { padding-top: var(--s6); display: flex; flex-direction: column; gap: var(--s2); }
+    nav button { display: flex; align-items: center; gap: var(--s3); text-align: left; color: var(--muted); }
+    nav button[aria-current="page"] { color: var(--accent); background: var(--accent-fill); font-weight: 650; }
+    main { min-width: 0; padding: var(--s6) 0 var(--s7); }
+    [hidden] { display: none !important; }
+    h1, h2, p { margin: 0; }
+    h1 { font-size: var(--t5); line-height: 1.3; font-weight: 650; }
+    h2 { font-size: var(--t4); font-weight: 600; }
+    .muted { color: var(--muted); }
+    .caption { font-size: var(--t2); }
+    .pageheading { margin-bottom: var(--s6); }
+    .pageheading p { color: var(--muted); margin-top: var(--s2); }
+    .balance { padding-bottom: var(--s6); }
+    .balance-label { display: flex; align-items: center; gap: var(--s2); color: var(--muted); }
+    .iconbutton { width: var(--target); padding: var(--s2); display: grid; place-items: center; }
+    .amount { font-size: var(--t5); font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -.02em; margin: var(--s2) 0 var(--s3); overflow-wrap: anywhere; }
+    .amount .currency { color: var(--muted); font-size: var(--t3); margin-right: var(--s2); font-weight: 400; }
+    .actions { display: flex; gap: var(--s3); margin-top: var(--s5); }
+    .actions button { display: flex; align-items: center; justify-content: center; gap: var(--s2); }
+    .primary { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+    .secondary { background: var(--surface); }
+    .textbutton { color: var(--accent); }
+    .section { padding: var(--s5) 0; border-top: var(--line-width) solid var(--line); }
+    .sectionhead { display: flex; justify-content: space-between; align-items: center; gap: var(--s3); margin-bottom: var(--s4); }
+    .sectionhead span { color: var(--muted); font-size: var(--t2); }
+    .summary { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s4); margin-bottom: var(--s5); }
+    .summary b { font-size: var(--t4); font-variant-numeric: tabular-nums; font-weight: 600; }
+    .category { display: flex; justify-content: space-between; gap: var(--s4); padding: var(--s2) 0; }
+    .category span { color: var(--muted); }
+    .category b { font-weight: 500; font-variant-numeric: tabular-nums; }
+    .row { display: grid; grid-template-columns: var(--target) minmax(0, 1fr) auto; gap: var(--s3); align-items: center; padding: var(--s4) 0; border-bottom: var(--line-width) solid var(--line); }
+    .row:last-child { border-bottom: 0; }
+    .rowicon { display: grid; place-items: center; width: var(--target); height: var(--target); background: var(--surface); border-radius: var(--r1); color: var(--muted); }
+    .row strong { font-weight: 550; font-variant-numeric: tabular-nums; }
+    .row .copy { min-width: 0; }
+    .row .copy b { display: block; font-weight: 550; overflow-wrap: anywhere; }
+    .row .copy small { color: var(--muted); font-size: var(--t2); }
+    .income { color: var(--positive); }
+    .filters { display: flex; gap: var(--s2); flex-wrap: wrap; margin-bottom: var(--s4); }
+    .filters button { padding: var(--s2) var(--s3); color: var(--muted); }
+    .filters button[aria-pressed="true"] { color: var(--accent); background: var(--accent-fill); }
+    .cardface { width: 100%; max-width: var(--form-width); background: var(--surface); border-radius: var(--r2); padding: var(--s5); text-align: left; display: flex; flex-direction: column; gap: var(--s5); margin-bottom: var(--s5); }
+    .cardface .cardtop, .cardface .cardbottom { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
+    .cardface .cardnumber { font-size: var(--t4); font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+    .cardface .cardbottom { color: var(--muted); font-size: var(--t2); }
+    .status { color: var(--positive); font-size: var(--t2); }
+    .assistant { max-width: var(--form-width); }
+    .assistant .greeting { padding: var(--s5) 0 var(--s6); }
+    .assistant .greeting p { margin-top: var(--s3); color: var(--muted); }
+    .prompts { display: flex; flex-direction: column; gap: var(--s2); }
+    .prompts button { display: flex; align-items: center; justify-content: space-between; text-align: left; background: var(--surface); }
+    .composer { display: flex; gap: var(--s2); margin-top: var(--s6); }
+    input { min-height: var(--target); width: 100%; min-width: 0; border: var(--line-width) solid var(--field-line); background: var(--page); border-radius: var(--r1); padding: var(--s3) var(--s4); font-size: var(--t3); }
+    .composer button { flex-shrink: 0; }
+    .disclosure { color: var(--muted); font-size: var(--t2); margin-top: var(--s4); }
+    .user-message { background: var(--surface); padding: var(--s4); border-radius: var(--r2); margin-top: var(--s5); overflow-wrap: anywhere; }
+    dialog { width: min(calc(100% - var(--s6)), var(--form-width)); max-height: calc(100dvh - var(--s6)); overflow: auto; padding: var(--s5); border: var(--dialog-border); border-radius: var(--r2); background: var(--page); color: var(--ink); box-shadow: var(--dialog-shadow); }
+    dialog::backdrop { background: var(--scrim); }
+    dialog .sectionhead { margin-bottom: var(--s5); }
+    dialog label { display: flex; flex-direction: column; gap: var(--s2); margin-bottom: var(--s5); }
+    dialog label span { color: var(--muted); }
+    .dialognote { margin: var(--s4) 0 var(--s5); color: var(--muted); }
+    .full { width: 100%; }
+    @media (hover: hover) {
+      button:not(:disabled):hover { background: var(--surface); }
+      .primary:not(:disabled):hover { background: var(--accent); opacity: .88; }
+      nav button[aria-current="page"]:hover, .filters button[aria-pressed="true"]:hover { background: var(--accent-fill); }
+    }
+    @media (max-width: 767px) {
+      .shell { padding: 0 var(--s4); }
+      header { padding-top: max(var(--s3), env(safe-area-inset-top)); }
+      .account > span { display: none; }
+      .layout { display: block; }
+      main { padding-top: var(--s5); padding-bottom: calc(var(--nav-height) + var(--s5) + env(safe-area-inset-bottom)); }
+      nav { position: fixed; z-index: 2; left: 0; right: 0; bottom: 0; height: calc(var(--nav-height) + env(safe-area-inset-bottom)); padding: var(--s2) var(--s4) calc(var(--s2) + env(safe-area-inset-bottom)); flex-direction: row; gap: var(--s2); border-top: var(--line-width) solid var(--line); background: var(--page); }
+      nav button { flex: 1; min-width: 0; flex-direction: column; justify-content: center; gap: var(--s1); padding: var(--s1); font-size: var(--t1); }
+      nav button[aria-current="page"] { background: transparent; }
+      .actions button { flex: 1; }
+      dialog { margin-bottom: max(var(--s4), env(safe-area-inset-bottom)); }
+    }
+    @media (prefers-reduced-motion: reduce) { button { transition: none; } }
+  </style>
+</head>
+<body>
+  <svg class="symbols" aria-hidden="true"><defs>
+    <symbol id="home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10H3zM9 20v-7h6v7"/></symbol>
+    <symbol id="spark" viewBox="0 0 24 24"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></symbol>
+    <symbol id="activity" viewBox="0 0 24 24"><path d="M5 20V11M12 20V4M19 20v-7"/></symbol>
+    <symbol id="card" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/></symbol>
+    <symbol id="eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="arrow" viewBox="0 0 24 24"><path d="M6 18 18 6M6 6h12v12"/></symbol>
+    <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="next" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+  </defs></svg>
+  <p class="draft">UI 草案 · 示例数据 · 未连接银行服务</p>
+  <div class="shell">
+    <header><div class="brand"><span class="brandmark">B</span>BankPilot</div><div class="account"><span>小土豆</span><span class="avatar" aria-label="示例用户小土豆">土豆</span></div></header>
+    <div class="layout">
+      <nav aria-label="主导航">
+        <button data-page="home" aria-current="page"><svg aria-hidden="true"><use href="#home"/></svg><span>首页</span></button>
+        <button data-page="assistant"><svg aria-hidden="true"><use href="#spark"/></svg><span>AI 助手</span></button>
+        <button data-page="activity"><svg aria-hidden="true"><use href="#activity"/></svg><span>明细</span></button>
+        <button data-page="cards"><svg aria-hidden="true"><use href="#card"/></svg><span>卡片</span></button>
+      </nav>
+      <main>
+        <section id="home" aria-label="首页">
+          <div class="pageheading"><h1>你好，小土豆</h1></div>
+          <section class="balance" aria-label="账户资产总览">
+            <div class="balance-label"><span>账户总资产</span><button id="visibility" class="iconbutton" aria-label="隐藏余额" aria-pressed="false"><svg aria-hidden="true"><use href="#eye"/></svg></button></div>
+            <p class="amount"><span class="currency">CNY</span><span id="balance-value">12,860.00</span></p>
+            <p class="muted caption">人民币账户 · 尾号 1024</p>
+            <div class="actions"><button class="primary" data-dialog="transfer"><svg aria-hidden="true"><use href="#arrow"/></svg>转账</button><button class="secondary" data-dialog="deposit"><svg aria-hidden="true"><use href="#plus"/></svg>入金</button></div>
+          </section>
+          <section class="section"><div class="sectionhead"><h2>本月支出与转出</h2><span>2026 年 10 月</span></div><div class="summary"><b>¥ 1,240.00</b></div><div class="category"><span>日常消费</span><b>¥ 640.00</b></div><div class="category"><span>转账</span><b>¥ 600.00</b></div></section>
+          <section class="section"><div class="sectionhead"><h2>最近交易</h2><button class="textbutton" data-open-page="activity">查看全部</button></div><div class="transactions"></div></section>
+        </section>
+        <section id="assistant" class="assistant" hidden aria-label="AI 助手">
+          <div class="pageheading"><h1>AI 助手</h1><p>查账单、准备转账、管理卡片。</p></div>
+          <div class="greeting"><h2>今天想办理什么？</h2><p>办理前，你可以核对每一步。</p></div>
+          <div class="prompts"><button data-prompt="查看本月支出">查看本月支出<svg aria-hidden="true"><use href="#next"/></svg></button><button data-prompt="准备一笔转账">准备一笔转账<svg aria-hidden="true"><use href="#next"/></svg></button><button data-prompt="查看我的卡片">查看我的卡片<svg aria-hidden="true"><use href="#next"/></svg></button></div>
+          <div id="messages" aria-live="polite"></div>
+          <form class="composer" id="assistant-form"><input id="assistant-input" aria-label="输入消息" placeholder="输入你想办理的事" required><button class="primary" type="submit">发送</button></form>
+          <p class="disclosure">草案仅预览消息排版，不调用 AI。</p>
+        </section>
+        <section id="activity" hidden aria-label="账户明细"><div class="pageheading"><h1>账户明细</h1><p>最近 50 笔交易</p></div><div class="filters" aria-label="交易筛选"><button data-filter="all" aria-pressed="true">全部</button><button data-filter="out" aria-pressed="false">支出</button><button data-filter="in" aria-pressed="false">收入</button></div><div class="transactions"></div></section>
+        <section id="cards" hidden aria-label="卡片管理"><div class="pageheading"><h1>我的卡片</h1><p>2 张虚拟卡</p></div>
+          <button class="cardface" data-dialog="card"><span class="cardtop"><b>日常消费卡</b><span class="status">正常</span></span><span class="cardnumber">•••• •••• •••• 1024</span><span class="cardbottom"><span>每日限额 ¥ 2,000</span><span>管理 →</span></span></button>
+          <button class="cardface" data-dialog="card"><span class="cardtop"><b>订阅专用卡</b><span class="status">正常</span></span><span class="cardnumber">•••• •••• •••• 2068</span><span class="cardbottom"><span>每日限额 ¥ 500</span><span>管理 →</span></span></button>
+          <button class="primary" data-dialog="application">申请虚拟卡</button>
+        </section>
+      </main>
+    </div>
+  </div>
+  <dialog id="form-dialog" aria-labelledby="dialog-title"><div class="sectionhead"><h2 id="dialog-title">转账</h2><button class="iconbutton" id="dialog-close" aria-label="关闭">×</button></div><div id="dialog-body"></div><p class="dialognote">静态草案，不会提交业务。</p><button class="primary full" disabled>仅预览</button></dialog>
+  <script>
+    const dialog = document.querySelector('#form-dialog');
+    function openPage(id) {
+      document.querySelectorAll('main > section').forEach(page => page.hidden = page.id !== id);
+      document.querySelectorAll('nav button').forEach(button => { if (button.dataset.page === id) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current'); });
+      window.scrollTo({ top: 0 });
+    }
+    document.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => openPage(button.dataset.page)));
+    document.querySelectorAll('[data-open-page]').forEach(button => button.addEventListener('click', () => openPage(button.dataset.openPage)));
+    document.querySelector('#visibility').addEventListener('click', event => {
+      const button = event.currentTarget, hidden = button.getAttribute('aria-pressed') !== 'true';
+      button.setAttribute('aria-pressed', String(hidden)); button.setAttribute('aria-label', hidden ? '显示余额' : '隐藏余额');
+      document.querySelector('#balance-value').textContent = hidden ? '••••••' : '12,860.00';
+    });
+    const transactions = [{ name: '转账给小板栗', category: '转账 · 10 月 12 日', amount: '− ¥ 600.00', kind: 'out', icon: 'arrow' }, { name: '日常购物', category: '日常消费 · 10 月 11 日', amount: '− ¥ 128.00', kind: 'out', icon: 'card' }, { name: '账户入金', category: '入金 · 10 月 10 日', amount: '+ ¥ 2,000.00', kind: 'in', icon: 'plus' }];
+    function renderTransactions(filter = 'all') {
+      document.querySelectorAll('.transactions').forEach(list => {
+        list.replaceChildren();
+        transactions.filter(item => list.closest('#home') || filter === 'all' || item.kind === filter).forEach(item => {
+          const row = document.createElement('div'); row.className = 'row';
+          row.innerHTML = '<span class="rowicon"><svg aria-hidden="true"><use href="#' + item.icon + '"/></svg></span><div class="copy"><b></b><small></small></div><strong></strong>';
+          row.querySelector('b').textContent = item.name; row.querySelector('small').textContent = item.category; row.querySelector('strong').textContent = item.amount;
+          if (item.kind === 'in') row.querySelector('strong').className = 'income'; list.append(row);
+        });
+      });
+    }
+    renderTransactions();
+    document.querySelectorAll('[data-filter]').forEach(button => button.addEventListener('click', () => {
+      document.querySelectorAll('[data-filter]').forEach(other => other.setAttribute('aria-pressed', String(other === button))); renderTransactions(button.dataset.filter);
+    }));
+    function addMessage(text) { const p = document.createElement('p'); p.className = 'user-message'; p.textContent = text; document.querySelector('#messages').append(p); }
+    document.querySelectorAll('[data-prompt]').forEach(button => button.addEventListener('click', () => { document.querySelector('#assistant-input').value = button.dataset.prompt; document.querySelector('#assistant-input').focus(); }));
+    document.querySelector('#assistant-form').addEventListener('submit', event => { event.preventDefault(); const input = document.querySelector('#assistant-input'); if (input.value.trim()) addMessage(input.value.trim()); input.value = ''; });
+    const views = { transfer: { title: '转账', body: '<label><span>收款人</span><input placeholder="选择收款人" autocomplete="off"></label><label><span>金额（元）</span><input type="text" inputmode="decimal" placeholder="0.00"></label>' }, deposit: { title: '入金', body: '<label><span>金额（元）</span><input type="text" inputmode="decimal" placeholder="0.00"></label>' }, card: { title: '卡片管理', body: '<p>卡片状态与每日限额将在这里展示。</p>' }, application: { title: '申请虚拟卡', body: '<label><span>卡片名称</span><input placeholder="例如：日常消费卡"></label>' } };
+    document.querySelectorAll('[data-dialog]').forEach(button => button.addEventListener('click', () => { const view = views[button.dataset.dialog]; document.querySelector('#dialog-title').textContent = view.title; document.querySelector('#dialog-body').innerHTML = view.body; dialog.showModal(); }));
+    document.querySelector('#dialog-close').addEventListener('click', () => dialog.close());
+  </script>
+</body>
+</html>
