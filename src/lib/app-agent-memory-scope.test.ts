@@ -10,7 +10,13 @@ const identity = { customerId: "demo-customer", sessionHash: "bank-session" };
 const run = { id: "run-a", model: "test-model", status: "COMPLETED", message: "完成", pending: null,
   controlGranted: false, steps: 1, expires_at: new Date(Date.now() + 60_000), memory_owner_id: "owner-a", memory_profile_key: "demo-a" };
 
-beforeEach(() => { mocks.query.mockReset().mockResolvedValue({ rows: [run] }); });
+beforeEach(() => {
+  mocks.query.mockReset().mockImplementation(async (sql: unknown) => {
+    // The timeline loader reads audit events for the run; return none.
+    if (typeof sql === "string" && sql.includes("audit_events")) return { rows: [] };
+    return { rows: [run] };
+  });
+});
 
 describe("page-agent run visitor binding", () => {
   it("allows the original visitor and rejects a switched browser or profile", async () => {

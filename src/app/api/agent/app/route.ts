@@ -30,7 +30,7 @@ export async function GET(request: Request) {
   try {
     const who = await requireAppSession(request);
     const scope = await resolveVisitorMemoryScope(request, who.customerId);
-    return Response.json(await withPreferenceScope(scope, () => getAppAgentRun(who, z.string().uuid().parse(new URL(request.url).searchParams.get("id")))));
+    return Response.json(await withPreferenceScope(scope, () => getAppAgentRun(who, z.string().uuid().parse(new URL(request.url).searchParams.get("id")))), { headers: { "Cache-Control": "private, no-store" } });
   }
   catch (error) { return failure(error); }
 }
