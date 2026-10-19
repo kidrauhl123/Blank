@@ -21,8 +21,7 @@
   --motion-fast: 150ms;
   --motion-base: 200ms;
 
-  --content-narrow: 640px;
-  --content-wide: 1200px;
+  /* 全部产品页面渲染在手机尺寸画布内，没有桌面加宽布局。 */
   --device-width: 430px;
   --target: 32px;
   --target-touch: 44px;
@@ -30,10 +29,11 @@
   --ink: #262722;
   --muted: #68645d;
   --paper: #efede8;
+  --desk: #e3e0d9;
   --white: #ffffff;
   --surface: #f5f3ef;
   --surface-strong: #e8e4dc;
-  --surface-hover: #e2ddd3;
+  --surface-pressed: #e2ddd3;
 
   /* 行分隔线：只分行，不围合内容 */
   --line: #d8d3c9;
@@ -75,9 +75,9 @@
 }
 
 * { box-sizing: border-box; padding: 0; margin: 0; }
-html { min-height: 100%; background: var(--paper); overscroll-behavior-y: none; }
+html { min-height: 100%; background: var(--desk); overscroll-behavior-y: none; }
 body { overscroll-behavior-y: none; }
-body { min-height: 100%; color: var(--ink); background: var(--paper); font-family: var(--font-sans); font-size: var(--text-md); line-height: 1.5; letter-spacing: -.011em; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+body { min-height: 100%; color: var(--ink); background: var(--desk); font-family: var(--font-sans); font-size: var(--text-md); line-height: 1.5; letter-spacing: -.011em; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
 button, input, select, textarea { font: inherit; }
 button {
   color: inherit;
@@ -103,10 +103,11 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     --ink: #f0ede6;
     --muted: #b6b0a5;
     --paper: #1b1b19;
+    --desk: #0f0f0e;
     --white: #242421;
     --surface: rgba(255, 255, 255, .04);
     --surface-strong: rgba(255, 255, 255, .08);
-    --surface-hover: rgba(255, 255, 255, .12);
+    --surface-pressed: rgba(255, 255, 255, .12);
     --line: rgba(255, 255, 255, .14);
     --line-quiet: rgba(255, 255, 255, .08);
     --line-control: #8d887d;
@@ -130,8 +131,9 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
   }
 }
 
-@media (hover: none) and (pointer: coarse) {
-  a:active, button:not(:disabled):active, summary:active, [role="button"]:active { opacity: .72; }
+/* 鼠标指针在手机画布上等同于手指：所有指针类型都使用按压反馈，不用 hover 表达状态。 */
+a:active, button:not(:disabled):active, summary:active, [role="button"]:active {
+  opacity: .72;
 }
 
 @media (prefers-reduced-motion: reduce) {

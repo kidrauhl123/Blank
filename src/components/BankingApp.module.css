@@ -1,7 +1,8 @@
-.stage { min-height: 100dvh; display: grid; place-items: center; padding: var(--space-6) var(--space-5) var(--space-7); position: relative; background: var(--paper); }
+/* 画布由 PhoneShell 提供；这里只负责在画布内铺满并纵向排列。 */
+.stage { height: 100%; min-height: 0; position: relative; display: flex; flex-direction: column; background: var(--paper); }
 .stage [data-agent-highlight] { outline: 2px solid var(--accent); outline-offset: var(--space-1); }
 .stage [data-agent-filled] { background: var(--surface-strong); }
-.phone { width: min(100%, var(--device-width)); height: min(890px, calc(100dvh - var(--space-6) - var(--space-7))); min-height: min(680px, calc(100dvh - var(--space-6) - var(--space-7))); background: var(--paper); border-radius: var(--radius-container); display: flex; flex-direction: column; overflow: hidden; position: relative; }
+.phone { flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; overflow: hidden; position: relative; background: var(--paper); }
 .topbar { height: 70px; flex: 0 0 70px; display: grid; grid-template-columns: var(--target-touch) 1fr var(--target-touch); align-items: center; padding: var(--space-2) var(--space-3) var(--space-1); background: var(--paper); z-index: 5; }
 .topbar button { cursor: pointer; }
 .avatar { width: var(--target-touch); height: var(--target-touch); display: grid; place-items: center; border: 0; border-radius: var(--radius-control); background: var(--white); color: var(--accent); font-size: var(--text-xs); font-weight: 750; letter-spacing: .02em; }
@@ -12,11 +13,11 @@
 .viewport::-webkit-scrollbar { display: none; }
 .connectionError { margin: 0 var(--space-4) var(--space-2); padding: var(--space-3); font-size: var(--text-xs); background: var(--danger-tint); display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); border-radius: var(--radius-control); color: var(--danger-ink); }
 .connectionError button { border: 0; background: none; display: flex; align-items: center; min-height: var(--target-touch); gap: var(--space-1); cursor: pointer; font-weight: 700; color: inherit; }
-.splash { display: grid; justify-items: center; gap: var(--space-4); color: var(--muted); font-size: var(--text-sm); }
+.splash { margin: auto; display: grid; justify-items: center; gap: var(--space-4); color: var(--muted); font-size: var(--text-sm); }
 .splash span { width: 48px; height: 48px; display: grid; place-items: center; border-radius: var(--radius-control); background: var(--ink); color: var(--white); font-size: var(--text-lg); font-weight: 800; }
 
-.authStage { min-height: 100dvh; display: grid; place-items: center; padding: var(--space-5) var(--space-4); background: var(--paper); }
-.authPanel { width: min(100%, var(--device-width)); background: var(--white); border-radius: var(--radius-container); padding: var(--space-6); }
+.authStage { height: 100%; min-height: 0; display: grid; place-items: stretch; background: var(--paper); overflow-y: auto; }
+.authPanel { width: 100%; padding: max(var(--space-6), env(safe-area-inset-top)) var(--space-5) max(var(--space-6), env(safe-area-inset-bottom)); }
 .authBrand { display: flex; align-items: center; gap: var(--space-3); font-size: var(--text-md); }
 .authBrand span { width: 30px; height: 30px; display: grid; place-items: center; border-radius: var(--radius-control); color: var(--white); background: var(--ink); font-weight: 800; }
 .authCopy { margin: var(--space-7) 0 var(--space-6); }
@@ -182,9 +183,9 @@
 .largeEmpty b { color: var(--ink); font-size: var(--text-md); }.largeEmpty span { width: 260px; font-size: var(--text-sm); line-height: 1.5; }
 .textAction { display: flex; align-items: center; justify-content: center; min-height: var(--target-touch); width: 100%; margin-top: var(--space-4); border: 0; background: none; color: var(--accent); font-size: var(--text-sm); font-weight: 650; cursor: pointer; }
 
-.auditLink { position: absolute; bottom: var(--space-5); width: min(100%, var(--device-width)); display: flex; align-items: center; justify-content: flex-start; min-height: var(--target-touch); gap: var(--space-2); color: var(--muted); font-size: var(--text-sm); font-weight: 600; }
-.modalBackdrop { position: fixed; inset: 0; z-index: 200; background: var(--scrim); display: grid; place-items: center; padding: var(--space-4); }
-.modal { width: min(100%, var(--device-width)); max-height: calc(100dvh - var(--space-6)); overflow-y: auto; overscroll-behavior-y: none; border-radius: var(--radius-container); background: var(--white); padding: var(--space-6) var(--space-5); position: relative; }
+/* 弹层盖住的是手机画布本身，不是浏览器窗口。 */
+.modalBackdrop { position: absolute; inset: 0; z-index: 200; background: var(--scrim); display: grid; place-items: end stretch; }
+.modal { width: 100%; max-height: calc(100% - var(--space-6)); overflow-y: auto; overscroll-behavior-y: none; border-radius: var(--radius-container) var(--radius-container) 0 0; background: var(--white); padding: var(--space-6) var(--space-5) max(var(--space-5), env(safe-area-inset-bottom)); position: relative; }
 .modalClose { position: absolute; right: var(--space-3); top: var(--space-3); width: var(--target-touch); height: var(--target-touch); display: grid; place-items: center; border: 0; background: var(--surface); border-radius: var(--radius-control); cursor: pointer; color: var(--muted); transition: color var(--motion-fast); }
 .mfaIcon { width: 48px; height: 48px; border-radius: var(--radius-control); display: grid; place-items: center; background: var(--ink); color: var(--white); margin-bottom: var(--space-4); }
 .eyebrow { color: var(--danger); letter-spacing: 0; font-weight: 750; }
@@ -205,7 +206,7 @@
 .profileRows { margin: var(--space-4) 0; border-top: 1px solid var(--line); }
 .profileRows div { display: flex; justify-content: space-between; gap: var(--space-4); padding: var(--space-4) 0; border-bottom: 1px solid var(--line); font-size: var(--text-sm); }
 .profileRows span { color: var(--muted); }.profileRows b { overflow-wrap: anywhere; text-align: right; }
-.unavailable { width: min(100%, var(--device-width)); padding: var(--space-6) var(--space-5); border-radius: var(--radius-container); border: 0; background: var(--white); display: grid; gap: var(--space-4); }
+.unavailable { width: 100%; margin: auto; padding: var(--space-6) var(--space-5); border-radius: var(--radius-container); border: 0; background: var(--white); display: grid; gap: var(--space-4); }
 .unavailable > svg { color: var(--accent); }.unavailable h1 { font-size: var(--text-xl); }.unavailable p { color: var(--muted); font-size: var(--text-sm); }.unavailable small { color: var(--muted); font-size: var(--text-xs); line-height: 1.6; }
 .confirmedNotice { margin: var(--space-2) var(--space-4); padding: var(--space-3); background: var(--positive-tint); color: var(--positive-ink); border-radius: var(--radius-control); font-size: var(--text-xs); display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .confirmedNotice button { border: 0; background: none; color: inherit; padding: var(--space-2); min-height: var(--target-touch); cursor: pointer; }
@@ -224,30 +225,20 @@
 .demoHint { font-size: var(--text-xs); color: var(--muted); line-height: 1.65; margin: var(--space-4) 0 0; }
 .mfaRequired { margin-bottom: var(--space-4); padding: var(--space-3); border-radius: var(--radius-control); background: var(--warning-tint); display: flex; flex-direction: column; gap: var(--space-1); }.mfaRequired b { font-size: var(--text-sm); }.mfaRequired span { color: var(--muted); font-size: var(--text-xs); line-height: 1.45; }.mfaRequired a { margin-top: var(--space-1); display: flex; align-items: center; min-height: var(--target-touch); color: var(--accent); font-size: var(--text-sm); font-weight: 700; }
 
-@media (max-width: 560px), (hover: none) and (pointer: coarse), (display-mode: standalone) {
-  .stage { height: 100dvh; min-height: 0; overflow: clip; padding: 0; background: var(--white); }
-  .phone { width: 100%; height: 100dvh; min-height: 0; border-radius: 0; }
-  .topbar { padding-top: max(var(--space-2), env(safe-area-inset-top)); height: calc(66px + env(safe-area-inset-top)); flex-basis: calc(66px + env(safe-area-inset-top)); }
-  .auditLink { display: none; }
-  .authStage { padding: 0; background: var(--white); align-items: stretch; }
-  .authPanel { width: 100%; min-height: 100dvh; padding: max(var(--space-6), env(safe-area-inset-top)) var(--space-5) var(--space-5); }
-  .modalBackdrop { align-items: end; padding: var(--space-3) var(--space-2) max(var(--space-2), env(safe-area-inset-bottom)); }
-  .modal { width: min(100%, var(--device-width)); max-height: calc(100dvh - var(--space-5) - env(safe-area-inset-top)); }
-}
+/* 刘海屏安全区：画布本身就是手机，所以顶部/底部内缩写在组件里。 */
+.topbar { padding-top: max(var(--space-2), env(safe-area-inset-top)); height: calc(70px + env(safe-area-inset-top)); flex-basis: calc(70px + env(safe-area-inset-top)); }
+.authPanel { padding-bottom: max(var(--space-6), env(safe-area-inset-bottom)); }
+.nav { height: calc(var(--space-7) + var(--space-5) + env(safe-area-inset-bottom)); flex-basis: calc(var(--space-7) + var(--space-5) + env(safe-area-inset-bottom)); }
 
-@media (hover: hover) and (pointer: fine) {
-  .quickActions button:hover, .filterPills button:hover, .promptRail button:hover,
-  .outlineAction:hover, .demoProfile:hover, .demoProfile:focus-visible,
-  .cancelOperation:hover, .logoutButton:hover, .channelEntry:hover,
-  .cardLock:hover, .sectionHead button:hover, .modalClose:hover, .avatar:hover { background: var(--surface-hover); }
-  .developerLink:hover { background: var(--accent-soft); }
-  .cardManage:hover { background: var(--accent-hover); color: var(--white); }
-  .authSubmit:hover, .executeButton:hover, .primaryButton:hover, .composer button:hover,
-  .quickActions .primary:hover { background: var(--accent-hover); }
-  .composer button:disabled:hover { background: var(--line); }
-  .modeSwitch:hover, .textAction:hover, .auditLink:hover, .connectionError button:hover, .confirmedNotice button:hover { color: var(--accent); opacity: .8; }
-  .sectionHead button:hover, .modalClose:hover { color: var(--accent); }
-  .balanceBlock .labelRow button:hover { background: var(--surface); color: var(--accent); }
-  .nav button:hover { color: var(--ink); }
-  .topbar button:hover, .iconButton:hover { color: var(--accent); }
-}
+/* 鼠标当作手指：只用按压反馈，不做 hover 态。 */
+.quickActions button:active, .filterPills button:active, .promptRail button:active,
+.outlineAction:active, .demoProfile:active, .cancelOperation:active,
+.logoutButton:active, .channelEntry:active, .cardLock:active,
+.sectionHead button:active, .modalClose:active, .avatar:active { background: var(--surface-pressed); }
+.developerLink:active { background: var(--accent-soft); }
+.cardManage:active { background: var(--accent-hover); color: var(--white); }
+.authSubmit:active, .executeButton:active, .primaryButton:active, .composer button:active,
+.quickActions .primary:active { background: var(--accent-hover); }
+.balanceBlock .labelRow button:active { background: var(--surface); color: var(--accent); }
+.nav button:active { color: var(--ink); }
+.topbar button:active, .iconButton:active { color: var(--accent); }

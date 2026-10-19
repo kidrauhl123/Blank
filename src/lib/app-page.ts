@@ -58,8 +58,10 @@ export async function applyPageAction(root: HTMLElement, action: PageAction, sti
     const element = Array.from(root.querySelectorAll<HTMLElement>("[data-agent-id]")).find((node) => node.dataset.agentId === action.target);
     if (!element || sensitive(element)) return { status: "BLOCKED", message: "TARGET_UNAVAILABLE", page: before };
     element.scrollIntoView({ block: "nearest", behavior: "instant" });
+    // 画布本身就是手机：指针坐标相对画布，不用浏览器视口坐标。
+    const frame = root.getBoundingClientRect();
     const rect = element.getBoundingClientRect();
-    const point = { x: Math.min(rect.right - 8, rect.left + rect.width * .65), y: rect.top + rect.height / 2 };
+    const point = { x: Math.min(rect.right - 8, rect.left + rect.width * .65) - frame.left, y: rect.top + rect.height / 2 - frame.top };
     const reduced = presentation.reducedMotion ?? (typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
     element.setAttribute("data-agent-highlight", "true");
     presentation.onMotion?.({ ...point, phase: "moving" });

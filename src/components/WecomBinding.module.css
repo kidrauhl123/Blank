@@ -1,19 +1,20 @@
+/* 手机画布内的全屏绑定页：没有桌面卡片，画布本身就是手机。 */
 .stage {
-  min-height: 100dvh;
-  display: grid;
-  place-items: center;
-  padding: var(--space-5) var(--space-4);
+  height: 100%;
+  display: flex;
   background: var(--paper);
 }
 
 .panel {
-  width: min(100%, var(--device-width));
-  min-height: 650px;
-  padding: var(--space-6);
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior-y: none;
+  padding: max(var(--space-5), env(safe-area-inset-top)) var(--space-5) max(var(--space-5), env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   background: var(--white);
-  border-radius: var(--radius-container);
 }
 
 .brand {
@@ -37,10 +38,10 @@
 
 .identityBridge {
   display: grid;
-  grid-template-columns: 78px 1fr 78px;
+  grid-template-columns: minmax(0, 78px) 1fr minmax(0, 78px);
   align-items: center;
   gap: var(--space-2);
-  margin: var(--space-7) 0;
+  margin: var(--space-6) 0;
 }
 
 .identity {
@@ -173,13 +174,6 @@
 .spin { animation: spin .9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-@media (hover: hover) and (pointer: fine) {
-  .primary:hover { background: var(--accent-hover); }
-  .secondary:hover { color: var(--accent); }
-}
-
-@media (max-width: 560px) {
-  .stage { padding: 0; background: var(--white); }
-  .panel { min-height: 100dvh; border-radius: 0; padding: max(var(--space-6), env(safe-area-inset-top)) var(--space-5) var(--space-5); }
-  .identityBridge { margin-top: var(--space-7); }
-}
+/* 鼠标当作手指：按压反馈取代 hover 态。 */
+.primary:active { background: var(--accent-hover); }
+.secondary:active { color: var(--accent); }
