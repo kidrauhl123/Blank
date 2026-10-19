@@ -2,7 +2,7 @@
 
 import {
   ArrowDownLeft, ArrowUpRight, ChartNoAxesColumnIncreasing,
-  ChevronRight, CreditCard, Eye, EyeOff, House, Link2, LockKeyhole,
+  ChevronRight, Clock3, CreditCard, Eye, EyeOff, House, Link2, LockKeyhole,
   LogOut, Plus, RefreshCw, Settings, ShieldCheck, Sparkles,
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
@@ -122,7 +122,7 @@ export function BankingApp() {
       </header>
       {error && <div className={styles.connectionError} role="alert"><span>{error}</span><button disabled={loading} onClick={() => void load()}><RefreshCw size={15} />重新读取</button></div>}
       {notice && <div className={styles.confirmedNotice} role="status">{notice}<button onClick={() => setNotice("")} aria-label="关闭操作提示">关闭</button></div>}
-      {loading && <p className={styles.refreshStatus} role="status">正在更新账户信息，以下为上次读取的数据…</p>}
+      {loading && <p className={styles.refreshStatus} role="note">正在更新账户信息，以下为上次读取的数据…</p>}
       <div className={styles.viewport} ref={viewportRef} data-agent-viewport>
         {tab === "home" && <HomeView data={data} loading={loading} visible={balanceVisible} toggleVisible={() => setBalanceVisible(!balanceVisible)} onDeposit={() => setDialog("deposit")} onTransfer={() => setDialog("transfer")} />}
         {tab === "activity" && <ActivityView data={data} />}
@@ -256,7 +256,7 @@ function CardModal({ account, busy, setBusy, close, done }: { account: Account; 
 }
 
 function ProfileModal({ data, busy, close, logout }: { data: Bootstrap; busy: boolean; close: () => void; logout: () => Promise<void> }) {
-  return <ModalShell eyebrow="模拟账户" title={data.customer.display_name} close={close} busy={busy}><div className={styles.profileRows} data-agent-private><div><span>手机号</span><b>{data.customer.phone}</b></div><div><span>收款方式</span><b>姓名或手机号</b></div><div><span>账户号</span><b>{data.accounts[0]?.account_no ?? "—"}</b></div></div><a className={styles.developerLink} href="/security"><ShieldCheck size={17} /><span><b>安全中心</b><small>{data.customer.mfa_configured ? "强验证已开启" : "设置高风险操作验证"}</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/channels"><Link2 size={17} /><span><b>消息渠道</b><small>QQ 与企业微信</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/settings"><Settings size={17} /><span><b>设置</b><small>回复偏好与调试选项</small></span><ChevronRight size={17} /></a><button className={styles.logoutButton} disabled={busy} onClick={logout}><LogOut size={17} />{busy ? "正在退出…" : "切换用户"}</button></ModalShell>;
+  return <ModalShell eyebrow="模拟账户" title={data.customer.display_name} close={close} busy={busy}><div className={styles.profileRows} data-agent-private><div><span>手机号</span><b>{data.customer.phone}</b></div><div><span>收款方式</span><b>姓名或手机号</b></div><div><span>账户号</span><b>{data.accounts[0]?.account_no ?? "—"}</b></div></div><a className={styles.developerLink} href="/security"><ShieldCheck size={17} /><span><b>安全中心</b><small>{data.customer.mfa_configured ? "强验证已开启" : "设置高风险操作验证"}</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/schedules"><Clock3 size={17} /><span><b>定时任务</b><small>提醒、账单报告与订阅检查</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/channels"><Link2 size={17} /><span><b>消息渠道</b><small>QQ 与企业微信</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/settings"><Settings size={17} /><span><b>设置</b><small>回复偏好与调试选项</small></span><ChevronRight size={17} /></a><button className={styles.logoutButton} disabled={busy} onClick={logout}><LogOut size={17} />{busy ? "正在退出…" : "切换用户"}</button></ModalShell>;
 }
 
 function CardDetailsModal({ card, close, done }: { card?: Card; close: () => void; done: () => Promise<void> }) {

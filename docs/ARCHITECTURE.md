@@ -28,7 +28,7 @@ Next.js App Router + React。入口选择五位固定模拟用户，支持账户
 
 每个请求创建独立的 LangGraph run，并把 checkpoint 写入 PostgreSQL 的 `langgraph` schema；checkpoint 表由版本化迁移预先创建，不在客户请求中动态执行 DDL。规划节点调用真实模型，随后路由到余额、账单、订阅、转账或卡片节点。只读任务直接结束；写任务在 `authorization_gate` 调用 `interrupt()`，持久化后等待用户确认。授权完成后用同一 `graph_thread_id` 恢复，并从 Bank Core 重读最终状态，再生成回复。
 
-模型采用两次受约束调用：第一次输出通过 Zod 校验的意图、实体和步骤；银行工具返回事实后，第二次只能根据 `BANK_FACTS` 生成说明。模型不能生成 SQL、调用任意 URL 或直接提交账本。重复授权由 runtime 原子抢占，只有一个请求能从 `INTERRUPTED` 进入 `RUNNING`。
+模型输出通过 Zod 校验的意图、实体和步骤；银行工具返回事实后，由服务端按类型生成确定性业务回执，不再发起第二次自由文本模型调用。模型不能生成 SQL、调用任意 URL 或直接提交账本。重复授权由 runtime 原子抢占，只有一个请求能从 `INTERRUPTED` 进入 `RUNNING`。
 
 ### 腾讯消息 Channel Adapters
 
@@ -48,7 +48,7 @@ APP 的 `/api/v1/*` 接口服务银行页面；QQ/企微通过各自认证的内
 - YELLOW：小额转账、虚拟卡申请、锁卡，先展示完整单据并获得明确确认。
 - RED：日累计转账超过 ¥1,000，要求 TOTP 动态码。设备与跨草稿行为画像尚未落实。
 
-模型提供的风险等级不被信任。策略裁决写入 `policy_decisions`，红色挑战关联操作编号且 10 分钟过期。授权指纹比对、黄色草稿期限和 TOTP 防重放仍待完成。
+模型提供的风险等级不被信任。策略裁决写入 `policy_decisions`；黄色和红色转账草稿统一为 10 分钟期限，提交前比对绑定金额、对象及期限的指纹。TOTP 在客户锁内消费时间步，认证失败使用 `mfa_auth_state` 共享预算。相关控制需执行 014；本次真实数据库与浏览器回归待完成，见 [授权补强](AUTHORIZATION_HARDENING.md)。
 
 ### Bank Core 与 PostgreSQL
 
@@ -56,7 +56,7 @@ APP 的 `/api/v1/*` 接口服务银行页面；QQ/企微通过各自认证的内
 
 关键数据域：
 
-- 身份：`customers`、`auth_credentials`、`user_sessions`、`mfa_totp`
+- 身份：`customers`、`auth_credentials`、`user_sessions`、`mfa_totp`、`mfa_auth_state`
 - 银行业务：`accounts`、`beneficiaries`、`transfers`、`cards`、`subscriptions`
 - 账本：`ledger_transactions`、`ledger_entries`、`bank_transactions`
 - Agent：`agent_tasks`、`task_nodes`、`policy_decisions`

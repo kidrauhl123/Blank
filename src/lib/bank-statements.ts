@@ -1,11 +1,12 @@
+import type { PoolClient } from "pg";
 import { query } from "./db";
 import { currentBankMonth, validBankMonth, type BankStatement } from "./banking-report";
 
-export async function getBankStatement(customerId: string, month = currentBankMonth()): Promise<BankStatement> {
+export async function getBankStatement(customerId: string, month = currentBankMonth(), client?: PoolClient): Promise<BankStatement> {
   if (!validBankMonth(month)) throw new Error("INVALID_STATEMENT_MONTH");
   // Aggregate the complete month, independently of the overview's recent-50 limit.
   // One SQL snapshot keeps totals, categories and anomaly counts consistent.
-  const result = await query<{ report: BankStatement }>(
+  const result = await (client ? client.query.bind(client) : query)<{ report: BankStatement }>(
     `WITH monthly AS (
        SELECT bt.* FROM bank_transactions bt JOIN accounts a ON a.id=bt.account_id
        WHERE a.customer_id=$1

@@ -285,7 +285,7 @@ export function FloatingAppAgent({ rootRef, configured, openSignal, closeSignal 
         <label>识别语言 <select aria-label="识别语言" value={speechLanguage} disabled={speech.listening} onChange={(event) => setSpeechLanguage(event.target.value as SpeechLanguage)}><option value="zh-CN">普通话</option><option value="zh-HK">粤语</option></select></label>
         {run?.message && <button type="button" onClick={() => speech.toggleSpeak(run.message)} aria-label={speech.speaking ? "停止播报" : "播报助手回复"}><Volume2 size={17} />{speech.speaking ? "停止播报" : "播报回复"}</button>}
       </div>
-      <p className={styles.voiceHint} role="status">{speech.hint}</p>
+      <p className={styles.voiceHint} role="note">{speech.hint}</p>
       <form onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}><input ref={answerInput} aria-label="向悬浮助手描述需求或回答问题" placeholder={question ? "选择选项，或直接输入…" : "描述你想办理的业务…"} value={input} onChange={(event) => setInput(event.target.value)} maxLength={1000} /><button type="button" className={styles.micButton} aria-label={speech.listening ? "停止录音" : "语音输入"} aria-pressed={speech.listening} disabled={!configured || busy} onClick={speech.toggleListening}>{speech.listening ? <Square size={17} /> : <Mic size={18} />}</button><button aria-label="发送给悬浮助手" disabled={(!configured && !parsePreferenceCommand(input)) || busy || speech.listening || !input.trim()}><Send size={18} /></button></form>
     </section>}
   </div>;

@@ -16,7 +16,9 @@ export async function POST(request: Request, context: RouteContext<"/api/v1/oper
     if ("authError" in result) return Response.json({
       ...result,
       error: result.authError,
-      message: result.authError === "AUTH_REQUIRED" ? "转账需要强验证，资金未转出。请核对红色操作并输入动态码再次确认。" : "强验证失败，资金未转出",
+      message: result.authError === "AUTH_REQUIRED" ? "转账需要强验证，资金未转出。请核对红色操作并输入动态码再次确认。"
+        : result.authError === "AUTH_FUSE_ACTIVE" ? "连续验证失败，强验证已暂停。请等待 15 分钟后重新发起操作，资金未转出。"
+          : "动态码无效或已使用，资金未转出。请使用新的动态码。",
     }, { status: result.authError === "AUTH_REQUIRED" ? 409 : result.authError === "AUTH_FUSE_ACTIVE" ? 423 : 401 });
     return Response.json(result);
   } catch (error) {

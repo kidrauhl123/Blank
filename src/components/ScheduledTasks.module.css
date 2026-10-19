@@ -1,0 +1,23 @@
+.page { max-width: var(--content-narrow); margin: 0 auto; padding: var(--space-5) var(--space-4) var(--space-7); }
+.page header, .row, .actions { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+.page h1 { font-size: var(--text-xl); margin-top: var(--space-5); }
+.page h2 { font-size: var(--text-lg); margin-bottom: var(--space-4); }
+.page p { margin: var(--space-3) 0; overflow-wrap: anywhere; }
+.page section { margin-top: var(--space-6); padding-top: var(--space-5); border-top: 1px solid var(--line); }
+.page fieldset { display: grid; gap: var(--space-4); border: 0; min-width: 0; }
+.page label { display: grid; gap: var(--space-2); font-size: var(--text-sm); }
+.row label { flex: 1 1 100%; min-width: 0; }
+.page input, .page select, .page textarea { width: 100%; min-width: 0; min-height: var(--target-touch); border: 1px solid var(--line-control); background: transparent; color: var(--ink); border-radius: var(--radius-control); padding: var(--space-3); }
+.page button, .page header a { min-height: var(--target-touch); padding: var(--space-2) var(--space-3); border: 0; border-radius: var(--radius-control); background: transparent; color: var(--accent); font-size: var(--text-sm); display: inline-flex; align-items: center; justify-content: center; }
+.page button:hover:not(:disabled), .page header a:hover { background: var(--accent-soft); }
+.page .primary { background: var(--accent); color: var(--white); width: 100%; margin-top: var(--space-5); }
+.page .primary:hover:not(:disabled) { background: var(--ink); }
+.page .check { display: flex; gap: var(--space-3); align-items: center; min-height: var(--target-touch); }
+.page .check input { width: var(--text-lg); min-height: var(--text-lg); height: var(--text-lg); flex-shrink: 0; accent-color: var(--accent); }
+.item { padding: var(--space-4) 0; border-bottom: 1px solid var(--line); }
+.item b { overflow-wrap: anywhere; }
+.actions { justify-content: flex-start; margin-top: var(--space-2); }
+.muted { color: var(--muted); font-size: var(--text-sm); }
+.error { color: var(--danger-ink); }
+.warning { color: var(--warning-ink); }
+.page :disabled { opacity: .5; }

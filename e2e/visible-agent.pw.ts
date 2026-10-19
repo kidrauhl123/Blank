@@ -42,7 +42,7 @@ async function setup(page: Page, scenario: "card" | "pause" | "choices") {
     await route.fulfill({ json: run });
   });
   await page.goto("/");
-  await page.getByRole("navigation", { name: "主导航" }).getByRole("button", { name: "AI 助手" }).click();
+  await page.getByRole("button", { name: "AI 助手", exact: true }).click();
   await page.getByRole("textbox", { name: "向悬浮助手描述需求或回答问题" }).fill("查看我的卡片");
   await page.getByRole("button", { name: "发送给悬浮助手" }).click();
   return { calls, bankWrites: () => bankWrites };

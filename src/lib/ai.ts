@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { GROUNDED_REPLY_PROMPT, PLANNER_SYSTEM_PROMPT } from "./bank-agent-prompts";
+import { PLANNER_SYSTEM_PROMPT } from "./bank-agent-prompts";
+import { renderBankReply, type BankReplyInput } from "./bank-facts";
 import { currentPreferenceData } from "./preference-runtime";
 
 export type ConversationMessage = { role: "user" | "assistant"; content: string };
@@ -47,11 +48,6 @@ export const understandingSchema = z.object({
 });
 
 export type AgentUnderstanding = z.infer<typeof understandingSchema>;
-
-const groundedReplySchema = z.object({
-  message: z.string().trim().min(1).max(500),
-  suggestions: z.array(z.string().trim().min(1).max(40)).max(3).default([]),
-});
 
 export class AIConfigurationError extends Error {
   constructor() {
@@ -158,45 +154,8 @@ export async function understandWithAI(message: string, history: ConversationMes
   );
 }
 
-export async function composeGroundedReply(input: {
-  userMessage: string;
-  intent: AgentUnderstanding["intent"];
-  state: "COMPLETED" | "AWAITING_INPUT" | "AWAITING_CONFIRMATION" | "AWAITING_MFA";
-  facts: Record<string, unknown>;
-}) {
-  const result = await requestJson(
-    [
-      { role: "system", content: GROUNDED_REPLY_PROMPT },
-      {
-        role: "user",
-        content: JSON.stringify({
-          USER_REQUEST: input.userMessage,
-          INTENT: input.intent,
-          STATE: input.state,
-          BANK_FACTS: input.facts,
-        }),
-      },
-    ],
-    groundedReplySchema,
-  );
-  const allowedActions = Array.isArray(input.facts.nextActions)
-    ? input.facts.nextActions.filter((action): action is string => typeof action === "string") : [];
-  const suggestions = result.value.suggestions.filter((suggestion) => allowedActions.includes(suggestion));
-  const bankVerified = input.state === "COMPLETED" && input.facts.operationExecuted === true &&
-    (input.facts.operationState === "SUCCEEDED" || input.facts.status === "SUCCEEDED");
-  // Any completed/succeeded wording about money movement counts as a success claim unless the bank
-  // receipt verified it. The blocklist is deliberately broad: missing a synonym lets the model
-  // restate an unverified draft as done, so unknown phrasings must fall through to the safe text.
-  const successClaim = /(?:已|已经|成功|完成)[^。！？\n]{0,8}(?:到账|入账|转出|转入|划出|划转|汇出|汇款|付款|扣款|支付|执行|办理|办好|搞定|成功|完成)|(?:到账|入账|转出|转入|划出|划转|汇出|汇款|付款|扣款|支付)[^。！？\n]{0,4}(?:成功|完成|了)|(?:款项|资金|钱)(?:已|已经)(?:到|划|转|汇|付|扣|出|入)|(?:转账|入金|锁卡|开卡|申请|挂失|解挂|改密|绑定)(?:已)?(?:成功|完成|办好)|(?:已|已经)(?:成功|完成)(?:转账|入金|锁卡|开卡|申请|办理)|(?:办理|执行|汇款|付款|扣款|支付|转出|划出)(?:成功|完成|好了|结束)/u;
-  const claimsOperationSuccess = successClaim.test(result.value.message);
-  const money = typeof input.facts.amountMinor === "number" && Number.isSafeInteger(input.facts.amountMinor) && input.facts.currency === "CNY"
-    ? `${(input.facts.amountMinor / 100).toFixed(2)}元` : null;
-  const recipient = typeof input.facts.beneficiaryName === "string" ? `给${input.facts.beneficiaryName}` : "";
-  const operation = input.intent === "TRANSFER" ? `${recipient}${money ?? "这笔"}转账`
-    : input.intent === "CARD_LOCK" ? "锁卡操作" : "这项业务";
-  const fallback = input.state === "AWAITING_MFA" ? `${operation}仍需你本人完成强验证，银行尚未确认执行成功。`
-    : input.state === "AWAITING_CONFIRMATION" ? `${operation}待你本人确认，银行尚未执行。`
-      : "目前没有可核验的银行执行成功结果，请以银行页面或交易记录的实际状态为准。";
-  const message = claimsOperationSuccess && !bankVerified ? fallback : result.value.message;
-  return { ...result, value: { message, suggestions } };
+// The reply is rendered deterministically from typed server facts; no second
+// model call can restate an unverified draft as a completed transfer.
+export async function composeGroundedReply(input: BankReplyInput) {
+  return { value: renderBankReply(input), meta: { model: null, renderer: "bank-facts-v1", promptTokens: null, completionTokens: null } };
 }
