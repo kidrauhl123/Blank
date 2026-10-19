@@ -5,7 +5,7 @@
 
 2026-10-19 状态：PR #1 / #2 / #3 与本地补强已全部合并到 `main`（合并提交 `2a56ca3`），三条工作流在 `main` 上通过：`ci.yml` 299 通过 / 9 跳过（45 个文件通过、1 个跳过），`security-regression.yml` 308/308，`agent-preferences-regression.yml` 299 通过 / 9 跳过。同一提交已部署到生产 `CONTABO-jp`（`/opt/bankpilot`，发布标记 `20261019T084641Z`），线上 `/api/health` 正常、9 项必需迁移到位（最新 `020_scheduled_tasks.sql`）、账本不变量检查通过、退役表与退役路由均不存在、`Authorization` 头返回 403。详情见 [授权补强](AUTHORIZATION_HARDENING.md) 与 [部署](DEPLOYMENT.md)。
 
-2026-10-19 UI：全部产品页面收敛到固定手机画布（`0f55aa9`）。新增 `PhoneShell` 与 `(phone)` 路由组，删除桌面加宽布局、`--content-narrow` / `--content-wide` 与各页最小宽度断点；鼠标等同手指，去掉 hover 态并统一 `:active` 按压反馈。方案与验收表见 [UI 重构](UI_REFACTOR_PLAN.md)。
+2026-10-19 UI：全部产品页面收敛到固定手机画布（`0f55aa9`，随 `0e3e705` 上线）。新增 `PhoneShell` 与 `(phone)` 路由组，删除桌面加宽布局、`--content-narrow` / `--content-wide` 与各页最小宽度断点；鼠标等同手指，去掉 hover 态并统一 `:active` 按压反馈。方案与验收表见 [UI 重构](UI_REFACTOR_PLAN.md)。
 
 2026-10-17 本地补强（历史）：实现转账授权指纹比对、统一 10 分钟草稿期限、TOTP 时间步消费、客户级失败冷却及工作流确定性事实回执，新增隔离 PostgreSQL CI 与相关回归。该批结果已并入上述 `main` 与线上版本；下方 10 月 11 日结果作为历史基线保留。M1 其余条目和完整安全验收未关闭。
 
