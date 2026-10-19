@@ -1,0 +1,10 @@
+{
+  "source_pr": "https://github.com/kidrauhl123/AIbanking/pull/2",
+  "source_commit": "a1b5d99cd5856214a94d0d5eff6de696cc51e896",
+  "source_main_sha": "aa1b8d874641e996af403b553a605d297ae49eed",
+  "source_main_unchanged": true,
+  "security_repository": "sikonglei/bankpilot-security",
+  "security_private": true,
+  "security_pr": "https://github.com/sikonglei/bankpilot-security/pull/1",
+  "note": "Both PRs are draft, unmerged; no deployment or collaborator changes performed."
+}

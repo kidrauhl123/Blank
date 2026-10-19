@@ -107,6 +107,13 @@ BEGIN
      OR NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='agent_runtime_runs' AND column_name='memory_profile_key') THEN
     RAISE EXCEPTION 'Agent memory scope migration is incomplete';
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='017_app_agent_timeline.sql') THEN
+    RAISE EXCEPTION 'Agent timeline migration is missing';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='018_totp_replay_protection.sql')
+     OR NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='mfa_totp' AND column_name='last_used_counter') THEN
+    RAISE EXCEPTION 'TOTP replay protection migration is incomplete';
+  END IF;
 END;
 $$;
 SQL

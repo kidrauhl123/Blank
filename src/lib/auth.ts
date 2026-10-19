@@ -263,3 +263,26 @@ export async function verifyCustomerTotp(customerId: string, code: string, clien
   const result = client ? await client.query<{ encrypted_secret: string }>(sql, [customerId]) : await query<{ encrypted_secret: string }>(sql, [customerId]);
   return Boolean(result.rows[0] && verifyTotp(decryptSecret(result.rows[0].encrypted_secret), code));
 }
+
+// Consume a time step in the same transaction as the bank posting. A pure
+// verification is insufficient: another operation could reuse the valid code.
+export async function consumeCustomerTotp(customerId: string, code: string, client: PoolClient, at: Date) {
+  if (!/^\d{6}$/.test(code)) return false;
+  const result = await client.query<{ encrypted_secret: string }>(
+    "SELECT encrypted_secret FROM mfa_totp WHERE customer_id=$1 AND enabled_at IS NOT NULL", [customerId],
+  );
+  const row = result.rows[0];
+  if (!row) return false;
+  const secret = decryptSecret(row.encrypted_secret);
+  const current = Math.floor(at.getTime() / 30_000);
+  const matched = [1, 0, -1].map(offset => current + offset)
+    .find(counter => timingSafeEqual(Buffer.from(totp(secret, counter)), Buffer.from(code)));
+  if (matched === undefined) return false;
+  const consumed = await client.query(
+    `UPDATE mfa_totp SET last_used_counter=$2,updated_at=now()
+     WHERE customer_id=$1 AND enabled_at IS NOT NULL AND last_used_counter<$2 AND encrypted_secret=$3
+     RETURNING customer_id`, [customerId, matched, row.encrypted_secret],
+  );
+  return consumed.rowCount === 1;
+}
+

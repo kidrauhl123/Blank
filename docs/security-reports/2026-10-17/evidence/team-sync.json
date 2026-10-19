@@ -1,0 +1,37 @@
+{
+  "synchronized_on": "2026-10-18",
+  "original_assessment_date": "2026-10-17",
+  "target_repository": "kidrauhl123/AIbanking",
+  "target_pr": "https://github.com/kidrauhl123/AIbanking/pull/2",
+  "preserved_parent_commit": "a207c26a987dbcdf3cd7df29d8e79f62e284e4bb",
+  "original_tested_commit": "a1b5d99cd5856214a94d0d5eff6de696cc51e896",
+  "migration_rename": {
+    "original": "015_totp_replay_protection.sql",
+    "current": "018_totp_replay_protection.sql",
+    "reason": "Keep migration numbering compatible with memory and timeline branches."
+  },
+  "historical_evidence": "Original test evidence and hashes are retained. Documentation synchronization is not a new model red-team run or production deployment.",
+  "word_copies": [
+    {
+      "name": "BankPilot_安全自评报告.docx",
+      "original_sha256": "b3b315c36d091afd20aba4ddcf8ecce064566b38d0ba4a7856d16328ff5717e3",
+      "uploaded_sha256": "b3b315c36d091afd20aba4ddcf8ecce064566b38d0ba4a7856d16328ff5717e3",
+      "migration_name_replacements": 0,
+      "note": "Original local Word file preserved; only submission copy is adapted."
+    },
+    {
+      "name": "BankPilot_安全设计文档.docx",
+      "original_sha256": "7d2977aa559040084c15993201680870bb0c2c1f270e1083a6e40342eaf75105",
+      "uploaded_sha256": "fd36a9679c36a794655e8107770128b0ee252cc40cdc58b6bf079199be463595",
+      "migration_name_replacements": 2,
+      "note": "Original local Word file preserved; only submission copy is adapted."
+    },
+    {
+      "name": "BankPilot_红队测试与证据报告.docx",
+      "original_sha256": "132b5f2de2d6a762c25ffd168b46c86a8da97ca2c21b5e90c21f98880d62729e",
+      "uploaded_sha256": "132b5f2de2d6a762c25ffd168b46c86a8da97ca2c21b5e90c21f98880d62729e",
+      "migration_name_replacements": 0,
+      "note": "Original local Word file preserved; only submission copy is adapted."
+    }
+  ]
+}
