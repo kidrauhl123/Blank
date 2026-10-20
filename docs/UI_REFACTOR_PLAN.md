@@ -107,5 +107,6 @@
 - [圆点停在按钮上](screenshots/touch-pointer-desktop.png)
 - [按下瞬间圆点收缩](screenshots/touch-pointer-pressed.png)
 - [触屏设备没有圆点](screenshots/touch-pointer-phone.png)
+- [线上 1440×900：`e28c1ad` 部署后的真实画布](screenshots/prod-touch-pointer.png)
 
 尚未完成：200% 缩放逐页核对、真机软键盘遮挡输入检查、与 `a220ee5` 的逐页像素对比基线。
