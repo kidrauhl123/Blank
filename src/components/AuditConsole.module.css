@@ -7,7 +7,7 @@
 .spin { animation: spin .9s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
 
 .header { position: sticky; top: 0; z-index: 5; height: calc(66px + env(safe-area-inset-top)); padding: max(var(--space-2), env(safe-area-inset-top)) var(--space-5) 0; display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); background: var(--paper); }
-.header a, .header button { border: 0; background: none; display: flex; align-items: center; min-height: var(--target-touch); gap: var(--space-2); font-size: var(--text-sm); font-weight: 650; cursor: pointer; }
+.header a, .header button { border: 0; background: none; display: flex; align-items: center; min-height: var(--target-touch); gap: var(--space-2); font-size: var(--text-sm); font-weight: 650; }
 /* 画布只有一屏宽：品牌字标让位给返回与刷新，标题由 hero 承担。 */
 .header div { display: none; }
 .header button { padding: var(--space-2) var(--space-3); border-radius: var(--radius-control); background: var(--surface); }
@@ -21,7 +21,7 @@
 /* 任务列表自身可滚动，避免把详情推到屏外太远。 */
 .tasks { max-height: 260px; overflow-y: auto; overscroll-behavior-y: contain; }
 .panelTitle { height: 48px; padding: 0 var(--space-4); display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--white); }.panelTitle span { font-size: var(--text-sm); font-weight: 700; }.panelTitle small { color: var(--muted); font: var(--text-xs) var(--font-mono); }
-.tasks button { width: 100%; min-height: 72px; padding: var(--space-3) var(--space-4); border: 0; border-bottom: 1px solid var(--line-quiet); background: none; display: grid; grid-template-columns: var(--space-1) 1fr 16px; gap: var(--space-3); align-items: center; text-align: left; cursor: pointer; transition: background var(--motion-fast); }.tasks button.selected { background: var(--accent-soft); }.tasks button > span:nth-child(2) { min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); }.tasks button b { font-size: var(--text-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }.tasks button small { color: var(--muted); font: var(--text-xs) var(--font-mono); }.tasks button > svg { color: var(--muted); }
+.tasks button { width: 100%; min-height: 72px; padding: var(--space-3) var(--space-4); border: 0; border-bottom: 1px solid var(--line-quiet); background: none; display: grid; grid-template-columns: var(--space-1) 1fr 16px; gap: var(--space-3); align-items: center; text-align: left; transition: background var(--motion-fast); }.tasks button.selected { background: var(--accent-soft); }.tasks button > span:nth-child(2) { min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); }.tasks button b { font-size: var(--text-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }.tasks button small { color: var(--muted); font: var(--text-xs) var(--font-mono); }.tasks button > svg { color: var(--muted); }
 .level { width: 8px; height: 31px; border-radius: var(--radius-container); background: var(--positive); }.level[data-level="YELLOW"] { background: var(--warning); }.level[data-level="RED"] { background: var(--danger); }
 
 .detail { padding-bottom: var(--space-5); }

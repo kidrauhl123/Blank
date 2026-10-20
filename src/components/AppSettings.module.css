@@ -11,7 +11,7 @@
 .select { position: relative; display: flex; align-items: center; }
 .select select { appearance: none; width: 100%; min-height: var(--target-touch); padding: var(--space-3) var(--space-7) var(--space-3) var(--space-4); border: 0; border-radius: var(--radius-control); background: var(--surface); color: var(--ink); font-size: var(--text-sm); transition: background var(--motion-fast); }
 .select select:active:not(:disabled) { background: var(--accent-soft); }
-.select select:disabled { opacity: .6; cursor: default; }
+.select select:disabled { opacity: .6; }
 .select > svg { position: absolute; right: var(--space-4); pointer-events: none; color: var(--muted); }
 .hint { color: var(--muted); font-size: var(--text-xs); }
 .actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-4); }
@@ -30,7 +30,7 @@
 .preferenceRow input:disabled, .preferenceRow select:disabled { opacity: .6; }
 .preferenceActions, .preferenceFooter { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .preferenceActions button, .preferenceFooter button, .memoryControl button, .section > button { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); min-height: var(--target-touch); padding: var(--space-3) var(--space-4); border: 0; border-radius: var(--radius-control); font-size: var(--text-sm); }
-.preferenceActions button:disabled, .preferenceFooter button:disabled, .memoryControl button:disabled { opacity: .5; cursor: default; }
+.preferenceActions button:disabled, .preferenceFooter button:disabled, .memoryControl button:disabled { opacity: .5; }
 .preferenceFooter { margin: var(--space-5) 0 var(--space-3); }
 .memoryControl { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); margin-top: var(--space-5); padding: var(--space-4); border-radius: var(--radius-control); background: var(--surface); }
 .memoryControl strong { font-size: var(--text-sm); }

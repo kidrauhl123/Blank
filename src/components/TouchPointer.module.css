@@ -1,0 +1,37 @@
+/* 画布内唯一的指针形态：一个跟随鼠标的圆形触点。外层只管位移（JS 写 transform），
+   内层圆点只管外观和收缩。分开两层的原因是 CSS 的 scale 先于 transform 生效，
+   写在同一个元素上会把位移一起缩掉，按下的圆点会朝画布左上角跑。 */
+.pointer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 400;
+  width: var(--pointer-size);
+  height: var(--pointer-size);
+  margin: calc(var(--pointer-size) / -2) 0 0 calc(var(--pointer-size) / -2);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--motion-fast) linear;
+}
+
+.pointer[data-visible="true"] { opacity: 1; }
+
+.dot {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--pointer-fill);
+  box-shadow: inset 0 0 0 2px var(--pointer-ring), 0 0 0 1px var(--pointer-edge);
+  scale: 1;
+  transition: scale var(--motion-fast) ease, background var(--motion-fast) linear;
+}
+
+.pointer[data-pressed="true"] .dot {
+  scale: .68;
+  background: var(--pointer-fill-pressed);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot { transition: background var(--motion-fast) linear; }
+}

@@ -26,6 +26,13 @@
   --target: 32px;
   --target-touch: 44px;
 
+  /* 画布里没有系统指针：鼠标触点是一个跟随的圆。 */
+  --pointer-size: 30px;
+  --pointer-fill: rgba(38, 39, 34, .16);
+  --pointer-fill-pressed: rgba(38, 39, 34, .32);
+  --pointer-ring: rgba(255, 255, 255, .92);
+  --pointer-edge: rgba(38, 39, 34, .30);
+
   --ink: #262722;
   --muted: #68645d;
   --paper: #efede8;
@@ -92,9 +99,35 @@ a { color: inherit; text-decoration: none; }
 ::selection { background: var(--accent-soft); }
 :focus:not(:focus-visible) { outline: none; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-button:not(:disabled), summary, [role="button"] { cursor: pointer; }
-button:disabled { cursor: default; opacity: .5; }
+/* 画布里不出现系统指针的任何形态：没有手型、箭头、文本光标或禁止符号，
+   指针一律是 TouchPointer 画的那个圆点。只在有鼠标指针的设备上生效，
+   触屏设备本来就没有系统指针。 */
+@media (pointer: fine) {
+  [data-pointer="canvas"],
+  [data-pointer="canvas"] *,
+  [data-pointer="canvas"] *::before,
+  [data-pointer="canvas"] *::after {
+    cursor: none;
+  }
+}
+/* 输入框仍要能看见插入点，用细竖线而不是系统的文本 I 型光标。 */
+[data-pointer="canvas"] input,
+[data-pointer="canvas"] textarea { caret-color: var(--ink); }
+/* 手机画布不出现滚动条，也不出现桌面端的拖拽改大小手柄。 */
+[data-pointer="canvas"],
+[data-pointer="canvas"] * { scrollbar-width: none; }
+[data-pointer="canvas"] ::-webkit-scrollbar { width: 0; height: 0; }
+[data-pointer="canvas"] textarea { resize: none; }
+/* 桌面上拖动鼠标划选界面文字是桌面行为，手机 App 里没有；输入框内仍可选中编辑。 */
+[data-pointer="canvas"] { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+[data-pointer="canvas"] input,
+[data-pointer="canvas"] textarea { -webkit-user-select: text; user-select: text; }
+/* 桌面端数字输入框的上下步进箭头在手机上不存在，去掉。 */
+[data-pointer="canvas"] input[type="number"] { -webkit-appearance: textfield; appearance: textfield; -moz-appearance: textfield; }
+[data-pointer="canvas"] input[type="number"]::-webkit-outer-spin-button,
+[data-pointer="canvas"] input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; appearance: none; margin: 0; }
 input, select, textarea { color: var(--ink); background: var(--surface); }
+button:disabled { opacity: .5; }
 input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 
 @media (prefers-color-scheme: dark) {
@@ -128,6 +161,10 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     --scrim: rgba(0, 0, 0, .64);
     --agent-live: #45453d;
     --agent-live-ink: #f0ede6;
+    --pointer-fill: rgba(240, 237, 230, .18);
+    --pointer-fill-pressed: rgba(240, 237, 230, .34);
+    --pointer-ring: rgba(15, 15, 14, .88);
+    --pointer-edge: rgba(240, 237, 230, .34);
   }
 }
 

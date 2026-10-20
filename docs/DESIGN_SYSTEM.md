@@ -5,7 +5,7 @@ transparent transaction details, high contrast, and accessible zoom—without co
 Wise's proprietary font, logo, or exact brand palette.
 
 Tokens live in `src/app/globals.css`; this file must stay consistent with that source.
-Last synced: 2026-10-19.
+Last synced: 2026-10-20.
 
 ## Canvas
 
@@ -17,6 +17,18 @@ Last synced: 2026-10-19.
   feedback. There are no hover-dependent affordances, and no component uses `100vw`,
   `100dvh`, or `position: fixed` to reach outside the canvas. Overlays are absolute
   within the canvas.
+- **The system cursor does not exist inside the canvas.** `TouchPointer` draws a 30px round
+  touch point that follows the mouse and shrinks while pressed, the way the simulated
+  device pointer in WeChat DevTools behaves. `PhoneShell` marks the surface with
+  `data-pointer="canvas"`, which gives every descendant `cursor: none` (only under
+  `@media (pointer: fine)`, so a real touch device keeps its finger) and strips the other
+  desktop affordances: scrollbars, `textarea` resize handles, number-input spinners, and
+  drag-to-select on UI text (inputs keep selectable text).
+- Press feedback is the only pointer state. Never add `:hover` styles, `cursor: pointer`,
+  `title` tooltips, or `@media (hover: hover)` blocks. `src/lib/ui-pointer-contract.test.ts`
+  guards the styles and `e2e/phone-pointer.pw.ts` checks the rendered canvas.
+- The assistant's synthetic pointer uses the same round shape, so the AI hand and the
+  user's hand read as one gesture language.
 
 ## Typography
 

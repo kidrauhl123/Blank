@@ -1,7 +1,9 @@
 # BankPilot 整体开发与参赛计划
 
-更新日期：2026-10-19。以本仓库代码审查、线上只读核验、退役清理与赛题原文为依据。
+更新日期：2026-10-20。以本仓库代码审查、线上只读核验、退役清理与赛题原文为依据。
 本文是待执行计划，不是完成声明。提交/答辩日期及团队人数尚未确认，因此先确定阶段顺序和验收条件，不虚构日历安排。
+
+2026-10-20 UI：画布里的系统指针也去掉了。新增 `TouchPointer`，鼠标在画布内是一个 30px 圆形触点（跟随、按下收缩、触屏不显示），`data-pointer="canvas"` 同时清掉滚动条、textarea 拖拽手柄、数字步进箭头和界面拖选；8 个组件里的 47 处 `cursor:` 声明删除，助手的合成指针改成同一种圆点。守卫为 `src/lib/ui-pointer-contract.test.ts` 与 `e2e/phone-pointer.pw.ts`，说明见 [设计系统](DESIGN_SYSTEM.md) 的 Canvas 一节。
 
 2026-10-19 状态：PR #1 / #2 / #3 与本地补强已全部合并到 `main`（合并提交 `2a56ca3`），三条工作流在 `main` 上通过：`ci.yml` 299 通过 / 9 跳过（45 个文件通过、1 个跳过），`security-regression.yml` 308/308，`agent-preferences-regression.yml` 299 通过 / 9 跳过。同一提交已部署到生产 `CONTABO-jp`（`/opt/bankpilot`，发布标记 `20261019T084641Z`），线上 `/api/health` 正常、9 项必需迁移到位（最新 `020_scheduled_tasks.sql`）、账本不变量检查通过、退役表与退役路由均不存在、`Authorization` 头返回 403。详情见 [授权补强](AUTHORIZATION_HARDENING.md) 与 [部署](DEPLOYMENT.md)。
 

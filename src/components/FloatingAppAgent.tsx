@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type RefObject } from "react";
-import { Check, ChevronDown, Mic, MousePointer2, Pause, Play, Send, Sparkles, Square, Volume2, X } from "lucide-react";
+import { Check, ChevronDown, Mic, Pause, Play, Send, Sparkles, Square, Volume2, X } from "lucide-react";
 import { applyPageAction, captureAppPage, type PageMotion } from "@/lib/app-page";
 import type { AppAgentView } from "@/lib/app-agent-protocol";
 import { parsePreferenceCommand } from "@/lib/preference-command";
@@ -257,7 +257,8 @@ export function FloatingAppAgent({ rootRef, configured, openSignal, closeSignal 
     : busy ? run?.message ?? "正在理解需求" : run?.message ?? "";
 
   return <div className={styles.root} data-agent-overlay>
-    {motion && <div className={styles.cursor} data-phase={motion.phase} style={{ left: motion.x, top: motion.y }} aria-hidden="true"><MousePointer2 size={25} fill="currentColor" /><span>{motion.phase === "typing" ? "正在填写" : motion.phase === "clicking" ? "点击" : "BankPilot"}</span></div>}
+    {/* 助手的手和用户的手是同一种形状：画布上的一个圆形触点。 */}
+    {motion && <div className={styles.cursor} data-phase={motion.phase} style={{ left: motion.x, top: motion.y }} aria-hidden="true"><span>{motion.phase === "typing" ? "正在填写" : motion.phase === "clicking" ? "点击" : "BankPilot"}</span></div>}
     {!open && active && <StepList items={visibleSteps} compact />}
     {/* 只在 agent 真的有事要报告时出现；平时首页的 AI 入口是底部导航那一个 */}
     {!open && active && <div className={styles.floating}>

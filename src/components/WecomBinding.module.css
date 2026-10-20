@@ -139,7 +139,6 @@
   color: var(--white);
   font-size: var(--text-sm);
   font-weight: 700;
-  cursor: pointer;
   transition: background var(--motion-fast), color var(--motion-fast);
 }
 
