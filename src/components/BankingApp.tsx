@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  ArrowDownLeft, ArrowUpRight, ChartNoAxesColumnIncreasing,
+  ArrowUpRight, ChartNoAxesColumnIncreasing,
   ChevronRight, Clock3, CreditCard, Eye, EyeOff, House, Link2,
   LogOut, Plus, RefreshCw, Settings, ShieldCheck, Sparkles, TrendingUp,
 } from "lucide-react";
@@ -10,6 +10,7 @@ import { ServiceWorkerRegister } from "./ServiceWorkerRegister";
 import { AuthScreen } from "./AuthScreen";
 import { FloatingAppAgent } from "./FloatingAppAgent";
 import { LiquidBankCard } from "./LiquidBankCard";
+import { TransactionCategoryIcon } from "./TransactionCategoryIcon";
 import { BankDialog as ModalShell } from "./BankDialog";
 import { InvestmentView } from "./InvestmentView";
 import { InvestmentReceiptDialog } from "./InvestmentReceiptDialog";
@@ -175,7 +176,7 @@ function TransactionList({ items }: { items: Transaction[] }) {
   if (!items.length) return <div className={styles.emptyState}><span>还没有交易</span><small>入金或转账后会显示在这里。</small></div>;
   return <><div className={styles.transactionList}>{items.map((item) => {
     const content = <>
-    <span className={Number(item.amount_minor) >= 0 ? styles.txIconIn : styles.txIcon}>{Number(item.amount_minor) >= 0 ? <ArrowDownLeft size={19} /> : item.merchant_name.slice(0, 1)}</span>
+    <span className={Number(item.amount_minor) >= 0 ? styles.txIconIn : styles.txIcon}><TransactionCategoryIcon category={item.category} merchant={item.merchant_name} incoming={Number(item.amount_minor) >= 0} /></span>
     <span className={styles.txCopy}><b>{item.merchant_name}</b><small>{item.category} · {shortDate(item.occurred_at)}{item.investment_receipt && " · 查看回执"}{item.is_anomaly && <em>需核实</em>}</small></span>
     <strong className={Number(item.amount_minor) >= 0 ? styles.positive : ""}>{Number(item.amount_minor) >= 0 ? "+" : "−"}{money(Math.abs(Number(item.amount_minor)))}</strong>
     </>;

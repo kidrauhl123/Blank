@@ -80,7 +80,8 @@
 .transaction:last-child { border-bottom: 0; }
 .transactionButton { width: 100%; padding: 0; border-top: 0; border-left: 0; border-right: 0; background: none; color: var(--ink); text-align: left; }
 .transactionButton:active { background: var(--surface-pressed); }
-.txIcon, .txIconIn { width: 40px; height: 40px; border-radius: var(--radius-control); background: var(--accent-tint); display: grid; place-items: center; font-size: var(--text-sm); font-weight: 720; }
+.txIcon, .txIconIn { --transaction-icon-size: 20px; width: calc(var(--space-5) + var(--space-4)); height: calc(var(--space-5) + var(--space-4)); border-radius: var(--radius-control); background: var(--surface); color: var(--ink); display: grid; place-items: center; }
+.txIcon svg, .txIconIn svg { width: var(--transaction-icon-size); height: var(--transaction-icon-size); }
 .txIconIn { background: var(--positive-tint); color: var(--positive); }
 .txCopy { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
 .txCopy b { font-size: var(--text-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
