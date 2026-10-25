@@ -16,7 +16,7 @@ export function BankDialog({ title, eyebrow, close, busy = false, children }: {
   }, [previousFocus]);
   useEffect(() => {
     const keyboard = (event: KeyboardEvent) => {
-      if (root.current?.closest("[inert]")) return;
+      if (root.current?.closest("[inert], [hidden]")) return;
       if (event.key === "Escape") { event.preventDefault(); if (!busy) close(); return; }
       if (event.key !== "Tab") return;
       const items = Array.from(root.current?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]') ?? []).filter(item => item.getClientRects().length > 0);

@@ -4,6 +4,16 @@ import { DAILY_REVIEW_SKILL } from "./daily-review-policy";
 // These are standard SKILL.md documents in the SDK's virtual filesystem.
 // The SDK discovers their descriptions and loads instructions on demand.
 const skills = {
+  "bank-insight": `---
+name: bank-insight
+description: 查询余额、分析完整月度账单、分类支出、异常记录或订阅，在对话里直接回答。
+---
+# 查询分析
+使用 read_bank_facts 获取当前客户的服务端事实。余额用 overview，完整月度账单用 statement，可指定 YYYY-MM；持仓用 investments。工具没有 customerId 参数，不能访问其他客户。
+不为查询主动接管或打开页面，不把操作步骤当成答案。只有客户要求查看具体页面或办理业务时再使用 bank-page。
+金额字段单位为分，显示时除以100。区分收入、支出与转出；说明月份、笔数及统计范围。近期流水不等于完整账单，缺少某个字段时说明无法判断。
+产品比较用 search_investment_products；不编造产品、收益或交易结果。建议引用实际分类金额和占比，不能声称已保存预算或执行交易。
+`,
   "bank-daily-review": DAILY_REVIEW_SKILL,
   "bank-investments": `---
 name: bank-investments

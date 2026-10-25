@@ -8,7 +8,7 @@ import {
 import { FormEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
 import { ServiceWorkerRegister } from "./ServiceWorkerRegister";
 import { AuthScreen } from "./AuthScreen";
-import { FloatingAppAgent } from "./FloatingAppAgent";
+import { AppAssistant } from "./AppAssistant";
 import { LiquidBankCard } from "./LiquidBankCard";
 import { TransactionCategoryIcon } from "./TransactionCategoryIcon";
 import { BankDialog as ModalShell } from "./BankDialog";
@@ -25,7 +25,8 @@ type Account = { id: string; name: string; account_no: string; masked_no: string
 type Transaction = { id: string; merchant_name: string; category: string; amount_minor: string; occurred_at: string; is_anomaly: boolean; investment_receipt?: InvestmentReceipt | null };
 type Card = { id: string; card_name: string; masked_no: string; card_type: string; status: string; daily_limit_minor: string };
 type Bootstrap = { customer: { display_name: string; phone: string; mfa_configured: boolean }; totalMinor: number; accounts: Account[]; transactions: Transaction[]; cards: Card[]; statement: BankStatement; ai: { configured: boolean; model: string | null }; features?: { proactiveReviews: boolean; voiceCalls?: boolean } };
-type Tab = "home" | "activity" | "cards" | "wealth";
+type BusinessTab = "home" | "activity" | "cards" | "wealth";
+type Tab = BusinessTab | "assistant";
 
 const money = (minor: number | string) => new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", minimumFractionDigits: 2 }).format(Number(minor) / 100);
 const shortDate = (date: string) => new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", timeZone: "Asia/Shanghai" }).format(new Date(date));
@@ -47,9 +48,12 @@ export function BankingApp() {
   const [mfaCode, setMfaCode] = useState("");
   const [dialog, setDialog] = useState<"deposit" | "transfer" | "card" | "profile" | "card-details" | null>(null);
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
-  const [assistantOpen, setAssistantOpen] = useState(0);
-  const [assistantClose, setAssistantClose] = useState(0);
-  const [assistantVisible, setAssistantVisible] = useState(false);
+  const [businessTab, setBusinessTab] = useState<BusinessTab>("home");
+  const lastBusinessTab = useRef<BusinessTab>("home");
+  const [assistantHost, setAssistantHost] = useState<HTMLDivElement | null>(null);
+  const assistantVisible = tab === "assistant";
+  const showAssistant = useCallback(() => setTab("assistant"), []);
+  const showBankPage = useCallback(() => setTab(lastBusinessTab.current), []);
   const appRoot = useRef<HTMLElement>(null);
   const [prepared, setPrepared] = useState<PreparedTransfer | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
@@ -92,11 +96,10 @@ export function BankingApp() {
     }).catch(reason => setError(reason instanceof Error ? reason.message : "无法读取待确认操作，请重新打开链接。"));
   }, [data]);
 
-  const navigate = (next: Tab) => { setTab(next); setAssistantClose(value => value + 1); };
-  const openAssistant = () => setAssistantOpen(value => value + 1);
+  const navigate = (next: BusinessTab) => { lastBusinessTab.current = next; setBusinessTab(next); setTab(next); };
   const closeTransfer = () => { setDialog(null); setPrepared(null); setMfaCode(""); if (location.search) history.replaceState(null, "", location.pathname); };
   const afterAction = async (message: string, next?: Tab) => {
-    closeTransfer(); setNotice(message); if (next) setTab(next); await load();
+    closeTransfer(); setNotice(message); if (next && next !== "assistant") navigate(next); await load();
   };
   const logout = async () => {
     if (logoutBusy) return;
@@ -106,7 +109,7 @@ export function BankingApp() {
       if (!response.ok) throw new Error("logout");
       loadGeneration.current++;
       sessionStorage.removeItem("bankpilot-app-agent-run");
-      setData(null); setDialog(null); setPrepared(null); setMfaCode(""); setSelectedCard(null); setTab("home"); setError(""); setNotice(""); setAssistantVisible(false);
+      setData(null); setDialog(null); setPrepared(null); setMfaCode(""); setSelectedCard(null); setTab("home"); setError(""); setNotice(""); setBusinessTab("home"); lastBusinessTab.current = "home";
       authorizationLoaded.current = false;
       if (location.search) history.replaceState(null, "", location.pathname);
       setAuthRequired(true);
@@ -118,33 +121,34 @@ export function BankingApp() {
   if (!data) return <main className={styles.stage}><section className={styles.unavailable}><ShieldCheck size={32} /><h1>账户数据暂不可用</h1><p role="alert">{error || "请重新读取账户信息。"}</p>{notice && <p className={styles.confirmedNotice} role="status">{notice} 请刷新查看最新账户状态。</p>}<button className={styles.primaryButton} disabled={loading} onClick={() => void load()}><RefreshCw size={17} />重新读取</button><small>读取失败不代表余额为零。操作结果请以回执和最新明细为准。</small></section></main>;
   const account = data.accounts[0];
 
-  return <main className={styles.stage} ref={appRoot} data-agent-page={dialog ?? ({ home: "首页", activity: "账户明细", cards: "卡片管理", wealth: "理财" }[tab])}>
+  return <main className={styles.stage} ref={appRoot} data-agent-page={assistantVisible ? "AI 助手" : dialog ?? ({ home: "首页", activity: "账户明细", cards: "卡片管理", wealth: "理财", assistant: "AI 助手" }[tab])}>
     <ServiceWorkerRegister />
     <section className={styles.phone} aria-label="BankPilot 手机银行">
-      <header className={styles.topbar} inert={assistantVisible}>
-        <button className={styles.avatar} aria-label="个人中心" onClick={() => setDialog("profile")}>{data.customer.display_name.slice(0, 2).toUpperCase()}</button>
+      <header className={styles.topbar}>
+        <button className={styles.avatar} aria-label="个人中心" onClick={() => { showBankPage(); setDialog("profile"); }}>{data.customer.display_name.slice(0, 2).toUpperCase()}</button>
         <div className={styles.wordmark}><span>B</span> BankPilot</div>
         <a className={styles.iconButton} href="/security" aria-label="安全中心"><ShieldCheck size={21} strokeWidth={1.8} /></a>
       </header>
       {error && <div className={styles.connectionError} role="alert"><span>{error}</span><button disabled={loading} onClick={() => void load()}><RefreshCw size={15} />重新读取</button></div>}
       {notice && <div className={styles.confirmedNotice} role="status">{notice}<button onClick={() => setNotice("")} aria-label="关闭操作提示">关闭</button></div>}
       {loading && <p className={styles.refreshStatus} role="note">正在更新账户信息，以下为上次读取的数据…</p>}
-      <div className={styles.viewport} ref={viewportRef} data-agent-viewport inert={assistantVisible}>
-        {tab === "home" && <HomeView data={data} loading={loading} visible={balanceVisible} toggleVisible={() => setBalanceVisible(!balanceVisible)} onDeposit={() => setDialog("deposit")} onTransfer={() => setDialog("transfer")} />}
-        {tab === "activity" && <ActivityView data={data} />}
-        {tab === "cards" && <CardsView data={data} disabled={loading} onCreate={() => setDialog("card")} onSelect={id => { setSelectedCard(id); setDialog("card-details"); }} />}
-        {tab === "wealth" && <InvestmentView accounts={data.accounts} mfaConfigured={data.customer.mfa_configured} onChanged={async message => { if (message) setNotice(message); await load(); }} />}
+      <div className={styles.viewport} ref={viewportRef} data-agent-viewport hidden={assistantVisible}>
+        {businessTab === "home" && <HomeView data={data} loading={loading} visible={balanceVisible} toggleVisible={() => setBalanceVisible(!balanceVisible)} onDeposit={() => setDialog("deposit")} onTransfer={() => setDialog("transfer")} />}
+        {businessTab === "activity" && <ActivityView data={data} />}
+        {businessTab === "cards" && <CardsView data={data} disabled={loading} onCreate={() => setDialog("card")} onSelect={id => { setSelectedCard(id); setDialog("card-details"); }} />}
+        {businessTab === "wealth" && <InvestmentView accounts={data.accounts} mfaConfigured={data.customer.mfa_configured} onChanged={async message => { if (message) setNotice(message); await load(); }} />}
       </div>
+      <div ref={setAssistantHost} className={styles.assistantPage} hidden={!assistantVisible} />
       <nav className={styles.nav} aria-label="主导航">
         <NavButton agentId="nav-home" active={tab === "home" && !assistantVisible} label="首页" icon={<House size={21} />} onClick={() => navigate("home")} />
         <NavButton agentId="nav-wealth" active={tab === "wealth" && !assistantVisible} label="理财" icon={<TrendingUp size={21} />} onClick={() => navigate("wealth")} />
-        <NavButton active={assistantVisible} label="AI 助手" icon={<AssistantMark />} onClick={openAssistant} />
+        <NavButton active={assistantVisible} label="AI 助手" icon={<AssistantMark />} onClick={showAssistant} />
         <NavButton agentId="nav-activity" active={tab === "activity" && !assistantVisible} label="明细" icon={<ChartNoAxesColumnIncreasing size={21} />} onClick={() => navigate("activity")} />
         <NavButton agentId="nav-cards" active={tab === "cards" && !assistantVisible} label="卡片" icon={<CreditCard size={21} />} onClick={() => navigate("cards")} />
       </nav>
-      <FloatingAppAgent rootRef={appRoot} configured={data.ai.configured} voiceEnabled={data.features?.voiceCalls} openSignal={assistantOpen} closeSignal={assistantClose} onOpenChange={setAssistantVisible} presentation="page" />
+      <AppAssistant rootRef={appRoot} configured={data.ai.configured} voiceEnabled={data.features?.voiceCalls} openSignal={0} presentation="page" pageHost={assistantHost} pageActive={assistantVisible} onShowPage={showAssistant} onShowBankPage={showBankPage} />
     </section>
-    <div inert={assistantVisible}>
+    <div hidden={assistantVisible}>
     {dialog === "deposit" && account && <DepositModal account={account} busy={actionBusy} close={() => setDialog(null)} done={() => afterAction("入金已完成。")} setBusy={setActionBusy} />}
     {dialog === "transfer" && account && <TransferModal account={account} mfaConfigured={data.customer.mfa_configured} prepared={prepared} setPrepared={setPrepared} busy={actionBusy} setBusy={setActionBusy} close={closeTransfer} code={mfaCode} setCode={setMfaCode} done={() => afterAction("转账已完成，请在明细中查看回执。")} />}
     {dialog === "card" && account && <CardModal account={account} busy={actionBusy} setBusy={setActionBusy} close={() => setDialog(null)} done={() => afterAction("虚拟卡已申请成功。", "cards")} />}

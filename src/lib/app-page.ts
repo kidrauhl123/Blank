@@ -33,7 +33,7 @@ export function captureAppPage(root: HTMLElement): AppPage {
     });
   }
   const clone = scope.cloneNode(true) as HTMLElement;
-  clone.querySelectorAll("[data-agent-overlay], [data-agent-private], script, style, input, select, textarea").forEach((node) => node.remove());
+  clone.querySelectorAll("[hidden], [data-agent-overlay], [data-agent-private], script, style, input, select, textarea").forEach((node) => node.remove());
   const text = (clone.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 8000);
   const name = dialogs.at(-1)?.getAttribute("aria-label") ?? root.dataset.agentPage ?? "手机银行";
   const body = { name, text, controls: controls.slice(0, 100) };

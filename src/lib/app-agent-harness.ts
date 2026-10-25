@@ -13,6 +13,8 @@ import { APP_AGENT_PROMPT } from "./bank-agent-prompts";
 import { currentPreferenceData } from "./preference-runtime";
 import { investmentFiltersSchema, listInvestmentProducts } from "./investments";
 
+import { readBankFacts } from "./bank-agent-facts";
+
 export { APP_AGENT_PROMPT } from "./bank-agent-prompts";
 
 function bridge(action: PageAction, runtime: ToolRuntime) {
@@ -25,6 +27,15 @@ const target = z.string().max(120).describe("最新页面 controls 中的 id，�
 
 export function appPageTools() {
   return [
+    tool(async (input, runtime: ToolRuntime) => {
+      const customerId = runtime.config.configurable?.bank_customer_id;
+      if (typeof customerId !== "string") throw new Error("BANK_APP_SESSION_REQUIRED");
+      return JSON.stringify(await readBankFacts(customerId, input.area, input.month));
+    }, {
+      name: "read_bank_facts",
+      description: "直接查询当前客户余额、卡片、近期流水与订阅(overview)，完整月度账单及分类汇总(statement)，或理财持仓(investments)。无需打开或操作页面。金额单位为分；近期流水不代表完整账单。",
+      schema: z.object({ area: z.enum(["overview", "statement", "investments"]), month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional().describe("statement 的 YYYY-MM 月份，省略查询本月。其他 area 不使用。") }),
+    }),
     tool(async (input, runtime: ToolRuntime) => {
       const customerId = runtime.config.configurable?.bank_customer_id;
       if (typeof customerId !== "string") throw new Error("BANK_APP_SESSION_REQUIRED");
