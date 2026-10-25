@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type RefObject } from "react";
-import { ArrowLeft, Check, ChevronDown, Pause, Phone, Play, Send, Sparkles, Square, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Pause, Phone, Play, Send, Square, X } from "lucide-react";
 import { applyPageAction, captureAppPage, type PageMotion } from "@/lib/app-page";
 import type { AppAgentView } from "@/lib/app-agent-protocol";
 import { parsePreferenceCommand } from "@/lib/preference-command";
 import { TaskTimeline } from "@/features/voice-trace/TaskTimeline";
 import { useRealtimeVoice } from "@/features/realtime-voice/useRealtimeVoice";
 import { VoiceCall } from "@/features/realtime-voice/VoiceCall";
+import { AssistantMark } from "./AssistantMark";
 import styles from "./FloatingAppAgent.module.css";
 
 type Message = { role: "user" | "assistant"; text: string; runId?: string };
@@ -271,12 +272,12 @@ export function FloatingAppAgent({ rootRef, configured, voiceEnabled = false, op
     {!open && active && presentation !== "page" && <StepList items={visibleSteps} compact />}
     {/* 只在 agent 真的有事要报告时出现；平时首页的 AI 入口是底部导航那一个 */}
     {!open && active && <div className={styles.floating}>
-      <button className={styles.trigger} onClick={expand} aria-label={presentation === "page" ? "查看 AI 助手会话" : "打开悬浮助手"}><Sparkles size={18} /><span>{status}</span></button>
+      <button className={styles.trigger} onClick={expand} aria-label={presentation === "page" ? "查看 AI 助手会话" : "打开悬浮助手"}><AssistantMark size={18} /><span>{status}</span></button>
       {run?.status === "PAUSED" || run?.status === "HANDOFF" ? <button onClick={continueRun} disabled={busy} aria-label="继续代操作"><Play size={17} /></button> : run?.controlGranted && run.status === "ACTION" ? <button onClick={pause} aria-label="暂停代操作"><Pause size={17} /></button> : null}
       <button onClick={cancel} aria-label="结束代操作"><Square size={15} /></button>
     </div>}
     {open && <section className={`${styles.panel} ${presentation === "page" ? styles.pagePanel : ""}`} role={presentation === "page" ? "region" : "dialog"} aria-modal={presentation === "page" ? undefined : "false"} aria-label={presentation === "page" ? "AI 助手会话" : "BankPilot 悬浮助手"}>
-      <header>{presentation === "page" && <button onClick={closeConversation} aria-label="返回银行页面"><ArrowLeft size={21} /></button>}<span><Sparkles size={19} /><b>{presentation === "page" ? "AI 助手" : "BankPilot"}</b></span>{presentation === "floating" && <><button onClick={closeConversation} aria-label="收起助手"><ChevronDown size={21} /></button><button onClick={closeConversation} aria-label="关闭助手面板"><X size={19} /></button></>}</header>
+      <header>{presentation === "page" && <button onClick={closeConversation} aria-label="返回银行页面"><ArrowLeft size={21} /></button>}<span><AssistantMark size={19} /><b>{presentation === "page" ? "AI 助手" : "BankPilot"}</b></span>{presentation === "floating" && <><button onClick={closeConversation} aria-label="收起助手"><ChevronDown size={21} /></button><button onClick={closeConversation} aria-label="关闭助手面板"><X size={19} /></button></>}</header>
       {voiceOpen ? <VoiceCall voice={voice} close={() => { voice.stop(); setVoiceOpen(false); }} continueTask={message => { voice.stop(); setVoiceOpen(false); void send(message); }} /> : <>
       <p className={styles.context}>已共享：{pageName} · 密码和验证码不共享</p>
       <div className={styles.messages}>

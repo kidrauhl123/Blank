@@ -3,7 +3,7 @@
 import {
   ArrowUpRight, ChartNoAxesColumnIncreasing,
   ChevronRight, Clock3, CreditCard, Eye, EyeOff, House, Link2,
-  LogOut, Plus, RefreshCw, Settings, ShieldCheck, Sparkles, TrendingUp,
+  LogOut, Plus, RefreshCw, Settings, ShieldCheck, TrendingUp,
 } from "lucide-react";
 import { FormEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
 import { ServiceWorkerRegister } from "./ServiceWorkerRegister";
@@ -13,6 +13,7 @@ import { LiquidBankCard } from "./LiquidBankCard";
 import { TransactionCategoryIcon } from "./TransactionCategoryIcon";
 import { BankDialog as ModalShell } from "./BankDialog";
 import { InvestmentView } from "./InvestmentView";
+import { AssistantMark } from "./AssistantMark";
 import { InvestmentReceiptDialog } from "./InvestmentReceiptDialog";
 import { ProactiveAttention } from "./ProactiveAttention";
 import type { InvestmentReceipt } from "@/lib/investment-types";
@@ -137,7 +138,7 @@ export function BankingApp() {
       <nav className={styles.nav} aria-label="主导航">
         <NavButton agentId="nav-home" active={tab === "home" && !assistantVisible} label="首页" icon={<House size={21} />} onClick={() => navigate("home")} />
         <NavButton agentId="nav-wealth" active={tab === "wealth" && !assistantVisible} label="理财" icon={<TrendingUp size={21} />} onClick={() => navigate("wealth")} />
-        <NavButton active={assistantVisible} label="AI 助手" icon={<Sparkles size={21} />} onClick={openAssistant} />
+        <NavButton active={assistantVisible} label="AI 助手" icon={<AssistantMark />} onClick={openAssistant} />
         <NavButton agentId="nav-activity" active={tab === "activity" && !assistantVisible} label="明细" icon={<ChartNoAxesColumnIncreasing size={21} />} onClick={() => navigate("activity")} />
         <NavButton agentId="nav-cards" active={tab === "cards" && !assistantVisible} label="卡片" icon={<CreditCard size={21} />} onClick={() => navigate("cards")} />
       </nav>
