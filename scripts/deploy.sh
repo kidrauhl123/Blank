@@ -34,6 +34,10 @@ tar --exclude='./backups' --exclude='./releases' --exclude='./node_modules' --ex
   --exclude='./.git' --exclude='./deploy/.env.production' --exclude='./.env*' \
   -czf "$backup_dir/source.tar.gz" .
 chmod 600 "$backup_dir/source.tar.gz"
+if [[ -f /opt/premsir-chat/source/Caddyfile.production ]]; then
+  cp /opt/premsir-chat/source/Caddyfile.production "$backup_dir/edge.Caddyfile"
+  chmod 600 "$backup_dir/edge.Caddyfile"
+fi
 echo "Database, environment and source backed up."
 REMOTE_BACKUP
 
@@ -65,7 +69,10 @@ if ! grep -Eq '^SCHEDULER_TOKEN=.{32,}$' deploy/.env.production; then
   cp "$backup_dir/scheduler.env" deploy/.env.production
   chmod 600 deploy/.env.production
 fi
-"${compose[@]}" build app scheduler
+"${compose[@]}" build app scheduler voice
+if docker container inspect bankpilot-voice >/dev/null 2>&1; then
+  docker stop bankpilot-voice >/dev/null
+fi
 if docker container inspect bankpilot-scheduler >/dev/null 2>&1; then
   docker stop bankpilot-scheduler >/dev/null
 fi
@@ -195,6 +202,10 @@ done
 if [[ "$scheduler_ready" != true ]]; then
   echo "Scheduler heartbeat unavailable; deployment verification failed." >&2
   exit 1
+fi
+if grep -Eq '^VOICE_API_KEY=.+$' deploy/.env.production && grep -Eq '^VOICE_BRIDGE_TOKEN=.{32,}$' deploy/.env.production; then
+  "${compose[@]}" up -d --wait voice
+  python3 scripts/configure-voice-edge.py
 fi
 printf '%s\n' "$release_commit" > DEPLOYED_COMMIT
 echo "Deployed $release_commit. Backups: $backup_dir"

@@ -4,7 +4,7 @@
 	header {
 		X-Content-Type-Options nosniff
 		Referrer-Policy strict-origin-when-cross-origin
-		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Permissions-Policy "camera=(), microphone=(self), geolocation=()"
 		-Server
 	}
 
@@ -12,5 +12,7 @@
 		max_size 1MB
 	}
 
+	@bankVoice path /api/voice/live
+	reverse_proxy @bankVoice bankpilot-voice:3011
 	reverse_proxy bankpilot-app:3000
 }

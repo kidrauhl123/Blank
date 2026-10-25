@@ -58,6 +58,8 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       SCHEDULER_TOKEN: ${SCHEDULER_TOKEN:-}
+      VOICE_BRIDGE_TOKEN: ${VOICE_BRIDGE_TOKEN:-}
+      VOICE_ENABLED: ${VOICE_API_KEY:+true}
       TYPESAFE_API_KEY: ${TYPESAFE_API_KEY:-}
       TYPESAFE_MODEL: ${TYPESAFE_MODEL:-jev-1.13.0}
       JEV_TIMEOUT_MS: ${JEV_TIMEOUT_MS:-8000}
@@ -110,6 +112,35 @@ services:
       - internal
     mem_limit: 128m
     cpus: 0.25
+
+  voice:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.voice
+    image: bankpilot-voice:latest
+    container_name: bankpilot-voice
+    restart: unless-stopped
+    environment:
+      BANKPILOT_INTERNAL_URL: http://app:3000
+      BANKPILOT_PUBLIC_URL: ${BANKPILOT_PUBLIC_URL}
+      VOICE_BRIDGE_TOKEN: ${VOICE_BRIDGE_TOKEN:-}
+      VOICE_API_KEY: ${VOICE_API_KEY:-}
+      VOICE_UPSTREAM_URL: ${VOICE_UPSTREAM_URL:-ws://grok2api:8000/v1/realtime}
+      VOICE_MODEL: ${VOICE_MODEL:-grok-voice-latest}
+      VOICE_NAME: ${VOICE_NAME:-eve}
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - internal
+      - edge
+    mem_limit: 128m
+    cpus: 0.5
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3011/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
 
   wecom:
     profiles: ["wecom"]

@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+/workers/voice/node_modules/
 /.pnp
 .pnp.*
 .yarn/*

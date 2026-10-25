@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type RefObject } from "react";
-import { ArrowLeft, Check, ChevronDown, Mic, Pause, Play, Send, Sparkles, Square, Volume2, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Pause, Phone, Play, Send, Sparkles, Square, X } from "lucide-react";
 import { applyPageAction, captureAppPage, type PageMotion } from "@/lib/app-page";
 import type { AppAgentView } from "@/lib/app-agent-protocol";
 import { parsePreferenceCommand } from "@/lib/preference-command";
 import { TaskTimeline } from "@/features/voice-trace/TaskTimeline";
-import { useBrowserSpeech, type SpeechLanguage } from "@/features/voice-trace/useBrowserSpeech";
+import { useRealtimeVoice } from "@/features/realtime-voice/useRealtimeVoice";
+import { VoiceCall } from "@/features/realtime-voice/VoiceCall";
 import styles from "./FloatingAppAgent.module.css";
 
 type Message = { role: "user" | "assistant"; text: string; runId?: string };
@@ -43,19 +44,17 @@ function StepList({ items, compact = false }: { items: Step[]; compact?: boolean
   </div>;
 }
 
-export function FloatingAppAgent({ rootRef, configured, openSignal, closeSignal = 0, onOpenChange, transport = bankTransport, presentation = "floating" }: { rootRef: RefObject<HTMLElement | null>; configured: boolean; openSignal: number; closeSignal?: number; onOpenChange?: (open: boolean) => void; transport?: AppAgentTransport; presentation?: "page" | "floating" }) {
+export function FloatingAppAgent({ rootRef, configured, voiceEnabled = false, openSignal, closeSignal = 0, onOpenChange, transport = bankTransport, presentation = "floating" }: { rootRef: RefObject<HTMLElement | null>; configured: boolean; voiceEnabled?: boolean; openSignal: number; closeSignal?: number; onOpenChange?: (open: boolean) => void; transport?: AppAgentTransport; presentation?: "page" | "floating" }) {
   const [open, setOpen] = useState(false);
   const [observedCloseSignal, setObservedCloseSignal] = useState(closeSignal);
-  if (observedCloseSignal !== closeSignal) { setObservedCloseSignal(closeSignal); setOpen(false); }
   const [input, setInput] = useState("");
-  const [speechLanguage, setSpeechLanguage] = useState<SpeechLanguage>("zh-CN");
-  // Voice results replace the whole input only when it is empty; otherwise they
-  // append so dictated amounts never wipe what the user already typed.
-  const applyTranscript = useCallback((text: string) => {
-    setInput((current) => current.trim() ? `${current.trimEnd()} ${text}` : text);
-  }, []);
-  const speech = useBrowserSpeech(applyTranscript, speechLanguage);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  if (observedCloseSignal !== closeSignal) { setObservedCloseSignal(closeSignal); setOpen(false); setVoiceOpen(false); }
+  const addVoiceMessage = useCallback((role: "user" | "assistant", text: string) => setMessages(items => [...items, { role, text }]), []);
+  const voice = useRealtimeVoice(addVoiceMessage);
+  const stopVoice = voice.stop;
+  useEffect(() => { if (!open) stopVoice(); }, [open, stopVoice]);
   const [run, setRun] = useState<AppAgentView | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -193,7 +192,7 @@ export function FloatingAppAgent({ rootRef, configured, openSignal, closeSignal 
   const send = async (text = input) => {
     const message = text.trim();
     const preferenceCommand = parsePreferenceCommand(message);
-    if (!message || busy || speech.listening || !rootRef.current || (!configured && !preferenceCommand)) return;
+    if (!message || busy || !rootRef.current || (!configured && !preferenceCommand)) return;
     setInput(""); setError(""); setBusy(true);
     setMessages((items) => [...items, { role: "user", text: message }]);
     const current = viewRef.current;
@@ -257,8 +256,7 @@ export function FloatingAppAgent({ rootRef, configured, openSignal, closeSignal 
   }, [openSignal, pause, rootRef]);
   useEffect(() => { onOpenChange?.(open); }, [open, onOpenChange]);
   const closeConversation = () => {
-    speech.cancelListening();
-    if (speech.speaking) speech.toggleSpeak();
+    voice.stop(); setVoiceOpen(false);
     pause(); setOpen(false);
   };
   const question = run?.pending?.action.type === "question" ? run.pending.action : null;
@@ -279,6 +277,7 @@ export function FloatingAppAgent({ rootRef, configured, openSignal, closeSignal 
     </div>}
     {open && <section className={`${styles.panel} ${presentation === "page" ? styles.pagePanel : ""}`} role={presentation === "page" ? "region" : "dialog"} aria-modal={presentation === "page" ? undefined : "false"} aria-label={presentation === "page" ? "AI 助手会话" : "BankPilot 悬浮助手"}>
       <header>{presentation === "page" && <button onClick={closeConversation} aria-label="返回银行页面"><ArrowLeft size={21} /></button>}<span><Sparkles size={19} /><b>{presentation === "page" ? "AI 助手" : "BankPilot"}</b></span>{presentation === "floating" && <><button onClick={closeConversation} aria-label="收起助手"><ChevronDown size={21} /></button><button onClick={closeConversation} aria-label="关闭助手面板"><X size={19} /></button></>}</header>
+      {voiceOpen ? <VoiceCall voice={voice} close={() => { voice.stop(); setVoiceOpen(false); }} continueTask={message => { voice.stop(); setVoiceOpen(false); void send(message); }} /> : <>
       <p className={styles.context}>已共享：{pageName} · 密码和验证码不共享</p>
       <div className={styles.messages}>
         {!messages.length && !run && <><p className={styles.intro}>告诉我你想查询或办理什么。</p><div className={styles.choices}>{["查一下我的余额", "分析本月账单", "比较一下理财产品"].map(prompt => <button key={prompt} disabled={busy || !configured} onClick={() => send(prompt)}>{prompt}</button>)}</div></>}
@@ -293,12 +292,8 @@ export function FloatingAppAgent({ rootRef, configured, openSignal, closeSignal 
         {!configured && <p className={styles.error}>助手模型暂不可用；仍可输入明确的偏好管理指令，或通过页面办理业务。</p>}
         <div ref={historyEnd} />
       </div>
-      <div className={styles.voiceTools}>
-        <label>识别语言 <select aria-label="识别语言" value={speechLanguage} disabled={speech.listening} onChange={(event) => setSpeechLanguage(event.target.value as SpeechLanguage)}><option value="zh-CN">普通话</option><option value="zh-HK">粤语</option></select></label>
-        {run?.message && <button type="button" onClick={() => speech.toggleSpeak(run.message)} aria-label={speech.speaking ? "停止播报" : "播报助手回复"}><Volume2 size={17} />{speech.speaking ? "停止播报" : "播报回复"}</button>}
-      </div>
-      <p className={styles.voiceHint} role="note">{speech.hint}</p>
-      <form onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}><input ref={answerInput} aria-label={presentation === "page" ? "向 AI 助手描述需求或回答问题" : "向悬浮助手描述需求或回答问题"} placeholder={question ? "选择选项，或直接输入…" : "描述你想办理的业务…"} value={input} onChange={(event) => setInput(event.target.value)} maxLength={1000} /><button type="button" className={styles.micButton} aria-label={speech.listening ? "停止录音" : "语音输入"} aria-pressed={speech.listening} disabled={!configured || busy} onClick={speech.toggleListening}>{speech.listening ? <Square size={17} /> : <Mic size={18} />}</button><button aria-label={presentation === "page" ? "发送给 AI 助手" : "发送给悬浮助手"} disabled={(!configured && !parsePreferenceCommand(input)) || busy || speech.listening || !input.trim()}><Send size={18} /></button></form>
+      <form onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}><input ref={answerInput} aria-label={presentation === "page" ? "向 AI 助手描述需求或回答问题" : "向悬浮助手描述需求或回答问题"} placeholder={question ? "选择选项，或直接输入…" : "描述你想办理的业务…"} value={input} onChange={(event) => setInput(event.target.value)} maxLength={1000} />{voiceEnabled && <button type="button" className={styles.micButton} aria-label="开始语音通话" disabled={busy || active} onClick={() => { pause(); setVoiceOpen(true); void voice.start(); }}><Phone size={18} /></button>}<button aria-label={presentation === "page" ? "发送给 AI 助手" : "发送给悬浮助手"} disabled={(!configured && !parsePreferenceCommand(input)) || busy || !input.trim()}><Send size={18} /></button></form>
+      </>}
     </section>}
   </div>;
 }

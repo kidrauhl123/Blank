@@ -2,13 +2,12 @@
 
 import { useState, type FormEvent } from "react";
 import { Mic, Send, Square, Volume2 } from "lucide-react";
-import { useBrowserSpeech, type SpeechLanguage } from "./useBrowserSpeech";
+import { useBrowserSpeech } from "./useBrowserSpeech";
 import styles from "./VoiceTraceDemo.module.css";
 
 export function VoiceComposer({ onSubmit, reply, disabled = false }: { onSubmit: (text: string) => void; reply?: string; disabled?: boolean }) {
   const [draft, setDraft] = useState("");
-  const [language, setLanguage] = useState<SpeechLanguage>("zh-CN");
-  const speech = useBrowserSpeech(setDraft, language);
+  const speech = useBrowserSpeech(setDraft, "zh-CN");
 
   const send = (event: FormEvent) => {
     event.preventDefault();
@@ -21,7 +20,7 @@ export function VoiceComposer({ onSubmit, reply, disabled = false }: { onSubmit:
   };
 
   return <div className={styles.voiceCard}>
-    <div className={styles.voiceHeading}><h2>语音与文字</h2><label>识别语言 <select value={language} disabled={speech.listening} onChange={(event) => setLanguage(event.target.value as SpeechLanguage)}><option value="zh-CN">普通话</option><option value="zh-HK">粤语</option></select></label></div>
+    <div className={styles.voiceHeading}><h2>语音与文字</h2></div>
     <form onSubmit={send}>
       <label htmlFor="voice-draft">你的需求</label>
       <textarea id="voice-draft" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={1000} rows={3} placeholder="例如：帮我查看本月账单" />
