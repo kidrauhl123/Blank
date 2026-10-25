@@ -9,8 +9,17 @@ function blockedModels() {
   return new Set((process.env.AI_BLOCKED_MODELS ?? "").split(",").map(id => id.trim()).filter(Boolean));
 }
 
+function allowedModels() {
+  return [...new Set((process.env.AI_ALLOWED_MODELS ?? "").split(",").map(id => id.trim()).filter(Boolean))];
+}
+
+export function isAIModelEnabled(model: string) {
+  const allowed = allowedModels();
+  return !blockedModels().has(model) && (!allowed.length || allowed.includes(model));
+}
+
 export function assertAIModelEnabled(model: string) {
-  if (blockedModels().has(model)) throw new Error("AI_MODEL_NOT_AVAILABLE");
+  if (!isAIModelEnabled(model)) throw new Error("AI_MODEL_NOT_AVAILABLE");
 }
 
 export async function getAIModels(): Promise<AIModelCatalog> {
@@ -19,7 +28,8 @@ export async function getAIModels(): Promise<AIModelCatalog> {
   const key = process.env.AI_API_KEY!;
   const defaultModel = process.env.AI_MODEL!;
   const blocked = blockedModels();
-  const provider = createHash("sha256").update(JSON.stringify([baseURL, key, defaultModel, [...blocked].sort()])).digest("hex");
+  const allowed = allowedModels();
+  const provider = createHash("sha256").update(JSON.stringify([baseURL, key, defaultModel, [...blocked].sort(), allowed])).digest("hex");
   if (cache?.provider === provider && cache.expiresAt > Date.now()) return cache.catalog;
   if (pending?.provider === provider) return pending.request;
   const request = (async () => {
@@ -31,10 +41,11 @@ export async function getAIModels(): Promise<AIModelCatalog> {
       const body: unknown = await response.json();
       const data = body && typeof body === "object" && "data" in body ? body.data : null;
       if (!Array.isArray(data)) throw new Error("AI_MODEL_CATALOG_UNAVAILABLE");
-      const models = [...new Set(data.flatMap((entry: unknown) => {
+      const available = new Set(data.flatMap((entry: unknown) => {
         const id = entry && typeof entry === "object" && "id" in entry ? entry.id : null;
         return typeof id === "string" && /^[a-zA-Z0-9._:/+-]{1,160}$/.test(id) && !blocked.has(id) ? [id] : [];
-      }))].sort().slice(0, 200);
+      }));
+      const models = (allowed.length ? allowed.filter(id => available.has(id)) : [...available].sort()).slice(0, 200);
       if (!models.length) throw new Error("AI_MODEL_CATALOG_UNAVAILABLE");
       const catalog = { models, defaultModel: models.includes(defaultModel) ? defaultModel : models[0] };
       cache = { provider, expiresAt: Date.now() + 60_000, catalog };

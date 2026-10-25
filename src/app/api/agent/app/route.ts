@@ -23,7 +23,7 @@ function failure(error: unknown) {
   if (error instanceof AuthError) {
     const preferenceMessages: Record<string, string> = {
       PREFERENCE_VERSION_CONFLICT: "偏好已在其他页面修改，请重新读取后再操作；本次未覆盖已有设置。",
-      PREFERENCE_INVALID: "这项偏好内容不能保存；请检查称呼或改用设置页。",
+      PREFERENCE_INVALID: "这项偏好内容不能保存，请换一个明确的称呼或偏好表达。",
     };
     return Response.json({ error: error.code, message: preferenceMessages[error.code] ?? "请在银行 APP 重新登录后操作" }, { status: error.status });
   }

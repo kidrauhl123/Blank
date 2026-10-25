@@ -17,3 +17,9 @@
 `POST /api/agent/app` 根据 `Accept: text/event-stream` 返回 SSE。服务端在原有 LangGraph 调用中接收模型的文字 token 回调，发送 `text-start`、`text-delta`、`text-end`，最后发送包含权威任务状态的 `result`。工具调用参数、推理内容、密钥不进入文字事件。既有 JSON 客户端保留原协议。
 
 前端按 UTF-8 流解码并处理跨分块的 SSE 事件；回复到达时立即渲染 Markdown。每个模型回复有独立 ID，最终结果替换临时回复，不重复显示。停止生成或断开请求会取消服务端模型调用。用户上滑查看旧消息时不强制拉回底部。
+
+## 模型与偏好
+
+设置页只显示 `AI_ALLOWED_MODELS` 与上游目录的交集，后端同样限制可选模型；当前列表为 DeepSeek 4.1 Flash、Qwen 3.8 Flash、Gemini 3.8 High，默认 `deepseek-v4.1-flash`。旧会话若保存了已移出列表的模型，新任务自动使用当前默认值。
+
+回复偏好表单已移除。称呼、回复语言及详略仍可通过明确的对话指令保存、删除、清空、启用或停用，服务端提交后给出回执。

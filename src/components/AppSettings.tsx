@@ -5,7 +5,6 @@ import Link from "next/link";
 import { ArrowLeft, ChevronDown, RefreshCw } from "lucide-react";
 import { bankRequest, BankRequestError } from "@/lib/client-request";
 import type { AIModelCatalog } from "@/lib/ai-models";
-import { PreferenceSettings } from "./PreferenceSettings";
 import styles from "./AppSettings.module.css";
 
 export function AppSettings() {
@@ -39,13 +38,12 @@ export function AppSettings() {
   };
   return <main className={styles.page}>
     <header className={styles.header}><Link href="/"><ArrowLeft size={18} />返回银行</Link><h1>设置</h1></header>
-    <PreferenceSettings />
-    <section className={styles.section} aria-labelledby="debug-settings"><h2 id="debug-settings">调试</h2>
+    <section className={styles.section} aria-labelledby="assistant-settings"><h2 id="assistant-settings">AI 助手</h2>
       <form className={styles.form} onSubmit={save}>
         <label htmlFor="assistant-model">助手模型</label>
         <div className={styles.select}><select id="assistant-model" disabled={loading || saving || !catalog} value={model} onChange={(event) => { setModel(event.target.value); setNotice(""); }}>
           {!catalog && <option value="">{loading ? "正在读取…" : "暂不可用"}</option>}
-          {catalog?.models.map((id) => <option key={id} value={id}>{id}</option>)}
+          {catalog?.models.map((id) => <option key={id} value={id}>{({ "deepseek-v4.1-flash": "DeepSeek 4.1 Flash", "qwen3.8-flash": "Qwen 3.8 Flash", "gemini-3.8-flash-high": "Gemini 3.8 High" } as Record<string, string>)[id] ?? id}{id === catalog.defaultModel ? "（默认）" : ""}</option>)}
         </select><ChevronDown size={16} aria-hidden="true" /></div>
         <p className={styles.hint}>仅用于当前登录会话的新任务。进行中的任务保持原模型。</p>
         {error && <p role="alert" className={styles.error}>{error}</p>}

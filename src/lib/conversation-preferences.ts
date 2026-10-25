@@ -20,10 +20,10 @@ export async function applyConversationPreference(scope: VisitorMemoryScope | nu
       return "已清空当前访客和用户的回复偏好。历史会话和备份不在本次清空范围内。";
     }
     await setPreferenceMemoryEnabled(scope, command.kind === "enable", state.version);
-    return command.kind === "enable" ? "已开启偏好记忆。此前保留且尚未过期的偏好可能再次生效，可在设置页查看或清空。"
-      : "已关闭偏好记忆，助手将不再读取这些偏好；已保存的偏好尚未删除，可在设置页清空。";
+    return command.kind === "enable" ? "已开启偏好记忆。此前保留且尚未过期的偏好可能再次生效；需要清空时告诉我“清空所有回复偏好”。"
+      : "已关闭偏好记忆，助手将不再读取这些偏好；已保存的偏好尚未删除；需要删除时告诉我“清空所有回复偏好”。";
   } catch (error) {
-    if (error instanceof AuthError && error.code === "PREFERENCE_MEMORY_DISABLED") return "偏好记忆目前已关闭，请先在设置页开启；本次没有保存偏好。";
+    if (error instanceof AuthError && error.code === "PREFERENCE_MEMORY_DISABLED") return "偏好记忆目前已关闭。告诉我“开启偏好记忆”后即可继续；本次没有保存偏好。";
     throw error;
   }
 }
