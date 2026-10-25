@@ -6,10 +6,9 @@
 .tag { font-size: var(--text-xs); color: var(--muted); }
 .tabs, .filters { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .tabs button, .filters button, .secondary, .back { min-height: var(--target-touch); padding: var(--space-2) var(--space-3); border: 0; border-radius: var(--radius-control); background: var(--surface-strong); font-size: var(--text-sm); }
-.tabs [aria-pressed="true"], .filters [aria-pressed="true"] { background: var(--ink); color: var(--paper); }
-.criteria { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
-.criteria label, .form label { display: flex; flex-direction: column; gap: var(--space-2); color: var(--muted); font-size: var(--text-xs); }
-.criteria input, .criteria select, .form input, .form select { width: 100%; min-height: var(--target-touch); padding: var(--space-3); border: 0; border-radius: var(--radius-control); background: var(--white); color: var(--ink); font-size: var(--text-sm); }
+.tabs [aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.form label { display: flex; flex-direction: column; gap: var(--space-2); color: var(--muted); font-size: var(--text-xs); }
+.form input, .form select { width: 100%; min-height: var(--target-touch); padding: var(--space-3); border: 0; border-radius: var(--radius-control); background: var(--white); color: var(--ink); font-size: var(--text-sm); }
 .card { padding: var(--space-5); border-radius: var(--radius-container); background: var(--white); }
 .card + .card { margin-top: var(--space-3); }
 .open { display: flex; flex-direction: column; gap: var(--space-3); width: 100%; text-align: left; border: 0; background: none; }

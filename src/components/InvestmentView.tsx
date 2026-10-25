@@ -5,7 +5,7 @@ import { ArrowLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { BankDialog } from "./BankDialog";
 import { InvestmentReceiptDialog } from "./InvestmentReceiptDialog";
 import { bankRequest, jsonPost } from "@/lib/client-request";
-import { investmentKindLabels, NAV_SCALE, SHARE_SCALE, type InvestmentKind } from "@/lib/investment-model";
+import { investmentKindLabels, NAV_SCALE, SHARE_SCALE } from "@/lib/investment-model";
 import type { InvestmentOrder, InvestmentOverview, InvestmentProduct, InvestmentReceipt } from "@/lib/investment-types";
 import styles from "./InvestmentView.module.css";
 
@@ -23,9 +23,6 @@ export function InvestmentView({ accounts, mfaConfigured, onChanged }: { account
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [screen, setScreen] = useState<"products" | "positions">("products");
-  const [kind, setKind] = useState<InvestmentKind | "ALL">("ALL");
-  const [budget, setBudget] = useState("");
-  const [risk, setRisk] = useState("R5");
   const [selected, setSelected] = useState<string | null>(null);
   const [compare, setCompare] = useState<string[]>([]);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -108,13 +105,12 @@ export function InvestmentView({ accounts, mfaConfigured, onChanged }: { account
   };
   const openTrade = (next: Trade) => { setFormError(""); setTrade(next); };
   const product = data?.products.find(item => item.id === selected);
-  const products = data?.products.filter(item => (kind === "ALL" || item.kind === kind) && item.riskLevel <= risk && (!budget || item.minimumMinor <= Math.round(Number(budget) * 100))) ?? [];
+  const products = data?.products ?? [];
   const compared = data?.products.filter(item => compare.includes(item.id)) ?? [];
   const quote = order?.quote;
 
   return <div className={styles.view}>
     <div className={styles.heading}><h1>理财</h1></div>
-    <p className={styles.hint}>净值会涨跌，历史表现不代表未来收益。</p>
     {error && <div role="alert" className={styles.error}>{error}<button className={styles.textButton} onClick={() => void load()} disabled={loading}><RefreshCw size={14} />重新读取</button></div>}
     {notice && <p role="status" className={styles.notice}>{notice}</p>}
     {loading && <p role="status" className={styles.hint}>正在读取理财数据…</p>}
@@ -125,12 +121,7 @@ export function InvestmentView({ accounts, mfaConfigured, onChanged }: { account
         <button data-agent-id="wealth-assessment" data-agent-permission="navigate" onClick={() => { setFormError(""); setAssessmentOpen(true); }}>{data.assessment ? `风险测评 ${data.assessment.riskLevel}` : "风险测评"}</button>
       </div>
       {screen === "products" && !product && <>
-        <div className={styles.filters} aria-label="产品类型">{(["ALL", "FLEXIBLE", "HOLDING", "CLOSED"] as const).map(value => <button key={value} data-agent-id={`wealth-filter-${value}`} data-agent-permission="navigate" aria-pressed={kind === value} onClick={() => setKind(value)}>{value === "ALL" ? "全部" : investmentKindLabels[value]}</button>)}</div>
-        <div className={styles.criteria}>
-          <label>可投入金额（元）<input data-agent-id="wealth-budget" data-agent-permission="fill" type="number" inputMode="decimal" min="0.01" step="0.01" value={budget} placeholder="不限" onChange={event => setBudget(event.target.value)} /></label>
-          <label>最高产品风险<select data-agent-id="wealth-max-risk" data-agent-permission="fill" value={risk} onChange={event => setRisk(event.target.value)}><option value="R5">不限</option>{["R1", "R2", "R3"].map(value => <option key={value} value={value}>{value}</option>)}</select></label>
-        </div>
-        <div className={styles.row}><small>{products.length} 只符合条件</small><button className={styles.textButton} data-agent-id="wealth-compare" data-agent-permission="navigate" disabled={compare.length < 2} onClick={() => setCompareOpen(true)}>对比（{compare.length}/3）</button></div>
+        <div className={styles.row}><small>{products.length} 只理财产品</small><button className={styles.textButton} data-agent-id="wealth-compare" data-agent-permission="navigate" disabled={compare.length < 2} onClick={() => setCompareOpen(true)}>对比（{compare.length}/3）</button></div>
         <div>{products.map(item => <article className={styles.card} key={item.id}>
           <button className={styles.open} data-agent-id={`wealth-product-${item.code}`} data-agent-permission="navigate" data-agent-label={`查看 ${item.name} ${item.riskLevel} ${term(item)}`} onClick={() => setSelected(item.id)}>
             <span className={styles.row}><h2>{item.name}</h2><ChevronRight size={18} /></span>
@@ -138,7 +129,7 @@ export function InvestmentView({ accounts, mfaConfigured, onChanged }: { account
             <span className={styles.metrics}><span><b className={item.change30DaysPercent >= 0 ? styles.positive : styles.negative}>{percent(item.change30DaysPercent)}</b><small>近 30 天净值变化</small></span><span><b>{money(item.minimumMinor)}</b><small>起购金额</small></span></span>
           </button>
           <div className={styles.cardFooter}><small>{item.status === "OPEN" ? "可申购" : "暂停申购"}</small><button className={styles.textButton} data-agent-id={`wealth-compare-${item.code}`} data-agent-permission="navigate" aria-pressed={compare.includes(item.id)} disabled={!compare.includes(item.id) && compare.length >= 3} onClick={() => setCompare(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])}>{compare.includes(item.id) ? "移出对比" : "加入对比"}</button></div>
-        </article>)}{!products.length && <p className={styles.empty}>没有符合条件的产品，可以调整金额或期限要求。</p>}</div>
+        </article>)}{!products.length && <p className={styles.empty}>暂无理财产品。</p>}</div>
       </>}
       {screen === "products" && product && <>
         <button className={styles.back} data-agent-id="wealth-back" data-agent-permission="navigate" onClick={() => setSelected(null)}><ArrowLeft size={16} />全部产品</button>
