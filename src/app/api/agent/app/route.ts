@@ -8,6 +8,11 @@ import { appAgentFailure } from "@/lib/app-agent-errors";
 import { withPreferenceScope } from "@/lib/preference-runtime";
 import { resolveVisitorMemoryScope } from "@/lib/visitor-memory";
 
+import { withAppAgentStream } from "@/lib/app-agent-stream";
+import type { AppAgentStreamEvent } from "@/lib/app-agent-stream-protocol";
+
+export const runtime = "nodejs";
+
 const schema = z.discriminatedUnion("command", [
   z.object({ command: z.literal("start"), message: z.string().trim().min(1).max(1000), page: pageSchema, model: z.string().min(1).max(160).optional() }),
   z.object({ command: z.enum(["allow", "pause", "cancel"]), id: z.string().uuid() }),
@@ -39,10 +44,41 @@ export async function POST(request: Request) {
     const who = await requireAppSession(request);
     const scope = await resolveVisitorMemoryScope(request, who.customerId);
     const input = schema.parse(await request.json());
-    return Response.json(await withPreferenceScope(scope, async () => {
+    const execute = () => withPreferenceScope(scope, async () => {
       if (input.command === "start") return startAppAgent(who, input.message, input.page, input.model ?? await getSessionModel(who) ?? undefined);
       if (input.command === "advance" || input.command === "refresh") return controlAppAgent(who, input.id, input.command, input.actionId, input.result);
       return controlAppAgent(who, input.id, input.command);
-    }));
+    });
+    if (!request.headers.get("accept")?.includes("text/event-stream")) return Response.json(await execute());
+    const abort = new AbortController();
+    const signal = AbortSignal.any([request.signal, abort.signal]);
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        let closed = false;
+        const emit = (event: AppAgentStreamEvent) => {
+          if (closed || signal.aborted) return;
+          try { controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`)); }
+          catch { closed = true; abort.abort(); }
+        };
+        const heartbeat = setInterval(() => {
+          if (closed || signal.aborted) return;
+          try { controller.enqueue(encoder.encode(": keepalive\n\n")); }
+          catch { closed = true; abort.abort(); }
+        }, 15000);
+        void withAppAgentStream({ emit, signal }, execute).then(run => emit({ type: "result", run })).catch(async error => {
+          if (!signal.aborted) {
+            const response = failure(error);
+            const result = await response.json();
+            emit({ type: "error", message: result.message });
+          }
+        }).finally(() => {
+          clearInterval(heartbeat);
+          if (!closed) { closed = true; try { controller.close(); } catch { /* Client disconnected. */ } }
+        });
+      },
+      cancel() { abort.abort(); },
+    });
+    return new Response(body, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "private, no-store, no-transform", "X-Accel-Buffering": "no" } });
   } catch (error) { return failure(error); }
 }

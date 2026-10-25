@@ -40,7 +40,7 @@ export function captureAppPage(root: HTMLElement): AppPage {
   return { ...body, version: fingerprint(JSON.stringify(body)) };
 }
 
-export type PageMotion = { x: number; y: number; phase: "moving" | "typing" | "clicking" };
+export type PageMotion = { x: number; y: number; phase: "moving" | "typing" | "clicking" | "resting" };
 type Presentation = { onMotion?: (motion: PageMotion | null) => void; reducedMotion?: boolean };
 const delay = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -50,9 +50,14 @@ export async function applyPageAction(root: HTMLElement, action: PageAction, sti
   if (blocked || !stillInControl()) return { status: blocked === "PAGE_CHANGED" ? "USER_CHANGED" : "BLOCKED", message: blocked ?? "CONTROL_PAUSED", page: before };
   if (action.type === "inspect") return { status: "OBSERVED", message: "当前页面", page: before };
   if (action.type === "question" || action.type === "handoff") throw new Error("USER_REQUIRED");
+  const reduced = presentation.reducedMotion ?? (typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   if (action.type === "scroll") {
-    const viewport = root.querySelector<HTMLElement>("[data-agent-viewport]");
-    viewport?.scrollBy({ top: (action.direction === "down" ? 1 : -1) * viewport.clientHeight * 0.65, behavior: "instant" });
+    const dialog = Array.from(root.querySelectorAll<HTMLElement>('[role="dialog"]')).filter(element => visible(element) && !element.closest("[data-agent-overlay]")).at(-1);
+    const viewport = dialog ?? root.querySelector<HTMLElement>("[data-agent-viewport]");
+    if (!viewport) return { status: "BLOCKED", message: "SCROLL_UNAVAILABLE", page: before };
+    viewport.scrollBy({ top: (action.direction === "down" ? 1 : -1) * viewport.clientHeight * 0.65, behavior: reduced ? "instant" : "smooth" });
+    await delay(reduced ? 0 : 350);
+    if (!stillInControl()) return { status: "USER_CHANGED", message: "用户已接管，滚动已暂停", page: captureAppPage(root) };
   } else {
     // Never interpolate model output into a selector, script, URL, or HTML.
     const element = Array.from(root.querySelectorAll<HTMLElement>("[data-agent-id]")).find((node) => node.dataset.agentId === action.target);
@@ -62,7 +67,6 @@ export async function applyPageAction(root: HTMLElement, action: PageAction, sti
     const frame = root.getBoundingClientRect();
     const rect = element.getBoundingClientRect();
     const point = { x: Math.min(rect.right - 8, rect.left + rect.width * .65) - frame.left, y: rect.top + rect.height / 2 - frame.top };
-    const reduced = presentation.reducedMotion ?? (typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
     element.setAttribute("data-agent-highlight", "true");
     presentation.onMotion?.({ ...point, phase: "moving" });
     try {

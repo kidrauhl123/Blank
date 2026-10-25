@@ -8,6 +8,9 @@ import { parsePreferenceCommand } from "@/lib/preference-command";
 import { TaskTimeline } from "@/features/voice-trace/TaskTimeline";
 import { useRealtimeVoice } from "@/features/realtime-voice/useRealtimeVoice";
 import { VoiceCall } from "@/features/realtime-voice/VoiceCall";
+import { AssistantMarkdown } from "./AssistantMarkdown";
+import { requestAppAgent } from "@/lib/app-agent-client";
+import type { AppAgentStreamEvent } from "@/lib/app-agent-stream-protocol";
 import { AssistantMark } from "./AssistantMark";
 import styles from "./FloatingAppAgent.module.css";
 
@@ -15,18 +18,12 @@ type Message = { role: "user" | "assistant"; text: string; runId?: string };
 type StepState = "ready" | "running" | "done" | "paused" | "blocked" | "waiting" | "cancelled" | "failed";
 type Step = { id: string; label: string; state: StepState };
 export type AppAgentTransport = {
-  request: (body: Record<string, unknown>) => Promise<AppAgentView>;
+  request: (body: Record<string, unknown>, onEvent?: (event: AppAgentStreamEvent) => void, signal?: AbortSignal) => Promise<AppAgentView>;
   restore: (id: string) => Promise<AppAgentView>;
   storageKey: string;
 };
-async function request(body: Record<string, unknown>): Promise<AppAgentView> {
-  const response = await fetch("/api/agent/app", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.message ?? "助手暂时不可用");
-  return result;
-}
 
-const bankTransport: AppAgentTransport = { request, storageKey: "bankpilot-app-agent-run", restore: async (id) => {
+const bankTransport: AppAgentTransport = { request: requestAppAgent, storageKey: "bankpilot-app-agent-run", restore: async (id) => {
   const response = await fetch(`/api/agent/app?id=${encodeURIComponent(id)}`);
   if (!response.ok) throw new Error("APP_AGENT_NOT_FOUND");
   return response.json();
@@ -58,6 +55,10 @@ export function FloatingAppAgent({ rootRef, configured, voiceEnabled = false, op
   useEffect(() => { if (!open) stopVoice(); }, [open, stopVoice]);
   const [run, setRun] = useState<AppAgentView | null>(null);
   const [busy, setBusy] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [draft, setDraft] = useState<{ id: string; text: string; finished: boolean } | null>(null);
+  const activeRequest = useRef<AbortController | null>(null);
+  const followOutput = useRef(true);
   const [error, setError] = useState("");
   const [pageName, setPageName] = useState("当前页面");
   const [motion, setMotion] = useState<PageMotion | null>(null);
@@ -73,6 +74,25 @@ export function FloatingAppAgent({ rootRef, configured, voiceEnabled = false, op
   const historyEnd = useRef<HTMLDivElement>(null);
   const lastOpenSignal = useRef(0);
   const answerInput = useRef<HTMLInputElement>(null);
+  const ask = useCallback(async (body: Record<string, unknown>) => {
+    const controller = new AbortController();
+    activeRequest.current = controller;
+    setGenerating(true); setDraft(null);
+    try {
+      const result = await transport.request(body, event => {
+        if (!alive.current || controller.signal.aborted) return;
+        if (event.type === "text-start") setDraft({ id: event.id, text: "", finished: false });
+        if (event.type === "text-delta") setDraft(current => ({ id: event.id, text: ((current?.id === event.id ? current.text : "") + event.delta).slice(0, 8000), finished: false }));
+        if (event.type === "text-end") setDraft(current => current?.id === event.id ? { ...current, finished: true } : current);
+      }, controller.signal);
+      if (controller.signal.aborted) throw new DOMException("Stopped", "AbortError");
+      if (alive.current) setDraft(null);
+      return result;
+    } finally {
+      if (activeRequest.current === controller) activeRequest.current = null;
+      if (alive.current) setGenerating(false);
+    }
+  }, [transport]);
   const markStep = useCallback((id: string, state: StepState) => {
     setSteps((items) => items.map((item) => item.id === id && !(state === "paused" && ["done", "blocked"].includes(item.state)) ? { ...item, state } : item));
   }, []);
@@ -89,6 +109,7 @@ export function FloatingAppAgent({ rootRef, configured, voiceEnabled = false, op
     if (!alive.current) return;
     viewRef.current = next;
     setRun(next);
+    if (["QUESTION", "CONSENT", "HANDOFF", "PAUSED"].includes(next.status)) setMotion(null);
     if (next.pending) {
       const pending = next.pending;
       const step: Step = { id: pending.id, label: pending.action.type === "question" ? pending.action.question : pending.action.description,
@@ -103,7 +124,8 @@ export function FloatingAppAgent({ rootRef, configured, voiceEnabled = false, op
       control.current = false;
       paused.current = false;
       setMotion(null);
-      setOpen(true);
+      const confirmationVisible = next.status === "COMPLETED" && next.controlGranted && rootRef.current && captureAppPage(rootRef.current).controls.some(item => item.permission === "human" && /^(?:本人)?确认|授权并执行/u.test(item.label));
+      setOpen(!confirmationVisible);
       setMessages(items => {
         const message: Message = { role: "assistant", text: next.message, runId: next.id };
         return items.some(item => item.runId === next.id) ? items.map(item => item.runId === next.id ? message : item) : [...items, message];
@@ -113,7 +135,7 @@ export function FloatingAppAgent({ rootRef, configured, voiceEnabled = false, op
       // already shown once and should not re-open the panel on every visit.
       if (!restoredFinished) sessionStorage.removeItem(storageKey);
     }
-  }, [transport, storageKey]);
+  }, [transport, storageKey, rootRef]);
 
   const pause = useCallback(() => {
     if (!control.current) return;
@@ -155,14 +177,16 @@ export function FloatingAppAgent({ rootRef, configured, voiceEnabled = false, op
     window.addEventListener("blur", pause);
     document.addEventListener("visibilitychange", hidden);
     return () => {
-      alive.current = false; control.current = false; lifecycleGeneration.current++;
+      alive.current = false; control.current = false; lifecycleGeneration.current++; activeRequest.current?.abort();
       events.forEach((name) => window.removeEventListener(name, intervene, true));
       window.removeEventListener("blur", pause);
       document.removeEventListener("visibilitychange", hidden);
     };
   }, [pause, receive, transport, storageKey]);
 
-  useEffect(() => { historyEnd.current?.scrollIntoView({ block: "nearest" }); }, [messages, run?.message, open]);
+  useEffect(() => {
+    if (open && followOutput.current) historyEnd.current?.scrollIntoView({ block: "nearest" });
+  }, [messages, run?.message, open, draft]);
 
   useEffect(() => {
     if (!run?.pending || run.status !== "ACTION" || !control.current || worker.current || !rootRef.current) return;
@@ -174,11 +198,11 @@ export function FloatingAppAgent({ rootRef, configured, voiceEnabled = false, op
       let observed = false;
       try {
         const result = await applyPageAction(rootRef.current!, action.action, () => control.current && generation.current === token && alive.current,
-          { onMotion: (point) => { if (alive.current && (point === null || control.current && generation.current === token)) setMotion(point); } });
+          { onMotion: (point) => { if (alive.current && (point === null || control.current && generation.current === token)) setMotion(current => point ?? (current ? { ...current, phase: "resting" } : null)); } });
         observed = true;
         if (alive.current && control.current && generation.current === token) markStep(action.id, result.status === "BLOCKED" ? "blocked" : result.status === "USER_CHANGED" ? "paused" : "done");
         if (!control.current || generation.current !== token) return;
-        await receive(await transport.request({ command: "advance", id: run.id, actionId: action.id, result }));
+        await receive(await ask({ command: "advance", id: run.id, actionId: action.id, result }));
       } catch (reason) {
         pause();
         if (!observed) markStep(action.id, "failed");
@@ -188,12 +212,13 @@ export function FloatingAppAgent({ rootRef, configured, voiceEnabled = false, op
         if (alive.current) setBusy(false);
       }
     })();
-  }, [run, busy, rootRef, receive, pause, transport, markStep]);
+  }, [run, busy, rootRef, receive, pause, ask, markStep]);
 
   const send = async (text = input) => {
     const message = text.trim();
     const preferenceCommand = parsePreferenceCommand(message);
     if (!message || busy || !rootRef.current || (!configured && !preferenceCommand)) return;
+    followOutput.current = true;
     setInput(""); setError(""); setBusy(true);
     setMessages((items) => [...items, { role: "user", text: message }]);
     const current = viewRef.current;
@@ -202,7 +227,7 @@ export function FloatingAppAgent({ rootRef, configured, voiceEnabled = false, op
         paused.current = false;
         control.current = current.controlGranted;
         markStep(current.pending.id, "done");
-        await receive(await transport.request({ command: "advance", id: current.id, actionId: current.pending.id,
+        await receive(await ask({ command: "advance", id: current.id, actionId: current.pending.id,
           result: { status: "USER_ANSWERED", message, page: captureAppPage(rootRef.current) } }));
       } else {
         control.current = false; paused.current = false; endRequested.current = false; generation.current++;
@@ -210,9 +235,9 @@ export function FloatingAppAgent({ rootRef, configured, voiceEnabled = false, op
         if (current?.pending) await transport.request({ command: "cancel", id: current.id });
         const page = captureAppPage(rootRef.current);
         setPageName(page.name);
-        await receive(await transport.request({ command: "start", message, page }));
+        await receive(await ask({ command: "start", message, page }));
       }
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "助手未能启动"); }
+    } catch (reason) { setError(reason instanceof DOMException && reason.name === "AbortError" ? "已停止生成。" : reason instanceof Error ? reason.message : "助手未能启动"); }
     finally { setBusy(false); }
   };
   const continueRun = async () => {
@@ -222,10 +247,10 @@ export function FloatingAppAgent({ rootRef, configured, voiceEnabled = false, op
     try {
       let next: AppAgentView;
       if (!current.controlGranted && current.status !== "HANDOFF") {
-        next = await transport.request({ command: "allow", id: current.id });
+        next = await ask({ command: "allow", id: current.id });
       } else {
         markStep(current.pending.id, current.status === "HANDOFF" ? "done" : "cancelled");
-        next = await transport.request({ command: "refresh", id: current.id, actionId: current.pending.id,
+        next = await ask({ command: "refresh", id: current.id, actionId: current.pending.id,
           result: { status: "USER_CHANGED", message: "用户请求继续，请按当前页面重新判断剩余任务，不重放旧动作。", page: captureAppPage(rootRef.current) } });
       }
       control.current = next.controlGranted;
@@ -262,17 +287,15 @@ export function FloatingAppAgent({ rootRef, configured, voiceEnabled = false, op
   };
   const question = run?.pending?.action.type === "question" ? run.pending.action : null;
   const active = Boolean(run?.pending);
-  const visibleSteps: Step[] = run?.timeline ? run.timeline.map((event) => ({ id: event.id, label: event.title, state: event.state })) : steps;
   const status = run?.status === "PAUSED" ? "你已接管 · 已暂停" : run?.status === "HANDOFF" ? "等待你确认或验证"
     : busy ? run?.message ?? "正在理解需求" : run?.message ?? "";
 
   return <div className={`${styles.root} ${presentation === "page" ? styles.pageRoot : ""}`} data-agent-overlay>
     {/* 助手的手和用户的手是同一种形状：画布上的一个圆形触点。 */}
     {motion && <div className={styles.cursor} data-phase={motion.phase} style={{ left: motion.x, top: motion.y }} aria-hidden="true"><span>{motion.phase === "typing" ? "正在填写" : motion.phase === "clicking" ? "点击" : "BankPilot"}</span></div>}
-    {!open && active && presentation !== "page" && <StepList items={visibleSteps} compact />}
     {/* 只在 agent 真的有事要报告时出现；平时首页的 AI 入口是底部导航那一个 */}
     {!open && active && <div className={styles.floating}>
-      <button className={styles.trigger} onClick={expand} aria-label={presentation === "page" ? "查看 AI 助手会话" : "打开悬浮助手"}><AssistantMark size={18} /><span>{status}</span></button>
+      <button className={styles.trigger} onClick={expand} aria-label={presentation === "page" ? "查看 AI 助手会话" : "打开悬浮助手"}><AssistantMark size={18} /><span><b>{run?.status === "PAUSED" ? "已暂停" : run?.status === "HANDOFF" ? "请你确认" : "助手正在操作"}</b><small>{status}</small></span></button>
       {run?.status === "PAUSED" || run?.status === "HANDOFF" ? <button onClick={continueRun} disabled={busy} aria-label="继续代操作"><Play size={17} /></button> : run?.controlGranted && run.status === "ACTION" ? <button onClick={pause} aria-label="暂停代操作"><Pause size={17} /></button> : null}
       <button onClick={cancel} aria-label="结束代操作"><Square size={15} /></button>
     </div>}
@@ -280,20 +303,21 @@ export function FloatingAppAgent({ rootRef, configured, voiceEnabled = false, op
       <header>{presentation === "page" && <button onClick={closeConversation} aria-label="返回银行页面"><ArrowLeft size={21} /></button>}<span><AssistantMark size={19} /><b>{presentation === "page" ? "AI 助手" : "BankPilot"}</b></span>{presentation === "floating" && <><button onClick={closeConversation} aria-label="收起助手"><ChevronDown size={21} /></button><button onClick={closeConversation} aria-label="关闭助手面板"><X size={19} /></button></>}</header>
       {voiceOpen ? <VoiceCall voice={voice} close={() => { voice.stop(); setVoiceOpen(false); }} continueTask={message => { voice.stop(); setVoiceOpen(false); void send(message); }} /> : <>
       <p className={styles.context}>已共享：{pageName} · 密码和验证码不共享</p>
-      <div className={styles.messages}>
+      <div className={styles.messages} onScroll={event => { const node = event.currentTarget; followOutput.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80; }}>
         {!messages.length && !run && <><p className={styles.intro}>告诉我你想查询或办理什么。</p><div className={styles.choices}>{["查一下我的余额", "分析本月账单", "比较一下理财产品"].map(prompt => <button key={prompt} disabled={busy || !configured} onClick={() => send(prompt)}>{prompt}</button>)}</div></>}
-        {messages.map((message, index) => <p key={index} className={message.role === "user" ? styles.user : styles.assistant}>{message.text}</p>)}
-        {run?.pending && <p className={styles.assistant}>{run.message}</p>}
-        {run?.timeline ? <TaskTimeline events={run.timeline} /> : <StepList items={steps} />}
+        {messages.map((message, index) => message.role === "user" ? <p key={index} className={styles.user}>{message.text}</p> : <div key={index} className={styles.assistant}><AssistantMarkdown text={message.text} /></div>)}
+        {draft?.text && <div className={styles.assistant} aria-busy={generating} data-streaming={generating && !draft.finished}><AssistantMarkdown text={draft.text} /></div>}
+        {run?.pending && !generating && <div className={styles.assistant}><AssistantMarkdown text={run.message} /></div>}
+        {(run?.timeline?.length || steps.length > 0) ? <details className={styles.audit}><summary>查看操作记录</summary>{run?.timeline ? <TaskTimeline events={run.timeline} /> : <StepList items={steps} />}</details> : null}
         {question && <div className={styles.choices} aria-label={question.question}>{question.options.map((option) => <button key={option} disabled={busy} onClick={() => option === "自行输入" ? answerInput.current?.focus() : void send(option)}>{option}</button>)}<small>也可以在下方直接输入，无默认选项。</small></div>}
-        {run?.status === "CONSENT" && <div className={styles.consent}><p>是否允许我接管页面？你操作页面时我会暂停，业务确认与强验证由你完成。</p><button disabled={busy} onClick={continueRun}>允许代操作</button><button disabled={busy} onClick={cancel}>暂不允许</button></div>}
+        {run?.status === "CONSENT" && <div className={styles.consent}><p>我会回到银行页面，点击和填写给你看。你随时可以接手，最终确认由你完成。</p><button disabled={busy} onClick={continueRun}>开始页面操作</button><button disabled={busy} onClick={cancel}>暂不允许</button></div>}
         {(run?.status === "PAUSED" || run?.status === "HANDOFF") && !question && <div className={styles.controls}><button disabled={busy} onClick={continueRun}>{run.controlGranted ? "继续 · 重新读取页面" : run.status === "HANDOFF" ? "我已操作 · 查看页面" : "允许代操作"}</button><button disabled={busy} onClick={cancel}>结束</button></div>}
-        {busy && <p className={styles.progress}>正在处理…</p>}
+        {busy && !draft?.text && <p role="status" className={styles.progress}>正在处理…</p>}
         {error && <p role="alert" className={styles.error}>{error}</p>}
         {!configured && <p className={styles.error}>助手模型暂不可用；仍可输入明确的偏好管理指令，或通过页面办理业务。</p>}
         <div ref={historyEnd} />
       </div>
-      <form onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}><input ref={answerInput} aria-label={presentation === "page" ? "向 AI 助手描述需求或回答问题" : "向悬浮助手描述需求或回答问题"} placeholder={question ? "选择选项，或直接输入…" : "描述你想办理的业务…"} value={input} onChange={(event) => setInput(event.target.value)} maxLength={1000} />{voiceEnabled && <button type="button" className={styles.micButton} aria-label="开始语音通话" disabled={busy || active} onClick={() => { pause(); setVoiceOpen(true); void voice.start(); }}><Phone size={18} /></button>}<button aria-label={presentation === "page" ? "发送给 AI 助手" : "发送给悬浮助手"} disabled={(!configured && !parsePreferenceCommand(input)) || busy || !input.trim()}><Send size={18} /></button></form>
+      <form onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}><input ref={answerInput} aria-label={presentation === "page" ? "向 AI 助手描述需求或回答问题" : "向悬浮助手描述需求或回答问题"} placeholder={question ? "选择选项，或直接输入…" : "描述你想办理的业务…"} value={input} onChange={(event) => setInput(event.target.value)} maxLength={1000} />{voiceEnabled && <button type="button" className={styles.micButton} aria-label="开始语音通话" disabled={busy || active} onClick={() => { pause(); setVoiceOpen(true); void voice.start(); }}><Phone size={18} /></button>}{generating ? <button type="button" aria-label="停止生成" onClick={() => activeRequest.current?.abort()}><Square size={17} /></button> : <button aria-label={presentation === "page" ? "发送给 AI 助手" : "发送给悬浮助手"} disabled={(!configured && !parsePreferenceCommand(input)) || busy || !input.trim()}><Send size={18} /></button>}</form>
       </>}
     </section>}
   </div>;

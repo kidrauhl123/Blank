@@ -53,7 +53,7 @@ export function appPageTools() {
   ];
 }
 
-export function createAppAgentHarness(checkpointer: BaseCheckpointSaver, modelOverride?: ChatOpenAI | ChatDeepSeek, selectedModel?: string) {
+export function createAppAgentHarness(checkpointer: BaseCheckpointSaver, modelOverride?: ChatOpenAI | ChatDeepSeek, selectedModel?: string, streaming = false) {
   if (!modelOverride && !getAIStatus().configured) throw new AIConfigurationError();
   const modelName = modelOverride?.model ?? selectedModel ?? process.env.AI_MODEL!;
   const deepseek = modelOverride ? modelOverride instanceof ChatDeepSeek : new URL(process.env.AI_BASE_URL!).hostname === "api.deepseek.com";
@@ -66,6 +66,7 @@ export function createAppAgentHarness(checkpointer: BaseCheckpointSaver, modelOv
   const modelOptions = {
     model: modelName, apiKey: process.env.AI_API_KEY!,
     configuration: { baseURL: process.env.AI_BASE_URL?.replace(/\/$/, "") },
+    streaming,
     temperature: 0, maxTokens: 4096, maxRetries: 0, timeout: Number(process.env.AI_TIMEOUT_MS ?? 30000),
     // DeepSeek defaults to thinking mode, whose tool turns require replaying
     // reasoning_content. The installed provider adapter does not serialize it

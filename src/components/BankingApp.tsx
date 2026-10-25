@@ -144,11 +144,13 @@ export function BankingApp() {
       </nav>
       <FloatingAppAgent rootRef={appRoot} configured={data.ai.configured} voiceEnabled={data.features?.voiceCalls} openSignal={assistantOpen} closeSignal={assistantClose} onOpenChange={setAssistantVisible} presentation="page" />
     </section>
+    <div inert={assistantVisible}>
     {dialog === "deposit" && account && <DepositModal account={account} busy={actionBusy} close={() => setDialog(null)} done={() => afterAction("入金已完成。")} setBusy={setActionBusy} />}
     {dialog === "transfer" && account && <TransferModal account={account} mfaConfigured={data.customer.mfa_configured} prepared={prepared} setPrepared={setPrepared} busy={actionBusy} setBusy={setActionBusy} close={closeTransfer} code={mfaCode} setCode={setMfaCode} done={() => afterAction("转账已完成，请在明细中查看回执。")} />}
     {dialog === "card" && account && <CardModal account={account} busy={actionBusy} setBusy={setActionBusy} close={() => setDialog(null)} done={() => afterAction("虚拟卡已申请成功。", "cards")} />}
     {dialog === "profile" && <ProfileModal data={data} busy={logoutBusy} close={() => setDialog(null)} logout={logout} />}
     {dialog === "card-details" && <CardDetailsModal card={data.cards.find(card => card.id === selectedCard)} close={() => setDialog(null)} done={() => afterAction("卡片已锁定。")} />}
+    </div>
   </main>;
 }
 

@@ -14,22 +14,26 @@ import { parsePreferenceCommand } from "./preference-command";
 import { applyConversationPreference } from "./conversation-preferences";
 import { guardQuestion, needsHumanHandoff } from "./app-agent-guards";
 
+import { currentAppAgentStream } from "./app-agent-stream";
+
 type Identity = { customerId: string; sessionHash: string };
 type Row = Omit<AppAgentView, "model"> & { model: string | null; expires_at: Date; memory_owner_id: string | null; memory_profile_key: string | null };
 const harnesses = new Map<string, Promise<ReturnType<typeof createAppAgentHarness>>>();
 async function getHarness(model: string) {
   assertAIModelEnabled(model);
-  const cached = harnesses.get(model);
+  const streaming = Boolean(currentAppAgentStream());
+  const cacheKey = `${model}:${streaming ? "stream" : "json"}`;
+  const cached = harnesses.get(cacheKey);
   if (cached) {
-    harnesses.delete(model); harnesses.set(model, cached);
+    harnesses.delete(cacheKey); harnesses.set(cacheKey, cached);
     return cached;
   }
   const harness = (async () => {
       const saver = new PostgresSaver(db, undefined, { schema: "langgraph" });
       await saver.setup();
-      return createAppAgentHarness(saver, undefined, model);
-    })().catch((error) => { if (harnesses.get(model) === harness) harnesses.delete(model); throw error; });
-  harnesses.set(model, harness);
+      return createAppAgentHarness(saver, undefined, model, streaming);
+    })().catch((error) => { if (harnesses.get(cacheKey) === harness) harnesses.delete(cacheKey); throw error; });
+  harnesses.set(cacheKey, harness);
   if (harnesses.size > 4) harnesses.delete(harnesses.keys().next().value!);
   return harness;
 }
@@ -69,7 +73,27 @@ async function invoke(identity: Identity, id: string, input: Parameters<ReturnTy
   // The SDK may read several Skills in one model turn. Concurrency=1 in the
   // current graph scheduler can leave a second Send unexecuted. These reads
   // are safe in parallel; page actions still must yield exactly one interrupt.
-  const result = await graph.invoke(input, { configurable: { thread_id: id, bank_customer_id: identity.customerId }, recursionLimit: 60, maxConcurrency: 4 });
+  const stream = currentAppAgentStream();
+  const started = new Set<string>();
+  const lengths = new Map<string, number>();
+  const result = await graph.invoke(input, {
+    configurable: { thread_id: id, bank_customer_id: identity.customerId }, recursionLimit: 60, maxConcurrency: 4,
+    signal: stream?.signal,
+    callbacks: stream ? [{
+      handleLLMNewToken(token: string, _indices: unknown, messageId: string) {
+        if (!token || stream.signal.aborted) return;
+        const used = lengths.get(messageId) ?? 0;
+        const delta = token.slice(0, Math.max(0, 8000 - used));
+        if (!delta) return;
+        if (!started.has(messageId)) { started.add(messageId); stream.emit({ type: "text-start", id: messageId }); }
+        lengths.set(messageId, used + delta.length);
+        stream.emit({ type: "text-delta", id: messageId, delta });
+      },
+      handleLLMEnd(_output: unknown, messageId: string) {
+        if (started.has(messageId)) stream.emit({ type: "text-end", id: messageId });
+      },
+    }] : undefined,
+  });
   const interrupts = (result as unknown as Record<string, unknown>)[INTERRUPT] as Array<{ value: { kind: string; id: string; action: unknown } }> | undefined;
   const requests = interrupts?.filter((item) => item.value.kind === "APP_PAGE_ACTION") ?? [];
   if (requests.length !== (interrupts?.length ?? 0)) throw new Error("APP_AGENT_UNSUPPORTED_INTERRUPT");
@@ -83,7 +107,7 @@ async function invoke(identity: Identity, id: string, input: Parameters<ReturnTy
   // completed conversation, even when the framework returns normally.
   const answered = new Set(result.messages.flatMap((message) => "tool_call_id" in message ? [message.tool_call_id] : []));
   if (!pending && last && "tool_calls" in last && Array.isArray(last.tool_calls) && last.tool_calls.some((call: { id?: string }) => !answered.has(call.id))) throw new Error("APP_AGENT_INCOMPLETE_TOOL_CYCLE");
-  const content = typeof last?.content === "string" ? last.content.slice(0, 1500) : "";
+  const content = typeof last?.content === "string" ? last.content.slice(0, 8000) : "";
   const humanHandoff = !pending && granted && context && needsHumanHandoff(context.page, context.priorAction, context.resultStatus);
   const message = pending ? pending.action.type === "question" ? pending.action.question : pending.action.description
     : humanHandoff ? "已到本人确认页面，请核对页面上的业务信息后自行确认；助手没有执行银行确认。"
