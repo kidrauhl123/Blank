@@ -9,7 +9,7 @@ const definitions = [
 ] as const;
 const products = definitions.map(([name, kind, riskLevel, minimumMinor, holdingDays], index) => {
   const rules: InvestmentRules = { kind, holdingDays, seed: index + 101, driftBps: 200, volatilityBps: 10, purchaseFeeBps: 0, redemptionFeeBps: 0, epoch: "2026-01-01", modelVersion: "wealth-v1" };
-  return { id: `02100000-0000-4000-8000-00000000000${index + 1}`, code: `SIM-${index + 1}`, name, issuer: "BankPilot 模拟发行", kind, riskLevel, minimumMinor, holdingDays,
+  return { id: `02100000-0000-4000-8000-00000000000${index + 1}`, code: `SIM-${index + 1}`, name, issuer: "BankPilot", kind, riskLevel, minimumMinor, holdingDays,
     purchaseFeeBps: 0, redemptionFeeBps: 0, status: "OPEN", ...investmentPriceSeries(rules, "2026-10-22"), change30DaysPercent: 0.5, simulated: true, source: "比赛模拟" };
 });
 async function setup(page: Page) {
@@ -40,7 +40,7 @@ test("six products can be filtered, compared and opened without a bank write", a
   await expect(page.getByText("0 只符合条件")).toBeVisible();
   await page.getByLabel("可投入金额（元）").fill("");
   await page.locator('[data-agent-id="wealth-product-SIM-1"]').click();
-  await expect(page.getByRole("img", { name: /零钱灵活近30天模拟净值走势/ })).toBeVisible();
+  await expect(page.getByRole("img", { name: /零钱灵活近30天净值走势/ })).toBeVisible();
   expect(writes).toBe(0);
 });
 
@@ -60,6 +60,6 @@ test("preparing a subscription cannot submit money or expose OTP to the assistan
   await expect(confirm).toHaveAttribute("data-agent-permission", "human");
   await expect(confirm).toBeDisabled();
   await expect(page.getByLabel("理财验证器动态码")).toHaveAttribute("data-agent-private", "true");
-  await expect(page.getByRole("dialog", { name: "核对模拟申购" })).toContainText("红色操作");
+  await expect(page.getByRole("dialog", { name: "核对申购" })).toContainText("红色操作");
   expect(commits).toBe(0);
 });

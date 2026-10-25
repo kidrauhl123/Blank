@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const DAILY_REVIEW_SKILL = `---
 name: bank-daily-review
-description: 每日检查模拟账户，按服务端事实挑选需要关注的事项，解释 Jev 唤醒结果。
+description: 每日检查账户，按服务端事实挑选需要关注的事项，解释 Jev 唤醒结果。
 ---
 # 每日账户巡检
 后台由定时任务触发，Jev 只判断是否需要主模型进一步检查。它不是授权或资金操作工具。

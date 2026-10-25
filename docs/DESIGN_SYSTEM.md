@@ -5,7 +5,7 @@ transparent transaction details, high contrast, and accessible zoom—without co
 Wise's proprietary font, logo, or exact brand palette.
 
 Tokens live in `src/app/globals.css`; this file must stay consistent with that source.
-Last synced: 2026-10-20.
+Last synced: 2026-10-25.
 
 ## Canvas
 
@@ -34,14 +34,16 @@ Last synced: 2026-10-20.
 
 - Product font: Inter Variable (SIL Open Font License), with PingFang SC, Noto Sans CJK SC,
   and Microsoft YaHei as Chinese fallbacks.
-- Sizes are fixed tokens: 12 / 14 / 16 / 20 / 24 px. Body copy is 14 or 16 px;
-  captions and technical metadata are 12 px; the largest display value is 24 px.
+- Text sizes are fixed tokens: 12 / 14 / 16 / 20 / 24 px. Body copy is 14 or 16 px;
+  captions and technical metadata are 12 px. Asset totals and receipt amounts use a
+  separate 36 px display token to preserve hierarchy in the user-provided app reference.
 - Monospace is reserved for operation IDs, tokens, statuses, and audit records.
 - Display text uses a tight line height and letter spacing; body text stays open and readable.
 
 ## Visual language
 
-- Ink `#262722` anchors financial information and primary actions; it is also the accent.
+- Ink `#262722` anchors financial information. Lime `#d4ed87` marks primary actions,
+  with dark `#26321a` labels; secondary actions keep neutral fills.
 - Paper `#efede8` is the app surface; desk `#e3e0d9` is what surrounds the canvas;
   `#ffffff` is the raised card surface.
 - Status colors are used only for status: positive `#386451`, warning `#8b631c`,
@@ -50,11 +52,15 @@ Last synced: 2026-10-20.
   with no border; dividers are lines that separate rows, not containers. Inner elements
   do not repeat the outer container's method.
 - Spacing uses only 4 / 8 / 12 / 16 / 24 / 32 / 48 px. Radii use at most two tiers:
-  `12px` for controls, `24px` for containers.
+  `16px` for controls, `28px` for containers.
 - Dark mode switches variables only, follows the system setting, and keeps the same
   container method.
 
 ## Product writing
+
+- The login entrance explains the competition environment once. Routine screens,
+  transaction names, product facts and receipts use plain business names. Data provenance
+  remains in internal flags; shared-account effects and authorization requirements stay visible.
 
 - The bottom AI Assistant entry is a full conversation page: edge to edge within the
   phone canvas and above the bottom navigation, with no dimmed backdrop or floating-card

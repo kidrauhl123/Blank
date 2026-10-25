@@ -103,10 +103,10 @@ export function ScheduledTasks() {
             {kind === "MONTHLY_REPORT" && <p className={styles.muted}>生成执行日期前一个自然月的账面收支报告，包含转账等资金往来。</p>}
             {kind === "SUBSCRIPTION_CHECK" && <p className={styles.muted}>检查已保存订阅中未来 72 小时的到期记录；没有到期记录时仅保存检查结果。</p>}
             {kind === "DAILY_AI_REVIEW" && <>
-              <p className={styles.muted}>每日检查账户、近期提醒、订阅与模拟持仓，先判断是否需要进一步分析。有新关注事项时才通知，仅提供检查结果。</p>
+              <p className={styles.muted}>每日检查账户、近期提醒、订阅与持仓，先判断是否需要进一步分析。有新关注事项时才通知，仅提供检查结果。</p>
               <label>关注事项（选填）<textarea name="message" maxLength={500} rows={3} placeholder="例如：关注近期提醒和订阅扣费准备" /></label>
               {data.dailyReview && (!data.dailyReview.jev.configured || !data.dailyReview.mainModel.configured) && <p className={styles.warning}>分析服务尚未配置齐全，任务可保存，执行需等待配置完成。</p>}
-              <p className={styles.muted}>使用当前共享模拟账户的数据与已保存提醒，不读取浏览器私有记忆；本任务不预留资金或下单。</p>
+              <p className={styles.muted}>使用当前共享账户的数据与已保存提醒，不读取浏览器私有记忆；本任务不预留资金或下单。</p>
             </>}
             <div className={styles.row}><label>执行频率<select value={frequency} onChange={event => setFrequency(event.target.value)} disabled={kind === "MONTHLY_REPORT" || kind === "DAILY_AI_REVIEW"}>{Object.entries(frequencyNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>首次执行时间<input type="datetime-local" name="startsAt" required /></label></div>
             <p className={styles.muted}>按月执行沿用首次日期，遇到短月在月末执行。服务恢复后补跑一次，暂停期间的周期不补跑。</p>

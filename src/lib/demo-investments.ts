@@ -18,7 +18,7 @@ async function post(client: PoolClient, customerId: string, accountId: string, c
   await client.query("UPDATE accounts SET available_balance_minor=available_balance_minor+$2,version=version+1 WHERE id=$1", [accountId, amount]);
   await client.query("UPDATE accounts SET available_balance_minor=available_balance_minor-$2,version=version+1 WHERE id=$1", [counterparty, amount]);
   await client.query(`INSERT INTO bank_transactions(account_id,merchant_name,category,amount_minor,occurred_at,metadata)
-    VALUES($1,$2,$3,$4,$5,$6::jsonb)`, [accountId, name, operationId ? "模拟理财" : "入金", amount, time,
+    VALUES($1,$2,$3,$4,$5,$6::jsonb)`, [accountId, name, operationId ? "理财" : "入金", amount, time,
     JSON.stringify({ demo: true, source: "DEMO_SEED", customerId, operationId, ledgerReference: reference })]);
 }
 
@@ -34,7 +34,7 @@ async function seedProfile(profileKey: (typeof DEMO_PROFILES)[number]["key"], cu
     const day = (await client.query<{ day: string }>("SELECT business_date::text AS day FROM investment_simulation_clocks WHERE customer_id=$1 FOR UPDATE", [customerId])).rows[0].day;
     const plan = buildDemoInvestmentPlan(profileKey, products, day);
     await client.query(`INSERT INTO accounts(customer_id,name,account_type,masked_no,currency,available_balance_minor,status,system_code)
-      VALUES(NULL,'模拟理财托管','SETTLEMENT','INTERNAL','CNY',0,'ACTIVE','INVESTMENT_CUSTODY')
+      VALUES(NULL,'理财托管','SETTLEMENT','INTERNAL','CNY',0,'ACTIVE','INVESTMENT_CUSTODY')
       ON CONFLICT(system_code) WHERE system_code IS NOT NULL DO NOTHING`);
     const system = (await client.query<{ id: string; system_code: string }>("SELECT id,system_code FROM accounts WHERE system_code IN ('INVESTMENT_CUSTODY','DEMO_SEED_CLEARING')")).rows;
     const custody = system.find(row => row.system_code === "INVESTMENT_CUSTODY")?.id;
@@ -42,7 +42,7 @@ async function seedProfile(profileKey: (typeof DEMO_PROFILES)[number]["key"], cu
     if (!custody || !clearing) throw new Error("DEMO_INVESTMENT_ACCOUNT_MISSING");
     const locked = (await client.query<{ id: string; customer_id: string | null; status: string }>("SELECT id,customer_id,status FROM accounts WHERE id=ANY($1::uuid[]) ORDER BY id FOR UPDATE", [[account.id, custody, clearing]])).rows;
     if (!locked.some(row => row.id === account.id && row.customer_id === customerId && row.status === "ACTIVE")) throw new Error("DEMO_INVESTMENT_ACCOUNT_MISSING");
-    await post(client, customerId, account.id, clearing, plan.fundingMinor, "模拟理财期初资金", plan.fundedOn, `DEMO-INV-${profileKey}-CAPITAL`);
+    await post(client, customerId, account.id, clearing, plan.fundingMinor, "理财期初资金", plan.fundedOn, `DEMO-INV-${profileKey}-CAPITAL`);
 
     const buy = async (lot: Lot) => {
       const positionId = randomUUID();
@@ -51,7 +51,7 @@ async function seedProfile(profileKey: (typeof DEMO_PROFILES)[number]["key"], cu
         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,'ACTIVE',$10)`,
       [positionId, customerId, account.id, lot.product.id, lot.quantityMicro, lot.amountMinor, lot.purchasedOn, lot.unlocksOn, JSON.stringify(lot.terms), time]);
       const operationId = `DEMO-INV-${profileKey}-${lot.key}-BUY`;
-      await post(client, customerId, account.id, custody, -lot.amountMinor, `${lot.product.name} · 模拟历史申购`, lot.purchasedOn, `LED-${operationId}`, operationId);
+      await post(client, customerId, account.id, custody, -lot.amountMinor, `${lot.product.name} · 申购`, lot.purchasedOn, `LED-${operationId}`, operationId);
       const receipt: InvestmentReceipt = { operationId, status: "SUCCEEDED", side: "SUBSCRIBE", productName: lot.product.name, amountMinor: lot.amountMinor,
         feeMinor: lot.feeMinor, settlementMinor: lot.amountMinor - lot.feeMinor, quantityMicro: lot.quantityMicro, navMicros: lot.navMicros,
         businessDate: lot.purchasedOn, positionId, ledgerReference: `LED-${operationId}` };
@@ -60,7 +60,7 @@ async function seedProfile(profileKey: (typeof DEMO_PROFILES)[number]["key"], cu
     };
     const closedPositionId = await buy(plan.closed);
     const operationId = `DEMO-INV-${profileKey}-past-SELL`;
-    await post(client, customerId, account.id, custody, plan.redemption.settlementMinor, `${plan.closed.product.name} · 模拟历史赎回`, plan.redemption.redeemedOn, `LED-${operationId}`, operationId);
+    await post(client, customerId, account.id, custody, plan.redemption.settlementMinor, `${plan.closed.product.name} · 赎回`, plan.redemption.redeemedOn, `LED-${operationId}`, operationId);
     const redemption: InvestmentReceipt = { operationId, status: "SUCCEEDED", side: "REDEEM", productName: plan.closed.product.name,
       amountMinor: plan.redemption.amountMinor, feeMinor: plan.redemption.feeMinor, settlementMinor: plan.redemption.settlementMinor,
       quantityMicro: plan.closed.quantityMicro, navMicros: plan.redemption.navMicros, businessDate: plan.redemption.redeemedOn,
@@ -69,7 +69,7 @@ async function seedProfile(profileKey: (typeof DEMO_PROFILES)[number]["key"], cu
     await client.query("UPDATE investment_positions SET status='REDEEMED' WHERE id=$1", [closedPositionId]);
     for (const lot of [...plan.holdings].sort((a, b) => a.purchasedOn.localeCompare(b.purchasedOn))) await buy(lot);
     await client.query("UPDATE demo_profiles SET investment_seeded_at=clock_timestamp() WHERE profile_key=$1 AND customer_id=$2", [profileKey, customerId]);
-    await writeAudit({ customerId, eventType: "DEMO_INVESTMENTS_SEEDED", actorType: "SYSTEM", summary: "补齐预置模拟理财持仓与历史交易",
+    await writeAudit({ customerId, eventType: "DEMO_INVESTMENTS_SEEDED", actorType: "SYSTEM", summary: "补齐预置理财持仓与历史交易",
       evidence: { source: "DEMO_SEED", profileKey, currentPositions: 2, redeemedPositions: 1, cashDeltaMinor: 0, fundingMinor: plan.fundingMinor } }, client);
   });
 }

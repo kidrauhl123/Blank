@@ -37,6 +37,6 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: () => Promise
     {error && <div className={styles.formError} role="alert">{error}</div>}
     {!profiles && error && <button className={styles.authSubmit} onClick={() => { setError(""); loadProfiles().then(setProfiles).catch(() => setError("暂时无法加载用户，请重试。")); }}>重新加载</button>}
     {busy && <p className={styles.demoHint} aria-live="polite">正在进入…</p>}
-    <small className={styles.authLegal}>模拟账户共享测试数据，不连接真实银行。</small>
+    <small className={styles.authLegal}>比赛体验环境，数据共享，不涉及真实银行或资金。</small>
   </section></main>;
 }

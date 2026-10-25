@@ -9,14 +9,19 @@
   --space-6: 32px;
   --space-7: 48px;
 
-  --radius-control: 12px;
-  --radius-container: 24px;
+  --radius-control: 16px;
+  --radius-container: 28px;
 
   --text-xs: 12px;
   --text-sm: 14px;
   --text-md: 16px;
   --text-lg: 20px;
   --text-xl: 24px;
+  --text-display: 36px;
+  --control-height: 52px;
+  --action-fill: #d4ed87;
+  --action-pressed: #c1dd70;
+  --action-ink: #26321a;
 
   --motion-fast: 150ms;
   --motion-base: 200ms;
@@ -128,6 +133,9 @@ a { color: inherit; text-decoration: none; }
 [data-pointer="canvas"] input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; appearance: none; margin: 0; }
 input, select, textarea { color: var(--ink); background: var(--surface); }
 button:disabled { opacity: .5; }
+[data-pointer="canvas"] :is(button, a, summary) {
+  transition: background-color var(--motion-fast), color var(--motion-fast), opacity var(--motion-fast);
+}
 input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 
 @media (prefers-color-scheme: dark) {

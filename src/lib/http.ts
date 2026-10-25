@@ -48,8 +48,8 @@ export function apiError(error: unknown, fallback = "REQUEST_FAILED") {
 function authMessage(code: string) {
   const messages: Record<string, string> = {
     ACCOUNT_CHANGED: "登录账户已发生变化，请重新核对后再确认连接",
-    DEMO_PROFILE_REQUIRED: "比赛沙箱请直接选择一位模拟用户进入",
-    DEMO_PROFILE_NOT_FOUND: "请选择列表中的模拟用户",
+    DEMO_PROFILE_REQUIRED: "请选择一位用户进入",
+    DEMO_PROFILE_NOT_FOUND: "请选择列表中的用户",
     AUTHENTICATION_REQUIRED: "请先登录",
     SESSION_EXPIRED: "登录已过期，请重新登录",
     INVALID_CREDENTIALS: "手机号或密码不正确",
@@ -60,7 +60,7 @@ function authMessage(code: string) {
     MFA_INVALID: "动态验证码不正确",
     MFA_ALREADY_CONFIGURED: "验证器已启用。当前入口仅支持首次设置，请勿覆盖已有验证器。",
     MFA_SETUP_CHANGED: "设置已变更，请重新打开安全中心并使用最新密钥。",
-    DEMO_MFA_CONFIRMATION_REQUIRED: "请先确认这是共享的模拟账户，再设置验证器。",
+    DEMO_MFA_CONFIRMATION_REQUIRED: "请先确认这是共享的账户，再设置验证器。",
     SECURITY_CONFIGURATION_REQUIRED: "服务器尚未完成安全密钥配置",
     DEPOSIT_REQUIRES_BANK_APP: "入金只能在银行 APP 内操作",
     CARD_ISSUANCE_REQUIRES_BANK_APP: "开卡只能在银行 APP 内操作",
@@ -69,11 +69,11 @@ function authMessage(code: string) {
     MFA_SETUP_REQUIRES_BANK_APP: "多因素认证只能在银行 APP 内设置",
     INVALID_ORIGIN: "请求来源未获允许",
     BANK_APP_SESSION_REQUIRED: "此功能只能在银行 APP 登录后使用",
-    MEMORY_VISITOR_REQUIRED: "访客记忆标识已失效，请重新选择模拟用户",
+    MEMORY_VISITOR_REQUIRED: "访客记忆标识已失效，请重新选择用户",
     PREFERENCE_INVALID: "偏好内容或操作格式无效，请检查后重试",
     PREFERENCE_VERSION_CONFLICT: "偏好已在别处更新，请刷新后重试",
     PREFERENCE_MEMORY_DISABLED: "长期偏好记忆已关闭，请先启用后再保存",
-    PREFERENCE_SCOPE_CHANGED: "当前模拟用户已切换，请重新读取偏好后再操作",
+    PREFERENCE_SCOPE_CHANGED: "当前用户已切换，请重新读取偏好后再操作",
   };
   return messages[code] ?? "身份验证失败";
 }

@@ -116,7 +116,7 @@ export function BankingApp() {
   if (!data) return <main className={styles.stage}><section className={styles.unavailable}><ShieldCheck size={32} /><h1>账户数据暂不可用</h1><p role="alert">{error || "请重新读取账户信息。"}</p>{notice && <p className={styles.confirmedNotice} role="status">{notice} 请刷新查看最新账户状态。</p>}<button className={styles.primaryButton} disabled={loading} onClick={() => void load()}><RefreshCw size={17} />重新读取</button><small>读取失败不代表余额为零。操作结果请以回执和最新明细为准。</small></section></main>;
   const account = data.accounts[0];
 
-  return <main className={styles.stage} ref={appRoot} data-agent-page={dialog ?? ({ home: "首页", activity: "账户明细", cards: "卡片管理", wealth: "模拟理财" }[tab])}>
+  return <main className={styles.stage} ref={appRoot} data-agent-page={dialog ?? ({ home: "首页", activity: "账户明细", cards: "卡片管理", wealth: "理财" }[tab])}>
     <ServiceWorkerRegister />
     <section className={styles.phone} aria-label="BankPilot 手机银行">
       <header className={styles.topbar} inert={assistantVisible}>
@@ -158,11 +158,12 @@ function HomeView({ data, loading, visible, toggleVisible, onDeposit, onTransfer
   const categories = data?.statement.categories.slice(0, 3) ?? [];
   return <div className={styles.home}>
     <div className={styles.homeGreeting}><div><h1>你好，{data?.customer.display_name ?? "欢迎回来"}</h1></div><span>账户总览</span></div>
-    <section className={styles.balanceBlock} aria-label="账户资产总览"><div className={styles.labelRow}><span>总资产 · CNY</span><button onClick={toggleVisible} aria-label={visible ? "隐藏余额" : "显示余额"} aria-pressed={!visible}>{visible ? <Eye size={18} /> : <EyeOff size={18} />}</button></div><div className={styles.balance}>{visible ? money(data.totalMinor) : "••••••"}</div><div className={styles.balanceMeta}><span>{loading ? "上次读取的账户资产" : "BankPilot · 账户资产"}</span><span>{data.accounts[0]?.masked_no ?? "暂无可用账户"}</span></div></section>
+    <section className={styles.balanceBlock} aria-label="账户资产总览"><div className={styles.labelRow}><span>总资产 · CNY</span><button onClick={toggleVisible} aria-label={visible ? "隐藏余额" : "显示余额"} aria-pressed={!visible}>{visible ? <Eye size={18} /> : <EyeOff size={18} />}</button></div><div className={styles.balance}>{visible ? money(data.totalMinor) : "••••••"}</div><div className={styles.balanceMeta}><span>{loading ? "上次读取的账户资产" : "账户资产"}</span><span>{data.accounts[0]?.masked_no ?? "暂无可用账户"}</span></div>
     <div className={styles.quickActions}>
       <button data-agent-id="open-transfer" data-agent-permission="navigate" className={styles.primary} disabled={loading || !data.accounts[0]} onClick={onTransfer}><span><ArrowUpRight /></span>转账</button>
       <button data-agent-id="open-deposit" data-agent-permission="navigate" disabled={loading || !data.accounts[0]} onClick={onDeposit}><span><Plus /></span>入金</button>
     </div>
+    </section>
     {data.features?.proactiveReviews && <ProactiveAttention key={data.customer.phone} />}
     <section className={styles.section}><div className={styles.sectionHead}><div><p>本月支出与转出</p><h2>{data ? money(data.statement.expenseMinor) : "—"}</h2></div><span className={styles.monthLabel}>{data?.statement.month ?? "本月"}</span></div>{categories.length > 0 && <div className={styles.spendingBreakdown}>{categories.map((category) => <div key={category.category}><span>{category.category}</span><b>{money(category.totalMinor)}</b></div>)}</div>}{data?.statement.expenseMinor === 0 && <p className={styles.emptyCopy}>本月还没有支出记录。</p>}</section>
     <section className={styles.section}><div className={styles.sectionTitle}><h2>最近交易</h2><span>{data?.transactions.length ?? 0} 笔</span></div><TransactionList items={data?.transactions.slice(0, 4) ?? []} /></section>
@@ -213,12 +214,12 @@ function DepositModal({ account, busy, setBusy, close, done }: { account: Accoun
     event.preventDefault(); const values = new FormData(event.currentTarget);
     await run(async () => { await bankRequest("/api/v1/deposits", jsonPost({ accountId: account.id, amountMinor: Math.round(Number(values.get("amount")) * 100), source: values.get("source"), reference: values.get("reference") })); await done(); });
   };
-  return <ModalShell eyebrow="模拟资金 · 请核对金额" title="向账户入金" close={close} busy={busy}><p>确认后，金额将计入你的模拟账户。</p><form className={styles.actionForm} onSubmit={submit}>
+  return <ModalShell eyebrow="请核对金额" title="向账户入金" close={close} busy={busy}><p>确认后，金额将计入你的账户。</p><form className={styles.actionForm} onSubmit={submit}>
     <label>金额（元）<input disabled={busy || uncertain} data-agent-id="field-amount" data-agent-permission="fill" name="amount" type="number" inputMode="decimal" min="0.01" max="1000000" step="0.01" required autoFocus /></label>
     <label>资金来源<select disabled={busy || uncertain} data-agent-id="field-source" data-agent-permission="fill" name="source"><option value="EXTERNAL_TRANSFER">外部账户转入</option><option value="CASH">现金存入</option></select></label>
     <label>外部参考号（选填）<input disabled={busy || uncertain} data-agent-id="field-reference" data-agent-permission="fill" name="reference" maxLength={80} /></label>{error && <div role="alert" className={styles.formError}>{error}</div>}
     <button data-agent-id="confirm-deposit" data-agent-permission="human" className={styles.primaryButton} disabled={busy || uncertain}>{busy ? "正在处理…" : "确认入金"}</button>
-  </form>{uncertain && <button type="button" className={styles.textAction} onClick={() => window.location.reload()}>重新读取账户状态</button>}<small>仅用于比赛演示，不涉及真实资金。</small></ModalShell>;
+  </form>{uncertain && <button type="button" className={styles.textAction} onClick={() => window.location.reload()}>重新读取账户状态</button>}</ModalShell>;
 }
 
 function TransferModal({ account, mfaConfigured, prepared, setPrepared, busy, setBusy, close, code, setCode, done }: { account: Account; mfaConfigured: boolean; prepared: PreparedTransfer | null; setPrepared: (value: PreparedTransfer | null) => void; busy: boolean; setBusy: (value: boolean) => void; close: () => void; code: string; setCode: (value: string) => void; done: () => Promise<void> }) {
@@ -268,7 +269,7 @@ function CardModal({ account, busy, setBusy, close, done }: { account: Account; 
 }
 
 function ProfileModal({ data, busy, close, logout }: { data: Bootstrap; busy: boolean; close: () => void; logout: () => Promise<void> }) {
-  return <ModalShell eyebrow="模拟账户" title={data.customer.display_name} close={close} busy={busy}><div className={styles.profileRows} data-agent-private><div><span>手机号</span><b>{data.customer.phone}</b></div><div><span>收款方式</span><b>姓名或手机号</b></div><div><span>账户号</span><b>{data.accounts[0]?.account_no ?? "—"}</b></div></div><a className={styles.developerLink} href="/security"><ShieldCheck size={17} /><span><b>安全中心</b><small>{data.customer.mfa_configured ? "强验证已开启" : "设置高风险操作验证"}</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/schedules"><Clock3 size={17} /><span><b>定时任务</b><small>提醒、账单报告与订阅检查</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/channels"><Link2 size={17} /><span><b>消息渠道</b><small>QQ 与企业微信</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/settings"><Settings size={17} /><span><b>设置</b><small>回复偏好与调试选项</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/audit"><ShieldCheck size={17} /><span><b>操作记录</b><small>风险等级、执行链路与系统状态</small></span><ChevronRight size={17} /></a><button className={styles.logoutButton} disabled={busy} onClick={logout}><LogOut size={17} />{busy ? "正在退出…" : "切换用户"}</button></ModalShell>;
+  return <ModalShell eyebrow="账户" title={data.customer.display_name} close={close} busy={busy}><div className={styles.profileRows} data-agent-private><div><span>手机号</span><b>{data.customer.phone}</b></div><div><span>收款方式</span><b>姓名或手机号</b></div><div><span>账户号</span><b>{data.accounts[0]?.account_no ?? "—"}</b></div></div><a className={styles.developerLink} href="/security"><ShieldCheck size={17} /><span><b>安全中心</b><small>{data.customer.mfa_configured ? "强验证已开启" : "设置高风险操作验证"}</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/schedules"><Clock3 size={17} /><span><b>定时任务</b><small>提醒、账单报告与订阅检查</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/channels"><Link2 size={17} /><span><b>消息渠道</b><small>QQ 与企业微信</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/settings"><Settings size={17} /><span><b>设置</b><small>回复偏好与调试选项</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/audit"><ShieldCheck size={17} /><span><b>操作记录</b><small>风险等级、执行链路与系统状态</small></span><ChevronRight size={17} /></a><button className={styles.logoutButton} disabled={busy} onClick={logout}><LogOut size={17} />{busy ? "正在退出…" : "切换用户"}</button></ModalShell>;
 }
 
 function CardDetailsModal({ card, close, done }: { card?: Card; close: () => void; done: () => Promise<void> }) {

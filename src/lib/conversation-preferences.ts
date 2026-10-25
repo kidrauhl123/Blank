@@ -4,7 +4,7 @@ import type { VisitorMemoryScope } from "./visitor-memory";
 import { clearPreferences, deletePreference, getPreferenceState, savePreference, setPreferenceMemoryEnabled } from "./visitor-preferences";
 
 export async function applyConversationPreference(scope: VisitorMemoryScope | null, command: PreferenceCommand): Promise<string> {
-  if (!scope) return "当前浏览器没有可用的偏好记忆标识。请重新选择模拟用户登录后再试；本次没有保存或删除偏好。";
+  if (!scope) return "当前浏览器没有可用的偏好记忆标识。请重新选择用户登录后再试；本次没有保存或删除偏好。";
   const state = await getPreferenceState(scope);
   try {
     if (command.kind === "save") {
@@ -17,7 +17,7 @@ export async function applyConversationPreference(scope: VisitorMemoryScope | nu
     }
     if (command.kind === "clear") {
       await clearPreferences(scope, state.version);
-      return "已清空当前访客和模拟用户的回复偏好。历史会话和备份不在本次清空范围内。";
+      return "已清空当前访客和用户的回复偏好。历史会话和备份不在本次清空范围内。";
     }
     await setPreferenceMemoryEnabled(scope, command.kind === "enable", state.version);
     return command.kind === "enable" ? "已开启偏好记忆。此前保留且尚未过期的偏好可能再次生效，可在设置页查看或清空。"

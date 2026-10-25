@@ -49,7 +49,7 @@ export async function loadDailyReviewSnapshot(customerId: string, watchNotes: st
       const price = investmentPriceSeries(investmentRulesSchema.parse(row.terms), row.day).navMicros;
       const value = investmentValue(Number(row.quantity_micro), price);
       facts.push({ id: `position:${row.id}:${row.unlocks_on}`, kind: "POSITION", required: false,
-        description: `在理财演示日期 ${row.day}，“${row.name}”持仓市值 ${money(value)}、持有盈亏 ${money(value - Number(row.cost_minor))}，可赎回日期 ${row.unlocks_on}；市值未扣赎回费。`,
+        description: `在理财估值日期 ${row.day}，“${row.name}”持仓市值 ${money(value)}、持有盈亏 ${money(value - Number(row.cost_minor))}，可赎回日期 ${row.unlocks_on}；市值未扣赎回费。`,
         nextStep: "可到理财持仓查看流动性和费用，自行决定是否办理。" });
     }
     return dailyReviewSnapshotSchema.parse({ capturedAt: now.toISOString(), businessDate: today, watchNotes,

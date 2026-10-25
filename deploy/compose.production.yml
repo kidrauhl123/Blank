@@ -36,6 +36,7 @@ services:
       - ../db/migrations/022_demo_investment_history.sql:/docker-entrypoint-initdb.d/220-demo-investment-history.sql:ro
       - ../db/migrations/023_daily_ai_reviews.sql:/docker-entrypoint-initdb.d/230-daily-ai-reviews.sql:ro
       - ../db/migrations/024_review_recording_support.sql:/docker-entrypoint-initdb.d/240-review-recording-support.sql:ro
+      - ../db/migrations/025_business_display_labels.sql:/docker-entrypoint-initdb.d/250-business-display-labels.sql:ro
     networks:
       - internal
     mem_limit: 512m

@@ -48,7 +48,7 @@ function productView(row: ProductRow, day: string): InvestmentProduct {
     kind: rules.kind, riskLevel: row.risk_level, minimumMinor: integer(row.minimum_purchase_minor),
     holdingDays: rules.holdingDays, purchaseFeeBps: rules.purchaseFeeBps, redemptionFeeBps: rules.redemptionFeeBps,
     status: row.status, navMicros, change30DaysPercent: (navMicros / history[0].navMicros - 1) * 100,
-    history, simulated: true, source: "BankPilot 模拟产品及净值场景 v1" };
+    history, simulated: true, source: "BankPilot 产品及净值场景 v1" };
 }
 
 export async function listInvestmentProducts(customerId: string, filters: InvestmentFilters = {}, dayOverride?: string) {
@@ -99,7 +99,7 @@ export async function saveInvestmentAssessment(customerId: string, raw: z.infer<
     const result = await client.query<{ risk_level: InvestmentRisk; expires_at: Date }>(`INSERT INTO risk_assessments(customer_id,answers,score,risk_level,expires_at)
       VALUES($1,$2::jsonb,$3,$4,clock_timestamp()+interval '365 days') RETURNING risk_level,expires_at`,
     [customerId, JSON.stringify({ simulated: true, answers: input.answers }), score, `R${score}`]);
-    await writeAudit({ customerId, eventType: "INVESTMENT_ASSESSMENT_SAVED", actorType: "USER", summary: "客户完成模拟风险测评", evidence: { simulated: true, riskLevel: result.rows[0].risk_level } }, client);
+    await writeAudit({ customerId, eventType: "INVESTMENT_ASSESSMENT_SAVED", actorType: "USER", summary: "客户完成风险测评", evidence: { simulated: true, riskLevel: result.rows[0].risk_level } }, client);
     return { riskLevel: result.rows[0].risk_level, expiresAt: result.rows[0].expires_at.toISOString() };
   });
 }
@@ -166,7 +166,7 @@ export async function prepareInvestment(customerId: string, raw: PrepareInput): 
     [operationId, customerId, quote.accountId, quote.productId, quote.side, quote.amountMinor,
       JSON.stringify({ simulated: true, assessmentId: quote.assessmentId, riskLevel: quote.riskLevel }), input.idempotencyKey, quote.positionId,
       JSON.stringify(quote), digest({ quote, expiresAt: expiry.toISOString() }), expiry]);
-    await writeAudit({ customerId, operationId, eventType: "INVESTMENT_PREPARED", actorType: "BANK_CORE", summary: "模拟理财草稿已准备，资金尚未变动",
+    await writeAudit({ customerId, operationId, eventType: "INVESTMENT_PREPARED", actorType: "BANK_CORE", summary: "理财草稿已准备，资金尚未变动",
       evidence: { side: quote.side, amountMinor: quote.amountMinor, requiredAuth: quote.requiredAuth, simulated: true } }, client);
     return orderView(result.rows[0]);
   });
@@ -199,7 +199,7 @@ export async function commitInvestment(customerId: string, operationId: string, 
       if (outcome !== "VERIFIED") return { authError: outcome === "LOCKED" ? "AUTH_FUSE_ACTIVE" as const : "AUTH_INVALID" as const };
     }
     await client.query(`INSERT INTO accounts(customer_id,name,account_type,masked_no,currency,available_balance_minor,status,system_code)
-      VALUES(NULL,'模拟理财托管','SETTLEMENT','INTERNAL','CNY',0,'ACTIVE','INVESTMENT_CUSTODY')
+      VALUES(NULL,'理财托管','SETTLEMENT','INTERNAL','CNY',0,'ACTIVE','INVESTMENT_CUSTODY')
       ON CONFLICT(system_code) WHERE system_code IS NOT NULL DO NOTHING`);
     const custody = (await client.query<{ id: string }>("SELECT id FROM accounts WHERE system_code='INVESTMENT_CUSTODY'")).rows[0].id;
     const accounts = await client.query<{ id: string; customer_id: string | null; status: string; currency: string; available_balance_minor: string }>("SELECT id,customer_id,status,currency,available_balance_minor FROM accounts WHERE id=ANY($1::uuid[]) ORDER BY id FOR UPDATE", [[quote.accountId, custody]]);
@@ -218,7 +218,7 @@ export async function commitInvestment(customerId: string, operationId: string, 
     }
     const delta = quote.side === "SUBSCRIBE" ? -quote.amountMinor : quote.settlementMinor;
     const reference = `LED-${operationId}`;
-    const label = `${quote.productName} · 模拟${quote.side === "SUBSCRIBE" ? "申购" : "赎回"}`;
+    const label = `${quote.productName} · ${quote.side === "SUBSCRIBE" ? "申购" : "赎回"}`;
     const ledger = (await client.query<{ id: string }>(`INSERT INTO ledger_transactions(reference,transaction_type,description)
       VALUES($1,$2,$3) RETURNING id`, [reference, `INVESTMENT_${quote.side}`, label])).rows[0];
     await client.query(`INSERT INTO ledger_entries(ledger_transaction_id,account_id,amount_minor,direction)
@@ -226,12 +226,12 @@ export async function commitInvestment(customerId: string, operationId: string, 
     await client.query("UPDATE accounts SET available_balance_minor=available_balance_minor+$2,version=version+1 WHERE id=$1", [quote.accountId, delta]);
     await client.query("UPDATE accounts SET available_balance_minor=available_balance_minor-$2,version=version+1 WHERE id=$1", [custody, delta]);
     await client.query(`INSERT INTO bank_transactions(account_id,merchant_name,category,amount_minor,occurred_at,metadata)
-      VALUES($1,$2,'模拟理财',$3,(SELECT posted_at FROM ledger_transactions WHERE id=$4),$5::jsonb)`, [quote.accountId, label, delta, ledger.id, JSON.stringify({ operationId, simulated: true, businessDate: day, ledgerReference: reference })]);
+      VALUES($1,$2,'理财',$3,(SELECT posted_at FROM ledger_transactions WHERE id=$4),$5::jsonb)`, [quote.accountId, label, delta, ledger.id, JSON.stringify({ operationId, simulated: true, businessDate: day, ledgerReference: reference })]);
     const receipt: InvestmentReceipt = { operationId, status: "SUCCEEDED", side: quote.side, productName: quote.productName,
       amountMinor: quote.amountMinor, feeMinor: quote.feeMinor, settlementMinor: quote.settlementMinor,
       quantityMicro: quote.quantityMicro, navMicros: quote.navMicros, businessDate: day, positionId: positionId!, ledgerReference: reference };
     await client.query("UPDATE investment_orders SET status='SUCCEEDED',executed_at=(SELECT posted_at FROM ledger_transactions WHERE id=$4),position_id=$2,receipt=$3::jsonb WHERE operation_id=$1", [operationId, positionId, JSON.stringify(receipt), ledger.id]);
-    await writeAudit({ customerId, operationId, eventType: "INVESTMENT_POSTED", actorType: "BANK_CORE", summary: "模拟理财操作已记入双分录账本", evidence: { ...receipt, simulated: true } }, client);
+    await writeAudit({ customerId, operationId, eventType: "INVESTMENT_POSTED", actorType: "BANK_CORE", summary: "理财操作已记入双分录账本", evidence: { ...receipt, simulated: true } }, client);
     return { receipt };
   });
 }
@@ -243,7 +243,7 @@ export async function cancelInvestment(customerId: string, operationId: string) 
     if (!row) throw new Error("OPERATION_NOT_FOUND");
     if (row.status === "SUCCEEDED") throw new Error("OPERATION_NOT_EXECUTABLE");
     await client.query("UPDATE investment_orders SET status='CANCELLED' WHERE operation_id=$1", [operationId]);
-    await writeAudit({ customerId, operationId, eventType: "INVESTMENT_CANCELLED", actorType: "USER", summary: "客户取消模拟理财草稿，资金未变动" }, client);
+    await writeAudit({ customerId, operationId, eventType: "INVESTMENT_CANCELLED", actorType: "USER", summary: "客户取消理财草稿，资金未变动" }, client);
     return { status: "CANCELLED" as const };
   });
 }
@@ -257,7 +257,7 @@ export async function advanceInvestmentClock(customerId: string, days: number, e
     if (next > "2045-12-31") throw new Error("INVESTMENT_DATE_INVALID");
     await client.query("UPDATE investment_simulation_clocks SET business_date=$2,version=version+1 WHERE customer_id=$1", [customerId, next]);
     await client.query("UPDATE investment_orders SET status='CANCELLED' WHERE customer_id=$1 AND status='AWAITING_AUTH' AND quote IS NOT NULL", [customerId]);
-    await writeAudit({ customerId, eventType: "INVESTMENT_CLOCK_ADVANCED", actorType: "USER", summary: "客户推进模拟理财日期，旧报价作废", evidence: { from: current, to: next, days, simulated: true } }, client);
+    await writeAudit({ customerId, eventType: "INVESTMENT_CLOCK_ADVANCED", actorType: "USER", summary: "客户推进理财日期，旧报价作废", evidence: { from: current, to: next, days, simulated: true } }, client);
     return { businessDate: next };
   });
 }

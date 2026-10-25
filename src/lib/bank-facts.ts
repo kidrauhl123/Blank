@@ -59,7 +59,7 @@ export function renderBankReply({ intent, state, facts }: BankReplyInput): { mes
     const catalog = z.object({ simulated: z.literal(true), businessDate: name, products: z.array(z.object({ name, riskLevel: z.enum(["R1", "R2", "R3", "R4", "R5"]), minimumMinor: minor, holdingDays: minor })) }).safeParse(facts);
     if (!catalog.success) return { message: unverified, suggestions: [] };
     const products = catalog.data.products.map(product => `${label(product.name)}：${product.riskLevel}，${money(product.minimumMinor)}起购，${product.holdingDays ? `持有${product.holdingDays}天后可赎回` : "灵活申赎"}`).join("；");
-    return { message: `模拟理财目录（${label(catalog.data.businessDate)}）：${products || "没有符合条件的产品"}。请回银行 APP 的理财页比较与办理，申购需模拟测评和本人强验证。本次未执行交易。`, suggestions: [] };
+    return { message: `理财目录（${label(catalog.data.businessDate)}）：${products || "没有符合条件的产品"}。请回银行 APP 的理财页比较与办理，申购需风险测评和本人强验证。本次未执行交易。`, suggestions: [] };
   }
   if (intent === "BALANCE") {
     const balance = z.object({ totalAvailableBalanceMinor: minor, currency: z.literal("CNY"),

@@ -1,6 +1,6 @@
-.card { margin: var(--space-4) 0; padding: var(--space-4); border-radius: var(--radius-container); background: var(--white); }
+.card { margin: var(--space-5) 0; padding: var(--space-5); border-radius: var(--radius-container); background: var(--white); }
 .heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
-.heading h2 { font-size: var(--text-md); }
+.heading h2 { font-size: var(--text-lg); letter-spacing: -.025em; }
 .heading span, .muted { font-size: var(--text-xs); color: var(--muted); line-height: 1.6; }
 .summary { margin-top: var(--space-3); font-size: var(--text-sm); line-height: 1.6; overflow-wrap: anywhere; }
 .muted { margin-top: var(--space-2); }

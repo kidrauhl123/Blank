@@ -13,7 +13,7 @@ const endpoint = "/api/v1/preferences";
 
 function requestError(error: unknown) {
   if (error instanceof BankRequestError) {
-    if (error.status === 401 || error.status === 403) return "请返回银行首页，重新选择模拟用户后再试。";
+    if (error.status === 401 || error.status === 403) return "请返回银行首页，重新选择用户后再试。";
     return error.message;
   }
   return "偏好暂时无法读取，请稍后重试。";
@@ -68,7 +68,7 @@ export function PreferenceSettings() {
       if (reason instanceof BankRequestError && (reason.status === 409 || reason.outcomeUnknown)) {
         const refreshed = await reload();
         setError(refreshed
-          ? reason.code === "PREFERENCE_SCOPE_CHANGED" ? "模拟用户已切换，已重新读取对应偏好。请检查后再操作。"
+          ? reason.code === "PREFERENCE_SCOPE_CHANGED" ? "用户已切换，已重新读取对应偏好。请检查后再操作。"
             : reason.status === 409 ? "偏好已在别处更新，已重新读取。请检查后再操作。" : "未能确认操作结果，已重新读取当前状态；请核对后再操作。"
           : "未能确认操作结果，也无法重新读取。请稍后刷新核对，避免重复操作。");
       } else setError(requestError(reason));
@@ -78,8 +78,8 @@ export function PreferenceSettings() {
   const save = (key: PreferenceKey) => mutate("PUT", { key, value: drafts[key] }, "偏好已保存，后续助手回复会按此设置调整。", key);
   const remove = (key: PreferenceKey) => mutate("DELETE", { key }, "这项偏好已删除，后续助手回复不会再读取它。", key);
   const clear = () => {
-    if (!window.confirm("确定清空当前模拟用户下的全部回复偏好吗？此操作不能撤销。")) return;
-    void mutate("DELETE", { all: true }, "当前模拟用户下的偏好已清空。");
+    if (!window.confirm("确定清空当前用户下的全部回复偏好吗？此操作不能撤销。")) return;
+    void mutate("DELETE", { all: true }, "当前用户下的偏好已清空。");
   };
 
   const canEdit = Boolean(state?.enabled) && !loading && !busy;
@@ -96,7 +96,7 @@ export function PreferenceSettings() {
 
   return <section className={styles.section} aria-labelledby="preference-settings">
     <h2 id="preference-settings">回复偏好</h2>
-    <p className={styles.hint}>只影响助手的称呼、语言和说明详略，不影响账户身份、金额或转账确认。偏好仅属于当前浏览器与当前模拟用户，保存后 90 天过期。</p>
+    <p className={styles.hint}>只影响助手的称呼、语言和说明详略，不影响账户身份、金额或转账确认。偏好仅属于当前浏览器与当前用户，保存后 90 天过期。</p>
     {loading && <p role="status" className={styles.hint}>正在读取偏好…</p>}
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {notice && <p role="status" className={styles.notice}>{notice}</p>}

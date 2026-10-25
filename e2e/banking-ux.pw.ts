@@ -115,7 +115,7 @@ test("demo verifier enrollment explains the shared account and requires explicit
   await page.route("**/api/v1/security/totp/setup", route => { input = route.request().postDataJSON(); return route.fulfill({ json: { secret: "TESTONLYTESTONLY", uri: "otpauth://totp/test" } }); });
   await page.route("**/api/v1/security/totp/confirm", route => route.fulfill({ json: { enabled: true } }));
   await page.goto("/security");
-  await expect(page.getByText("测试客户 · 共享模拟账户")).toBeVisible();
+  await expect(page.getByText("测试客户 · 共享账户")).toBeVisible();
   await expect(page.locator('input[type="password"]')).toHaveCount(0);
   await expect(page.getByRole("button", { name: "开始设置" })).toBeDisabled();
   await page.getByRole("checkbox").check();

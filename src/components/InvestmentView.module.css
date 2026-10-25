@@ -1,4 +1,4 @@
-.view { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-5) var(--space-4) var(--space-6); }
+.view { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-5) var(--space-5) var(--space-6); }
 .heading, .row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .heading h1 { font-size: var(--text-xl); font-weight: 700; }
 .hint, .view small, .dialog small { color: var(--muted); font-size: var(--text-xs); }
@@ -10,17 +10,19 @@
 .criteria { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
 .criteria label, .form label { display: flex; flex-direction: column; gap: var(--space-2); color: var(--muted); font-size: var(--text-xs); }
 .criteria input, .criteria select, .form input, .form select { width: 100%; min-height: var(--target-touch); padding: var(--space-3); border: 0; border-radius: var(--radius-control); background: var(--white); color: var(--ink); font-size: var(--text-sm); }
-.card { padding: var(--space-4); border-radius: var(--radius-container); background: var(--white); }
+.card { padding: var(--space-5); border-radius: var(--radius-container); background: var(--white); }
 .card + .card { margin-top: var(--space-3); }
 .open { display: flex; flex-direction: column; gap: var(--space-3); width: 100%; text-align: left; border: 0; background: none; }
-.open h2, .card h2 { font-size: var(--text-md); font-weight: 650; }
+.open h2, .card h2 { font-size: var(--text-lg); font-weight: 650; letter-spacing: -.025em; }
 .open .row { width: 100%; }
 .metrics { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
 .metrics span { display: flex; flex-direction: column; gap: var(--space-1); }
-.metrics b { font-size: var(--text-lg); font-variant-numeric: tabular-nums; }
+.metrics b { font-size: var(--text-xl); font-weight: 700; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
 .cardFooter { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); margin-top: var(--space-3); padding-top: var(--space-2); }
-.textButton { border: 0; background: none; min-height: var(--target-touch); color: var(--ink); font-size: var(--text-sm); text-decoration: underline; text-underline-offset: var(--space-1); }
-.primary { width: 100%; min-height: var(--target-touch); padding: var(--space-3) var(--space-4); border: 0; border-radius: var(--radius-control); background: var(--ink); color: var(--paper); font-size: var(--text-sm); font-weight: 650; }
+.textButton { border: 0; background: var(--surface); padding: var(--space-2) var(--space-3); border-radius: var(--radius-control); min-height: var(--target-touch); color: var(--ink); font-size: var(--text-sm); text-decoration: none; }
+.primary { width: 100%; min-height: var(--control-height); padding: var(--space-3) var(--space-4); border: 0; border-radius: var(--radius-control); background: var(--action-fill); color: var(--action-ink); font-size: var(--text-md); font-weight: 650; }
+.primary:active { background: var(--action-pressed); }
+.textButton:active { background: var(--surface-pressed); }
 .positive { color: var(--positive); }
 .negative, .error { color: var(--danger); }
 .error, .notice { font-size: var(--text-sm); line-height: 1.6; }
@@ -47,7 +49,7 @@
 .table th, .table td { text-align: left; vertical-align: top; padding: var(--space-3) var(--space-1); overflow-wrap: anywhere; border-bottom: 1px solid var(--line-quiet); }
 .table th { font-weight: 650; }
 .table td:first-child { color: var(--muted); }
-.receiptValue { font-size: var(--text-xl); font-weight: 700; }
+.receiptValue { font-size: var(--text-display); font-weight: 700; letter-spacing: -.035em; }
 .historyHeading { font-size: var(--text-md); }
 .historyRow { width: 100%; display: flex; justify-content: space-between; gap: var(--space-3); padding: var(--space-4) 0; border: 0; border-bottom: 1px solid var(--line); background: none; text-align: left; }
 .historyRow > span { display: flex; flex-direction: column; gap: var(--space-1); }

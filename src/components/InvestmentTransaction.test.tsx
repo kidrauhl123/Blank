@@ -17,8 +17,8 @@ beforeEach(() => {
     customer: { display_name: "小土豆", phone: "99000000001", mfa_configured: false }, totalMinor: 100000,
     accounts: [{ id: "account-1", name: "活期账户", masked_no: "•• 1234", available_balance_minor: "100000" }], cards: [],
     transactions: [
-      { id: "redemption", merchant_name: "日享灵活 · 模拟历史赎回", category: "模拟理财", amount_minor: "200899", occurred_at: "2026-09-02T03:00:00Z", investment_receipt: receipt },
-      { id: "purchase", merchant_name: "日享灵活 · 模拟历史申购", category: "模拟理财", amount_minor: "-200000", occurred_at: "2026-08-28T02:00:00Z", investment_receipt: { ...receipt, operationId: "DEMO-INV-potato-past-BUY", ledgerReference: "LED-DEMO-INV-potato-past-BUY", side: "SUBSCRIBE", amountMinor: 200000, feeMinor: 0, settlementMinor: 200000, navMicros: 1000000, businessDate: "2026-08-28" } },
+      { id: "redemption", merchant_name: "日享灵活 · 赎回", category: "理财", amount_minor: "200899", occurred_at: "2026-09-02T03:00:00Z", investment_receipt: receipt },
+      { id: "purchase", merchant_name: "日享灵活 · 申购", category: "理财", amount_minor: "-200000", occurred_at: "2026-08-28T02:00:00Z", investment_receipt: { ...receipt, operationId: "DEMO-INV-potato-past-BUY", ledgerReference: "LED-DEMO-INV-potato-past-BUY", side: "SUBSCRIBE", amountMinor: 200000, feeMinor: 0, settlementMinor: 200000, navMicros: 1000000, businessDate: "2026-08-28" } },
       { id: "coffee", merchant_name: "咖啡", category: "餐饮", amount_minor: "-3200", occurred_at: "2026-09-01T00:00:00Z" },
     ], ai: { configured: false, model: null }, statement: { month: "2026-10", expenseMinor: 0, categories: [] },
   })));
@@ -40,7 +40,7 @@ describe("investment receipts linked from account activity", () => {
     expect(transaction.textContent).toContain("+¥2,008.99");
     expect(transaction.dataset.agentPermission).toBe("navigate");
     await act(async () => transaction.click());
-    expect(container.querySelector('[role="dialog"]')?.textContent).toContain("预置模拟历史回执");
+    expect(container.querySelector('[role="dialog"]')?.textContent).toContain("交易回执");
     expect(rowText("赎回市值")).toBe("¥2,010.00");
     expect(rowText("赎回费用")).toBe("¥1.01");
     expect(rowText("账户到账")).toBe("¥2,008.99");

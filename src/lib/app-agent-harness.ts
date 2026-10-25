@@ -30,8 +30,8 @@ export function appPageTools() {
       if (typeof customerId !== "string") throw new Error("BANK_APP_SESSION_REQUIRED");
       const result = await listInvestmentProducts(customerId, input);
       return JSON.stringify({ ...result, products: result.products.map(product => ({ ...product, history: undefined })),
-        scope: "仅比赛模拟产品；历史模拟净值变化不是预期收益。候选筛选不等于风险测评或申购授权。" });
-    }, { name: "search_investment_products", description: "查询当前客户演示日期下的模拟理财产品，可按金额、风险、持有期限和类型筛选。返回产品事实、费用及当前模拟净值，不进行交易。", schema: investmentFiltersSchema }),
+        scope: "产品来自本项目目录；历史净值变化不是预期收益。候选筛选不等于风险测评或申购授权。" });
+    }, { name: "search_investment_products", description: "查询当前客户理财日期下的产品，可按金额、风险、持有期限和类型筛选。返回产品事实、费用及净值，不进行交易。", schema: investmentFiltersSchema }),
     tool((_, runtime: ToolRuntime) => bridge({ type: "inspect", description: "正在查看当前页面" }, runtime), {
       name: "inspect_page", description: "读取用户正在看的 BankPilot 页面、可见数据及可用控件。不会读取密码或验证码。", schema: z.object({}),
     }),

@@ -89,7 +89,7 @@ async function executeReadOnlyTask(client: PoolClient, task: ScheduledTask, now:
   if (task.kind === "MONTHLY_REPORT") {
     const month = previousStatementMonth(task.next_run_at);
     const statement = await getBankStatement(task.customer_id, month, client);
-    return { summary: `${month} 月度账单：共 ${statement.transactionCount} 笔，账面流入 ¥${money(statement.incomeMinor)}，账面流出 ¥${money(statement.expenseMinor)}。仅本沙箱账户已记录流水，含转账等资金往来，不等于真实消费；无流水不代表其他账户没有支出。`, notify: true };
+    return { summary: `${month} 月度账单：共 ${statement.transactionCount} 笔，账面流入 ¥${money(statement.incomeMinor)}，账面流出 ¥${money(statement.expenseMinor)}。统计包含转账等资金往来，不等同于消费支出。`, notify: true };
   }
   const result = await client.query<{ merchant_name: string; amount_minor: string; next_charge_at: Date }>(`SELECT merchant_name,amount_minor,next_charge_at FROM subscriptions
     WHERE customer_id=$1 AND status='ACTIVE' AND next_charge_at >= $2 AND next_charge_at < $2::timestamptz+interval '3 days'
