@@ -40,22 +40,22 @@
 
   --ink: #262722;
   --muted: #68645d;
-  --paper: #efede8;
-  --desk: #e3e0d9;
+  --paper: #f2f3f4;
+  --desk: #e5e7ea;
   --white: #ffffff;
-  --surface: #f5f3ef;
-  --surface-strong: #e8e4dc;
-  --surface-pressed: #e2ddd3;
+  --surface: #f8f9fa;
+  --surface-strong: #e9ebee;
+  --surface-pressed: #e1e4e8;
 
   /* 行分隔线：只分行，不围合内容 */
-  --line: #d8d3c9;
-  --line-quiet: #eae6df;
-  --line-control: #8b8477;
+  --line: #d4d8dd;
+  --line-quiet: #ebedf0;
+  --line-control: #858b92;
 
   --accent: #262722;
   --accent-hover: #44443c;
-  --accent-soft: #e8e4dc;
-  --accent-tint: #f5f3ef;
+  --accent-soft: #e9ebee;
+  --accent-tint: #f8f9fa;
 
   --positive: #386451;
   --positive-ink: #315843;
@@ -73,7 +73,7 @@
   --elevate: none;
   --scrim: rgba(32, 32, 28, .44);
 
-  --agent-live: #e8e4dc;
+  --agent-live: #e9ebee;
   --agent-live-ink: #262722;
   --brand-qq: var(--surface);
   --card-face: #34372f;
