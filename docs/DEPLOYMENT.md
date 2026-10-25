@@ -32,11 +32,11 @@ AI 变量为空时，银行基础功能正常工作，内置助手明确显示�
 
 ## 发布
 
-2026-10-22 本地新增模拟理财及五位用户历史，需要先依次应用 `021_simulated_investments.sql`、`022_demo_investment_history.sql` 再启动新版 APP，否则新增的账户资产汇总和模拟身份登录无法读取。Compose 新安装及发布检查已纳入两项迁移；本地实现与验证边界见 [模拟理财](SIMULATED_INVESTMENTS.md)。这条说明不是生产发布记录。
+模拟理财及五位用户历史需要先依次应用 `021_simulated_investments.sql`、`022_demo_investment_history.sql` 再启动新版 APP，否则新增的账户资产汇总和模拟身份登录无法读取。Compose 新安装及发布检查已纳入两项迁移；实现与验证边界见 [模拟理财](SIMULATED_INVESTMENTS.md)。2026-10-25 已发布，见下方记录。
 
-同日每日 AI 巡检还需要 `023_daily_ai_reviews.sql`、APP 私有环境中的 `TYPESAFE_API_KEY` 及现有主模型配置，迁移后重建 APP 并启动 scheduler。密钥不进入 Git 或源码同步；自动发布会在远端备份完成后，将本地私有配置中指定的 Jev 变量通过 SSH 标准输入安装到远端私有环境文件。见 [每日巡检](DAILY_AI_REVIEWS.md)。这条说明同样不是生产发布记录。
+每日 AI 巡检还需要 `023_daily_ai_reviews.sql`、APP 私有环境中的 `TYPESAFE_API_KEY` 及现有主模型配置，迁移后重建 APP 并启动 scheduler。密钥不进入 Git 或源码同步；自动发布会在远端备份完成后，将本地私有配置中指定的 Jev 变量通过 SSH 标准输入安装到远端私有环境文件。2026-10-25 已发布，见 [每日巡检](DAILY_AI_REVIEWS.md)。
 
-首页主动关注及录制支持还需 `024_review_recording_support.sql`，发布检查已纳入。录屏流程见 [视频录制](DEMO_VIDEO.md)；当前尚无该批发布记录。
+首页主动关注及录制支持还需 `024_review_recording_support.sql`，发布检查已纳入，2026-10-25 已发布。录屏流程见 [视频录制](DEMO_VIDEO.md)；本次发布未录制视频。
 
 含授权补强的版本必须应用 `019_authorization_hardening.sql` 后启动新版。迁移会取消升级前未完成的转账草稿及对应挑战/任务，保留资金和历史回执；已有 TOTP 用户可能需等待最多约 60 秒使用新的动态码。先在隔离 PostgreSQL 上通过全部回归，细节见 [授权补强与验证范围](AUTHORIZATION_HARDENING.md)。
 
@@ -128,6 +128,7 @@ docker volume rm bankpilot_nanobot
 | 2026-10-19 | `2a56ca3` | 到 `020_scheduled_tasks.sql`（9 项必需迁移到位） | 发布标记 `20261019T084641Z`；备份 `/opt/bankpilot/backups/release-20261019T084641Z/`（dump、env、source，权限 600）；`/api/health` 正常，账本不变量通过，退役表与退役路由不存在，`Authorization` 头返回 403，调度心跳正常；`https://bank.jung.edu.pl` 返回 200 且 TLS/安全响应头正常 |
 | 2026-10-19 | `f3f0690`（手机画布 UI、文档状态校正、付款人锁用例修复） | 无新增迁移，全部为 `skip` | 发布标记 `20261019T170551Z`；备份 `/opt/bankpilot/backups/release-20261019T170551Z/`；账本不变量通过，`/api/health` 为 `{"status":"ok","database":"connected","agentRuntime":"ready","ai":{"configured":true}}`，应用与调度容器健康；线上八个产品路由均 200、三个退役路由 404；`.env` 模板文件已随源码同步（校验和一致）。此前 `0e3e705` 已同流程发布，仅源码与文档不同 |
 | 2026-10-20 | `e28c1ad`（画布内圆形触点，去掉系统指针与其余桌面形态） | 无新增迁移，全部为 `skip` | 发布标记 `20261020T044113Z`；备份 `/opt/bankpilot/backups/release-20261020T044113Z/`；`DEPLOYED_COMMIT` 为 `e28c1ad`，`bankpilot-app`、`bankpilot-scheduler`、`bankpilot-postgres` 均健康，账本不变量通过；`/api/health` 为 `{"status":"ok","database":"connected","ai":{"configured":true,"model":"deepseek-v4.1-flash-free"},"agentRuntime":"ready","channels":{"wecomInternalApi":true,"qqInternalApi":false}}`；线上八个产品路由 200、三个退役路由 404；线上画布已确认 `cursor: none`、圆形触点 30px、按下收缩到 20.4px 且圆心不动 |
+| 2026-10-25 | `3b46529`（模拟理财、整页助手、Jev 每日巡检及录制支持） | 确认 `021`–`024` 已应用，本次迁移命令均为 `skip` | 发布标记 `20261025T042257Z`；备份 `/opt/bankpilot/backups/release-20261025T042257Z/`（dump、env、source 均为 600）；`DEPLOYED_COMMIT` 与运行时提交一致；APP 与 PostgreSQL 健康，scheduler 运行且心跳新鲜，账本不变量通过。公开首页及健康接口 200；逐一登录五位用户，均读取到六只产品、两笔当前持仓、四笔预置理财回执及四笔关联账户明细，退出会话成功。首页巡检功能已启用，Jev 和主模型配置存在；从 APP 容器对 Jev 作无客户数据的真实请求，HTTP 200，响应 `jev-1.13.0`、概率 0.1、耗时 498ms。未运行申赎、完整巡检任务、外部通知或视频录制；后续文档提交不改变此运行时版本。 |
 
 同步模板文件（`.env.example`、`deploy/.env.production.example`）会被部署脚本排除规则放过；私有 `.env`、`.env.local`、`deploy/.env.production` 仍被排除。
 
