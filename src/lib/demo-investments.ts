@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { query, withTransaction } from "./db";
 import { DEMO_PROFILES } from "./demo-catalog";
+import DEMO_MERCHANTS from "./demo-merchant-catalog.json";
 import { buildDemoInvestmentPlan, type DemoInvestmentProduct } from "./demo-investment-plan";
 import type { InvestmentReceipt } from "./investment-types";
 import { writeAudit } from "./audit";
@@ -42,7 +43,7 @@ async function seedProfile(profileKey: (typeof DEMO_PROFILES)[number]["key"], cu
     if (!custody || !clearing) throw new Error("DEMO_INVESTMENT_ACCOUNT_MISSING");
     const locked = (await client.query<{ id: string; customer_id: string | null; status: string }>("SELECT id,customer_id,status FROM accounts WHERE id=ANY($1::uuid[]) ORDER BY id FOR UPDATE", [[account.id, custody, clearing]])).rows;
     if (!locked.some(row => row.id === account.id && row.customer_id === customerId && row.status === "ACTIVE")) throw new Error("DEMO_INVESTMENT_ACCOUNT_MISSING");
-    await post(client, customerId, account.id, clearing, plan.fundingMinor, "理财期初资金", plan.fundedOn, `DEMO-INV-${profileKey}-CAPITAL`);
+    await post(client, customerId, account.id, clearing, plan.fundingMinor, DEMO_MERCHANTS[profileKey].sourceAccount, plan.fundedOn, `DEMO-INV-${profileKey}-CAPITAL`);
 
     const buy = async (lot: Lot) => {
       const positionId = randomUUID();

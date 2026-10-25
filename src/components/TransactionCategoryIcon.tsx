@@ -17,6 +17,7 @@ const categoryIcons: Record<string, LucideIcon> = {
   工资: BriefcaseBusiness,
   薪资: BriefcaseBusiness,
   收入: Wallet,
+  经营收入: Wallet,
   入金: Wallet,
   退款: RotateCcw,
 };

@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import { AuthError, createSession } from "./auth";
 import { query, withTransaction } from "./db";
 import { DEMO_PROFILES } from "./demo-catalog";
+import DEMO_MERCHANTS from "./demo-merchant-catalog.json";
 import { ensureVisitorMemoryToken } from "./visitor-memory";
 import { ensureDemoInvestmentHistory } from "./demo-investments";
 
@@ -33,6 +34,7 @@ export async function ensureDemoProfiles() {
     const clearing = await client.query<{ id: string }>(`INSERT INTO accounts(name,account_type,masked_no,system_code) VALUES('历史资金清算','SETTLEMENT','DEMO INTERNAL','DEMO_SEED_CLEARING') RETURNING id`);
     const people: Person[] = [];
     for (const [i, profile] of DEMO_PROFILES.entries()) {
+      const merchants = DEMO_MERCHANTS[profile.key];
       const id = randomUUID(), accountId = randomUUID();
       await client.query("INSERT INTO customers(id,display_name,phone,risk_profile) VALUES($1,$2,$3,'BALANCED')", [id, profile.name, profile.phone]);
       // Unusable random credentials preserve the identity schema; there is no
@@ -42,21 +44,21 @@ export async function ensureDemoProfiles() {
       await client.query("INSERT INTO demo_profiles(profile_key,customer_id) VALUES($1,$2)", [profile.key, id]);
       const person = { id, accountId, name: profile.name, phone: profile.phone, key: profile.key };
       people.push(person);
-      await post(client, accountId, clearing.rows[0].id, profile.initialMinor, "期初资金", "入金", 65, `DEMO-${profile.key}-OPENING`);
+      await post(client, accountId, clearing.rows[0].id, profile.initialMinor, merchants.sourceAccount, "入金", 65, `DEMO-${profile.key}-OPENING`);
       const items: Array<[string, string, number, number, boolean?]> = [
-        [profile.key === "chestnut" ? "生活费" : profile.key === "apple" ? "店铺经营收入" : "工资到账", "收入", profile.salaryMinor, 5],
-        ["星河咖啡", "餐饮", -3200 - i * 200, 1], ["邻里超市", "购物", -18650 - i * 1300, 2],
-        ["城市地铁", "交通", -600, 3], ["午餐小馆", "餐饮", -5800, 4],
-        ["云盘会员", "订阅", -1800, 6], ["音乐会员", "订阅", -1500, 9],
-        ["水电缴费", "生活缴费", -23600 - i * 500, 12], ["学习书店", "教育", -8900, 16],
-        ["周末出行", "交通", -12500 - i * 600, 20], ["邻里超市", "购物", -22100, 35],
-        ["上月餐饮", "餐饮", -6800, 42], ["上月收入", "收入", profile.salaryMinor, 45],
-        [profile.key === "orange" ? "境外重复扣费" : "陌生商户扣费", "购物", -399900, 7, true],
+        [merchants.income, merchants.incomeCategory, profile.salaryMinor, 5],
+        [merchants.coffee, "餐饮", -3200 - i * 200, 1], [merchants.groceries, "购物", -18650 - i * 1300, 2],
+        [merchants.transit, "交通", -600, 3], [merchants.lunch, "餐饮", -5800, 4],
+        [merchants.cloud, "订阅", -1800, 6], [merchants.music, "订阅", -1500, 9],
+        [merchants.utility, "生活缴费", -23600 - i * 500, 12], [merchants.books, "教育", -8900, 16],
+        [merchants.ride, "交通", -12500 - i * 600, 20], [merchants.pastGroceries, "购物", -22100, 35],
+        [merchants.pastDining, "餐饮", -6800, 42], [merchants.income, merchants.incomeCategory, profile.salaryMinor, 45],
+        [merchants.reviewMerchant, "购物", -399900, 7, true],
       ];
       for (const [j, item] of items.entries()) await post(client, accountId, clearing.rows[0].id, item[2], item[0], item[1], item[3], `DEMO-${profile.key}-${j}`, item[4]);
       const card = await client.query<{ id: string }>("INSERT INTO cards(customer_id,account_id,card_name,masked_no,card_type,daily_limit_minor) VALUES($1,$2,'日常消费卡',$3,'VIRTUAL',100000) RETURNING id", [id, accountId, `•••• ${4101 + i}`]);
       await client.query("INSERT INTO cards(customer_id,account_id,card_name,masked_no,card_type,daily_limit_minor,overseas_enabled) VALUES($1,$2,'旅行备用卡',$3,'VIRTUAL',200000,true)", [id, accountId, `•••• ${8101 + i}`]);
-      for (const [merchant, amount, day] of [["云盘会员", 1800, 8], ["音乐会员", 1500, 16]] as const) {
+      for (const [merchant, amount, day] of [[merchants.cloud, 1800, 8], [merchants.music, 1500, 16]] as const) {
         await client.query("INSERT INTO subscriptions(customer_id,card_id,merchant_name,amount_minor,billing_cycle,next_charge_at) VALUES($1,$2,$3,$4,'MONTHLY',$5)", [id, card.rows[0].id, merchant, amount, ago(-day)]);
       }
       await client.query("INSERT INTO audit_events(customer_id,event_type,actor_type,event_summary,evidence) VALUES($1,'DEMO_DATA_SEEDED','SYSTEM','初始化用户及历史数据', $2::jsonb)", [id, JSON.stringify({ demo: true, source: "DEMO_SEED", profileKey: profile.key })]);
