@@ -60,6 +60,10 @@ Last synced: 2026-10-20.
   phone canvas and above the bottom navigation, with no dimmed backdrop or floating-card
   boundary. Approved automation reveals the business screen with one progress control.
 
+- Cards use a horizontal carousel with native touch scrolling, mouse dragging, keyboard
+  arrows, and labelled selection dots. Daily limit and the single Manage entry follow
+  the selected card. Locking remains inside the management dialog with human confirmation.
+
 - Banking and Agent are separate user flows. Banking buttons open their own screens
   and call authenticated banking APIs directly; they must never send a hidden prompt
   or switch to chat. The dedicated AI Assistant tab and the clearly labelled home

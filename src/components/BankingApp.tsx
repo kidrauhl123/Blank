@@ -2,10 +2,10 @@
 
 import {
   ArrowDownLeft, ArrowUpRight, ChartNoAxesColumnIncreasing,
-  ChevronRight, Clock3, CreditCard, Eye, EyeOff, House, Link2, LockKeyhole,
+  ChevronRight, Clock3, CreditCard, Eye, EyeOff, House, Link2,
   LogOut, Plus, RefreshCw, Settings, ShieldCheck, Sparkles, TrendingUp,
 } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
 import { ServiceWorkerRegister } from "./ServiceWorkerRegister";
 import { AuthScreen } from "./AuthScreen";
 import { FloatingAppAgent } from "./FloatingAppAgent";
@@ -290,21 +290,106 @@ function CardDetailsModal({ card, close, done }: { card?: Card; close: () => voi
 }
 
 function CardsView({ data, disabled, onCreate, onSelect }: { data: Bootstrap; disabled: boolean; onCreate: () => void; onSelect: (id: string) => void }) {
+  const [activeId, setActiveId] = useState(data.cards[0]?.id);
+  const activeIdRef = useRef(data.cards[0]?.id);
+  const carouselRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ pointerId: number; x: number; y: number; left: number; started: boolean } | null>(null);
+  const cardOrder = data.cards.map(card => card.id).join(",");
+  const activeIndex = Math.max(0, data.cards.findIndex(card => card.id === activeId));
+  const activeCard = data.cards[activeIndex];
+
+  useEffect(() => {
+    const carousel = carouselRef.current;
+    if (!carousel) return;
+    const align = () => {
+      if (dragRef.current?.started) return;
+      const slides = Array.from(carousel.children) as HTMLElement[];
+      const current = slides.find(slide => slide.dataset.cardId === activeIdRef.current) ?? slides[0];
+      if (current) carousel.scrollTo({ left: current.offsetLeft - slides[0].offsetLeft, behavior: "instant" });
+    };
+    const observer = new ResizeObserver(align);
+    observer.observe(carousel);
+    align();
+    return () => observer.disconnect();
+  }, [cardOrder]);
+
+  const nearestIndex = (carousel: HTMLDivElement) => {
+    const slides = Array.from(carousel.children) as HTMLElement[];
+    return slides.reduce((nearest, slide, index) =>
+      Math.abs(slide.offsetLeft - slides[0].offsetLeft - carousel.scrollLeft) < Math.abs(slides[nearest].offsetLeft - slides[0].offsetLeft - carousel.scrollLeft) ? index : nearest, 0);
+  };
+  const selectCard = (index: number) => {
+    const carousel = carouselRef.current;
+    const card = data.cards[index];
+    if (!carousel || !card) return;
+    activeIdRef.current = card.id;
+    setActiveId(card.id);
+    const slides = Array.from(carousel.children) as HTMLElement[];
+    carousel.scrollTo({ left: slides[index].offsetLeft - slides[0].offsetLeft, behavior: "instant" });
+  };
+  const syncSelection = (carousel: HTMLDivElement) => {
+    const card = data.cards[nearestIndex(carousel)];
+    if (card) { activeIdRef.current = card.id; setActiveId(card.id); }
+  };
+  const dragStart = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "mouse" || event.button !== 0) return;
+    dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, left: event.currentTarget.scrollLeft, started: false };
+  };
+  const dragMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
+    if (!drag.started) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < 8) return;
+      if (Math.abs(dy) > Math.abs(dx)) { dragRef.current = null; return; }
+      drag.started = true;
+      event.currentTarget.setAttribute("data-dragging", "true");
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+    event.preventDefault();
+    event.currentTarget.scrollLeft = drag.left - dx;
+  };
+  const dragEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    const index = nearestIndex(event.currentTarget);
+    event.currentTarget.removeAttribute("data-dragging");
+    if (drag.started) selectCard(index);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+
   return <div className={styles.listView}>
-    <div className={styles.viewHeading}><p>卡片与限额</p><h1>我的卡<span className={styles.cardCount}>{data?.cards.length ?? 0}</span></h1></div>
-    {!data?.cards.length && <div className={styles.largeEmpty}><CreditCard size={28} /><b>还没有卡片</b><span>申请一张虚拟卡，为日常支付设置独立限额。</span></div>}
-    {data?.cards.map((card, index) => <article className={styles.cardItem} key={card.id}>
+    <div className={styles.viewHeading}><p>卡片与限额</p><h1>我的卡<span className={styles.cardCount}>{data.cards.length}</span></h1></div>
+    {!data.cards.length && <div className={styles.largeEmpty}><CreditCard size={28} /><b>还没有卡片</b><span>申请一张虚拟卡，为日常支付设置独立限额。</span></div>}
+    {activeCard && <>
+    <div ref={carouselRef} className={styles.cardCarousel} role="region" aria-roledescription="轮播" aria-label="银行卡" tabIndex={0}
+      onScroll={event => syncSelection(event.currentTarget)} onPointerDown={dragStart} onPointerMove={dragMove}
+      onPointerUp={dragEnd} onPointerCancel={dragEnd} onLostPointerCapture={dragEnd}
+      onPointerLeave={event => { if (!dragRef.current?.started) dragEnd(event); }}
+      onKeyDown={event => {
+        const next = event.key === "ArrowRight" ? activeIndex + 1 : event.key === "ArrowLeft" ? activeIndex - 1 : event.key === "Home" ? 0 : event.key === "End" ? data.cards.length - 1 : null;
+        if (next !== null) { event.preventDefault(); selectCard(Math.max(0, Math.min(data.cards.length - 1, next))); }
+      }}>
+    {data.cards.map((card, index) => <article className={styles.cardItem} key={card.id} data-card-id={card.id} role="group" aria-roledescription="幻灯片" aria-label={`${index + 1} / ${data.cards.length}，${card.card_name}`}>
       <LiquidBankCard className={styles.bankCard} light={index % 2 === 1} locked={card.status !== "ACTIVE"}>
         <div className={styles.cardBrand}><span className={styles.cardLogo}>B</span><b>BankPilot</b><small>{card.card_type === "VIRTUAL" ? "VIRTUAL" : "DEBIT"}</small></div>
         <div className={styles.cardChip} aria-hidden="true"><i /><i /><i /></div>
         <p className={styles.cardNumber}>{card.masked_no}</p>
         <footer className={styles.cardFooter}><strong>{card.card_name}</strong><span className={styles.cardStatus} data-active={card.status === "ACTIVE"}>{card.status === "ACTIVE" ? "可用" : card.status === "LOCKED" ? "已锁定" : card.status}</span></footer>
       </LiquidBankCard>
-      <div className={styles.cardControls}><span>日限额<b>{money(card.daily_limit_minor)}</b></span><div>
-        {card.status === "ACTIVE" && <button data-agent-id={`lock-card-${card.id}`} data-agent-permission="human" className={styles.cardLock} disabled={disabled} onClick={() => onSelect(card.id)}><LockKeyhole size={15} />锁定</button>}
-        <button data-agent-id={`view-card-${card.id}`} data-agent-permission="navigate" data-agent-label={`查看 ${card.card_name} ${card.masked_no}`} className={styles.cardManage} disabled={disabled} onClick={() => onSelect(card.id)}>管理<ChevronRight size={15} /></button>
-      </div></div>
     </article>)}
+    </div>
+    {data.cards.length > 1 && <div className={styles.cardPagination}>
+      <div className={styles.cardDots} role="group" aria-label="选择银行卡">{data.cards.map((card, index) => <button key={card.id} type="button"
+        data-agent-id={`select-card-${card.id}`} data-agent-permission="navigate" aria-label={`切换到${card.card_name} ${card.masked_no}`}
+        aria-pressed={index === activeIndex} onClick={() => selectCard(index)}><span aria-hidden="true" /></button>)}</div>
+      <span className={styles.cardPosition} role="status" aria-label={`第 ${activeIndex + 1} 张，共 ${data.cards.length} 张卡`}>{activeIndex + 1} / {data.cards.length}</span>
+    </div>}
+    <div className={styles.cardControls}><span>日限额<b>{money(activeCard.daily_limit_minor)}</b></span>
+      <button data-agent-id={`view-card-${activeCard.id}`} data-agent-permission="navigate" data-agent-label={`管理 ${activeCard.card_name} ${activeCard.masked_no}`} aria-label={`管理${activeCard.card_name} ${activeCard.masked_no}`} className={styles.cardManage} disabled={disabled} onClick={() => onSelect(activeCard.id)}>管理<ChevronRight size={15} /></button>
+    </div>
+    </>}
     <button data-agent-id="open-card-application" data-agent-permission="navigate" className={styles.outlineAction} disabled={disabled || !data.accounts[0]} onClick={onCreate}><Plus size={18} />申请虚拟卡<ChevronRight size={17} /></button>
   </div>;
 }

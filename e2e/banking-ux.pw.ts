@@ -49,12 +49,12 @@ test("locking a card requires the bank dialog and submits once while confirmatio
   await page.route("**/api/v1/cards/*/lock", async route => { calls++; await new Promise<void>(resolve => { finish = resolve; }); locked = true; await route.fulfill({ json: { status: "LOCKED" } }); });
   await page.goto("/");
   await page.getByRole("button", { name: "卡片", exact: true }).click();
-  await page.locator(`[data-agent-id="lock-card-${cardId}"]`).click();
+  await page.locator(`[data-agent-id="view-card-${cardId}"]`).click();
   await expect(page.getByRole("dialog", { name: "卡片管理" })).toBeVisible();
   expect(calls).toBe(0);
   await page.getByRole("button", { name: "关闭", exact: true }).click();
   expect(calls).toBe(0);
-  await page.locator(`[data-agent-id="lock-card-${cardId}"]`).click();
+  await page.locator(`[data-agent-id="view-card-${cardId}"]`).click();
   await page.getByRole("button", { name: "确认锁定这张卡" }).click({ clickCount: 2 });
   await expect.poll(() => calls).toBe(1);
   await expect(page.getByRole("button", { name: "关闭", exact: true })).toBeDisabled();
@@ -72,7 +72,7 @@ test("a lost write response cannot claim failure or allow repeated confirmation"
   await page.route("**/api/v1/cards/*/lock", route => { writes++; return route.abort("connectionreset"); });
   await page.goto("/");
   await page.getByRole("button", { name: "卡片", exact: true }).click();
-  await page.locator(`[data-agent-id="lock-card-${cardId}"]`).click();
+  await page.locator(`[data-agent-id="view-card-${cardId}"]`).click();
   await page.getByRole("button", { name: "确认锁定这张卡" }).click();
   await expect(page.getByRole("dialog", { name: "卡片管理" }).getByRole("alert")).toContainText("暂时无法确认操作结果");
   await expect(page.getByRole("button", { name: "确认锁定这张卡" })).toBeDisabled();
@@ -88,7 +88,7 @@ test("an acknowledged write stays acknowledged when the subsequent account read 
   await page.route("**/api/v1/cards/*/lock", route => { locked = true; return route.fulfill({ json: { status: "LOCKED" } }); });
   await page.goto("/");
   await page.getByRole("button", { name: "卡片", exact: true }).click();
-  await page.locator(`[data-agent-id="lock-card-${cardId}"]`).click();
+  await page.locator(`[data-agent-id="view-card-${cardId}"]`).click();
   await page.getByRole("button", { name: "确认锁定这张卡" }).click();
   await expect(page.getByRole("heading", { name: "账户数据暂不可用" })).toBeVisible();
   await expect(page.getByRole("status")).toContainText("卡片已锁定");
