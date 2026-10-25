@@ -8,7 +8,7 @@
 .wordmark { display: flex; justify-content: center; align-items: center; gap: var(--space-2); font-size: var(--text-md); font-weight: 730; letter-spacing: -.025em; }
 .wordmark span { width: 25px; height: 25px; display: grid; place-items: center; background: var(--ink); color: var(--white); border-radius: var(--radius-control); font-size: var(--text-xs); }
 .iconButton { justify-self: end; width: var(--target-touch); height: var(--target-touch); display: grid; place-items: center; position: relative; color: var(--muted); }
-.viewport { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior-y: none; scrollbar-width: none; }
+.viewport { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior-y: none; scrollbar-width: none; padding-bottom: calc(var(--space-7) + var(--space-5) * 2 + env(safe-area-inset-bottom)); scroll-padding-bottom: calc(var(--space-7) + var(--space-5) * 2 + env(safe-area-inset-bottom)); }
 .viewport::-webkit-scrollbar { display: none; }
 .connectionError { margin: 0 var(--space-4) var(--space-2); padding: var(--space-3); font-size: var(--text-xs); background: var(--danger-tint); display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); border-radius: var(--radius-control); color: var(--danger-ink); }
 .connectionError button { border: 0; background: none; display: flex; align-items: center; min-height: var(--target-touch); gap: var(--space-1); font-weight: 700; color: inherit; }
@@ -159,9 +159,9 @@
 .composer input { height: 48px; width: 100%; border: 0; background: var(--surface); border-radius: var(--radius-control); padding: 0 var(--space-4); font-size: var(--text-md); }
 .composer button { width: var(--target-touch); height: var(--target-touch); border: 0; background: var(--ink); color: var(--white); border-radius: var(--radius-control); display: grid; place-items: center; transition: background var(--motion-fast); }
 .composer button:disabled { background: var(--line); opacity: 1; }
-.nav { height: calc(var(--space-7) + var(--space-5) + env(safe-area-inset-bottom)); flex: 0 0 calc(var(--space-7) + var(--space-5) + env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(5,1fr); padding: var(--space-1) var(--space-3) calc(var(--space-1) + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--white); }
+.nav { position: absolute; z-index: 10; inset-inline: var(--space-3); bottom: calc(var(--space-2) + env(safe-area-inset-bottom)); height: calc(var(--space-7) + var(--space-4)); display: grid; grid-template-columns: repeat(5,1fr); padding: var(--space-1); border: 0; border-radius: var(--radius-container); background: var(--white); }
 .nav button { border: 0; background: none; color: var(--muted); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-1); font-size: var(--text-xs); position: relative; border-radius: var(--radius-control); transition: color var(--motion-fast), background var(--motion-fast); }
-.nav button svg { stroke-width: 1.7; }.nav button.navActive { color: var(--accent); font-weight: 700; background: var(--accent-soft); }.nav button.navActive svg { stroke-width: 2; }
+.nav button svg { stroke-width: 1.7; }.nav button.navActive { color: var(--ink); font-weight: 700; }.nav button.navActive svg { stroke-width: 2; }
 
 .listView { padding: var(--space-5) var(--space-5) var(--space-6); }
 .viewHeading { margin: var(--space-1) var(--space-1) var(--space-5); }.viewHeading h1 { font-size: var(--text-xl); line-height: 1.2; letter-spacing: -.035em; }
@@ -244,7 +244,6 @@
 /* 刘海屏安全区：画布本身就是手机，所以顶部/底部内缩写在组件里。 */
 .topbar { padding-top: max(var(--space-2), env(safe-area-inset-top)); height: calc(70px + env(safe-area-inset-top)); flex-basis: calc(70px + env(safe-area-inset-top)); }
 .authPanel { padding-bottom: max(var(--space-6), env(safe-area-inset-bottom)); }
-.nav { height: calc(var(--space-7) + var(--space-5) + env(safe-area-inset-bottom)); flex-basis: calc(var(--space-7) + var(--space-5) + env(safe-area-inset-bottom)); }
 
 /* 鼠标当作手指：只用按压反馈，不做 hover 态。 */
 .quickActions button:active, .filterPills button:active, .promptRail button:active,
@@ -261,6 +260,6 @@
 .primaryButton:active { background: var(--action-pressed); }
 .balanceBlock .labelRow button:active { background: var(--card-detail); color: var(--card-ink); }
 .cardManage { padding-inline: var(--space-4); font-size: var(--text-sm); }
-.nav { position: relative; isolation: isolate; border-top: 0; background: var(--paper); padding-inline: var(--space-4); }
-.nav::before { content: ""; position: absolute; z-index: -1; inset: var(--space-1) var(--space-3) max(var(--space-1), env(safe-area-inset-bottom)); border-radius: var(--radius-container); background: var(--white); }
-.nav button.navActive { background: var(--surface-strong); }
+@supports (backdrop-filter: blur(var(--space-3))) {
+  .nav { background: color-mix(in srgb, var(--white) 88%, transparent); backdrop-filter: blur(var(--space-3)); -webkit-backdrop-filter: blur(var(--space-3)); }
+}
