@@ -56,6 +56,10 @@ Last synced: 2026-10-20.
 
 ## Product writing
 
+- The bottom AI Assistant entry is a full conversation page: edge to edge within the
+  phone canvas and above the bottom navigation, with no dimmed backdrop or floating-card
+  boundary. Approved automation reveals the business screen with one progress control.
+
 - Banking and Agent are separate user flows. Banking buttons open their own screens
   and call authenticated banking APIs directly; they must never send a hidden prompt
   or switch to chat. The dedicated AI Assistant tab and the clearly labelled home

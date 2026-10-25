@@ -4,6 +4,7 @@ import { AuthError, createSession } from "./auth";
 import { query, withTransaction } from "./db";
 import { DEMO_PROFILES } from "./demo-catalog";
 import { ensureVisitorMemoryToken } from "./visitor-memory";
+import { ensureDemoInvestmentHistory } from "./demo-investments";
 
 export async function isDemoCustomer(customerId: string) {
   return Boolean((await query("SELECT 1 FROM demo_profiles WHERE customer_id=$1", [customerId])).rowCount);
@@ -80,6 +81,7 @@ export async function loginDemoProfile(input: { profileKey: string; previousToke
   // Only the published fictional identities are selectable, never a customer UUID.
   if (!DEMO_PROFILES.some((profile) => profile.key === input.profileKey)) throw new AuthError("DEMO_PROFILE_NOT_FOUND", 404);
   await ensureDemoProfiles();
+  await ensureDemoInvestmentHistory();
   return withTransaction(async (client) => {
     const result = await client.query<{ id: string; display_name: string; phone: string }>(
       "SELECT c.id,c.display_name,c.phone FROM demo_profiles d JOIN customers c ON c.id=d.customer_id WHERE d.profile_key=$1 AND c.status='ACTIVE'", [input.profileKey],

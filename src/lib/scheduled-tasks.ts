@@ -3,6 +3,9 @@ import { query, withTransaction } from "./db";
 import { writeAudit } from "./audit";
 import { getBankStatement } from "./bank-statements";
 import { nextOccurrence, previousStatementMonth, scheduleInput, type ScheduleInput } from "./schedule-time";
+import { processDailyReview } from "./scheduled-ai-reviews";
+import { getJevStatus } from "./jev";
+import { getAIStatus } from "./ai";
 
 export type ScheduledTask = {
   id: string; customer_id: string; kind: ScheduleInput["kind"]; title: string; message: string;
@@ -40,14 +43,18 @@ export async function listScheduledTasks(customerId: string) {
   const [tasks, runs, heartbeat] = await Promise.all([
     query<ScheduledTask>("SELECT * FROM scheduled_tasks WHERE customer_id=$1 ORDER BY (status IN ('ACTIVE','PAUSED','ERROR')) DESC,created_at DESC LIMIT 200", [customerId]),
     query(`SELECT r.*,t.title,
+      CASE WHEN j.run_id IS NOT NULL THEN jsonb_build_object('status',j.status,'gate',j.gate,'result',j.result,'mainRequestedAt',j.main_requested_at,'error',j.last_error,
+        'capturedAt',j.snapshot->>'capturedAt','facts',j.snapshot->'facts') END AS ai,
       (SELECT jsonb_build_object('status',o.status,'attempts',o.attempts) FROM channel_outbox o
        WHERE o.dedupe_key='schedule:'||r.id::text) AS delivery
       FROM scheduled_task_runs r JOIN scheduled_tasks t ON t.id=r.schedule_id
+      LEFT JOIN scheduled_ai_reviews j ON j.run_id=r.id
       WHERE t.customer_id=$1 ORDER BY r.completed_at DESC LIMIT 50`, [customerId]),
     query<{ last_tick_at: Date }>("SELECT last_tick_at FROM scheduler_heartbeat WHERE id=1"),
   ]);
   const lastTick = heartbeat.rows[0]?.last_tick_at ?? null;
-  return { tasks: tasks.rows, runs: runs.rows, scheduler: { lastTickAt: lastTick, running: !!lastTick && Date.now() - lastTick.getTime() < 90_000 } };
+  return { tasks: tasks.rows, runs: runs.rows, scheduler: { lastTickAt: lastTick, running: !!lastTick && Date.now() - lastTick.getTime() < 90_000 },
+    dailyReview: { jev: getJevStatus(), mainModel: getAIStatus() } };
 }
 
 export async function changeScheduledTask(customerId: string, id: string, action: "pause" | "resume" | "cancel") {
@@ -66,6 +73,11 @@ export async function changeScheduledTask(customerId: string, id: string, action
     }
     const updated = await client.query<ScheduledTask>(`UPDATE scheduled_tasks SET status=$3,next_run_at=$4,retry_at=NULL,attempts=0,last_error=NULL,updated_at=now()
       WHERE id=$1 AND customer_id=$2 RETURNING *`, [id, customerId, status, next]);
+    if (task.kind === "DAILY_AI_REVIEW") await client.query(`WITH cancelled AS (
+      UPDATE scheduled_ai_reviews j SET status='CANCELLED',lease_token=NULL,locked_until=NULL,updated_at=now()
+      FROM scheduled_task_runs r WHERE r.id=j.run_id AND r.schedule_id=$1 AND j.status IN ('PENDING','RUNNING') RETURNING j.run_id)
+      UPDATE scheduled_task_runs SET status='CANCELLED',summary='任务设置已变更，本轮检查停止。',completed_at=now()
+      WHERE id IN (SELECT run_id FROM cancelled)`, [id]);
     await writeAudit({ customerId, actorType: "USER", eventType: "SCHEDULE_CHANGED", summary: "客户更新定时任务状态", evidence: { scheduleId: id, action, status } }, client);
     return updated.rows[0];
   });
@@ -108,7 +120,8 @@ export async function tickScheduledTasks() {
       }
       await client.query("SAVEPOINT occurrence");
       try {
-        const output = await executeReadOnlyTask(client, task, now);
+        const isAI = task.kind === "DAILY_AI_REVIEW";
+        const output = isAI ? { summary: "每日巡检已排队，等待 Jev 判断。", notify: false } : await executeReadOnlyTask(client, task, now);
         let identity: { id: string; channel_type: string } | undefined;
         if (task.channel_identity_id) {
           const active = await client.query<{ id: string; channel_type: string }>("SELECT id,channel_type FROM channel_identities WHERE id=$1 AND customer_id=$2 AND status='ACTIVE' FOR SHARE", [task.channel_identity_id, task.customer_id]);
@@ -116,8 +129,9 @@ export async function tickScheduledTasks() {
           if (!identity) output.summary += " 通知绑定已失效，结果仅保存在 APP。";
         }
         const run = await client.query<{ id: string }>(`INSERT INTO scheduled_task_runs(schedule_id,scheduled_for,status,summary,attempts)
-          VALUES($1,$2,'SUCCEEDED',$3,$4) ON CONFLICT(schedule_id,scheduled_for) DO UPDATE
-          SET status='SUCCEEDED',summary=excluded.summary,attempts=excluded.attempts,completed_at=now() RETURNING id`, [task.id, task.next_run_at, output.summary, task.attempts + 1]);
+          VALUES($1,$2,$5,$3,$4) ON CONFLICT(schedule_id,scheduled_for) DO UPDATE
+          SET status=excluded.status,summary=excluded.summary,attempts=excluded.attempts,completed_at=now() RETURNING id`, [task.id, task.next_run_at, output.summary, task.attempts + 1, isAI ? "PENDING" : "SUCCEEDED"]);
+        if (isAI) await client.query("INSERT INTO scheduled_ai_reviews(run_id) VALUES($1) ON CONFLICT DO NOTHING", [run.rows[0].id]);
         if (identity && output.notify) {
           // Send a generic notice; financial details and custom reminder text stay in APP.
           await client.query(`INSERT INTO channel_outbox(channel_identity_id,customer_id,channel_type,dedupe_key,payload)
@@ -127,7 +141,7 @@ export async function tickScheduledTasks() {
         const next = nextOccurrence(task.starts_at, task.frequency, now);
         const finished = !next || !!task.ends_at && next > task.ends_at;
         await client.query(`UPDATE scheduled_tasks SET status=$2,next_run_at=$3,retry_at=NULL,attempts=0,last_error=NULL,updated_at=now() WHERE id=$1`, [task.id, finished ? "COMPLETED" : "ACTIVE", next ?? task.next_run_at]);
-        await writeAudit({ customerId: task.customer_id, actorType: "SYSTEM", eventType: "SCHEDULE_EXECUTED", summary: "定时任务结果已保存", evidence: { scheduleId: task.id, runId: run.rows[0].id, notificationQueued: !!identity && output.notify } }, client);
+        await writeAudit({ customerId: task.customer_id, actorType: "SYSTEM", eventType: isAI ? "DAILY_REVIEW_QUEUED" : "SCHEDULE_EXECUTED", summary: isAI ? "每日巡检已排队" : "定时任务结果已保存", evidence: { scheduleId: task.id, runId: run.rows[0].id, notificationQueued: !!identity && output.notify } }, client);
       } catch {
         await client.query("ROLLBACK TO SAVEPOINT occurrence");
         const attempts = task.attempts + 1;
@@ -144,5 +158,7 @@ export async function tickScheduledTasks() {
     processed++;
   }
   await query("INSERT INTO scheduler_heartbeat(id,last_tick_at) VALUES(1,now()) ON CONFLICT(id) DO UPDATE SET last_tick_at=excluded.last_tick_at");
-  return { processed };
+  const reviews = await processDailyReview();
+  await query("UPDATE scheduler_heartbeat SET last_tick_at=now() WHERE id=1");
+  return { processed, reviews };
 }

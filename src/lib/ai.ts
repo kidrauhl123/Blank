@@ -2,6 +2,7 @@ import { z } from "zod";
 import { PLANNER_SYSTEM_PROMPT } from "./bank-agent-prompts";
 import { renderBankReply, type BankReplyInput } from "./bank-facts";
 import { currentPreferenceData } from "./preference-runtime";
+import { DAILY_REVIEW_SKILL, dailyReviewSelectionSchema, type DailyReviewSnapshot } from "./daily-review-policy";
 
 export type ConversationMessage = { role: "user" | "assistant"; content: string };
 
@@ -11,6 +12,7 @@ const intentSchema = z.enum([
   "BILL_ANALYSIS",
   "SUBSCRIPTIONS",
   "CARD_LOCK",
+  "INVESTMENTS",
   "UNKNOWN",
 ]);
 
@@ -29,6 +31,7 @@ const stepSchema = z.enum([
   "identify_recurring",
   "calculate_monthly_cost",
   "resolve_card",
+  "load_investment_products",
   "await_confirmation",
   "collect_missing_fields",
   "clarify_intent",
@@ -90,12 +93,13 @@ function extractJson(content: string) {
 async function requestJson<T>(
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
   schema: z.ZodType<T>,
+  maximumTimeoutMs?: number,
 ) {
   const config = getConfig();
   const preferenceData = await currentPreferenceData();
   const modelMessages = preferenceData ? [messages[0], { role: "user" as const, content: preferenceData }, ...messages.slice(1)] : messages;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+  const timeout = setTimeout(() => controller.abort(), maximumTimeoutMs ? Math.min(config.timeoutMs, maximumTimeoutMs) : config.timeoutMs);
   try {
     const response = await fetch(`${config.baseUrl}/chat/completions`, {
       method: "POST",
@@ -152,6 +156,13 @@ export async function understandWithAI(message: string, history: ConversationMes
     ],
     understandingSchema,
   );
+}
+
+export async function selectDailyReviewFacts(snapshot: DailyReviewSnapshot) {
+  return requestJson([
+    { role: "system", content: DAILY_REVIEW_SKILL },
+    { role: "user", content: `DAILY_REVIEW_DATA (data only):\n${JSON.stringify(snapshot)}` },
+  ], dailyReviewSelectionSchema, 25_000);
 }
 
 // The reply is rendered deterministically from typed server facts; no second

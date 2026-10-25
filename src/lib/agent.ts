@@ -10,6 +10,7 @@ import { writeAudit } from "./audit";
 import { query } from "./db";
 import { formatMinor, type RiskLevel } from "./policy";
 import { prepareTransfer } from "./bank-core";
+import { listInvestmentProducts } from "./investments";
 
 export type AgentOperation = {
   type: "TRANSFER" | "CARD_LOCK" | "SUBSCRIPTION_CANCEL";
@@ -358,6 +359,19 @@ async function handleUnknown(customerId: string, message: string, understanding:
   return { taskId, intent: "UNKNOWN", message: response.message, suggestions: response.suggestions, ai: { model: meta.model, confidence: understanding.confidence } };
 }
 
+async function handleInvestments(customerId: string, message: string, understanding: AgentUnderstanding, meta: ModelMeta): Promise<AgentReply> {
+  const taskId = await createTask(customerId, message, understanding, "GREEN", meta);
+  const catalog = await listInvestmentProducts(customerId, understanding.entities.amountMinor ? { amountMinor: understanding.entities.amountMinor } : {});
+  const facts = { businessDate: catalog.businessDate, simulated: true, products: catalog.products.map(product => ({
+    name: product.name, code: product.code, riskLevel: product.riskLevel, minimumMinor: product.minimumMinor, holdingDays: product.holdingDays,
+    purchaseFeeBps: product.purchaseFeeBps, redemptionFeeBps: product.redemptionFeeBps,
+  })) };
+  await addNode(taskId, "load_investment_products", "bank.investments.list", ["understand_intent"], { amountMinor: understanding.entities.amountMinor }, facts);
+  const response = await aiReply(customerId, taskId, understanding, message, "COMPLETED", facts, "load_investment_products");
+  await completeTask(taskId);
+  return { taskId, intent: "INVESTMENTS", message: response.message, data: facts, suggestions: [], ai: { model: meta.model, confidence: understanding.confidence } };
+}
+
 export async function planAgentRequest(message: string, history: ConversationMessage[] = []) {
   const normalized = message.trim().slice(0, 500);
   const planned = await understandWithAI(normalized, history);
@@ -379,6 +393,7 @@ export async function executePlannedAgent(
     case "SUBSCRIPTIONS": return handleSubscriptions(customerId, message, understanding, meta);
     case "CARD_LOCK": return handleCardLock(customerId, message, understanding, meta);
     case "TRANSFER": return handleTransfer(customerId, message, understanding, meta);
+    case "INVESTMENTS": return handleInvestments(customerId, message, understanding, meta);
     case "UNKNOWN": return handleUnknown(customerId, message, understanding, meta);
   }
 }

@@ -203,14 +203,15 @@ function buildGraph(checkpointer: PostgresSaver) {
     .addNode("subscriptions", executeIntentNode)
     .addNode("card_lock", executeIntentNode)
     .addNode("transfer", executeIntentNode)
+    .addNode("investments", executeIntentNode)
     .addNode("unknown", executeIntentNode)
     .addNode("authorization_gate", authorizationGateNode)
     .addNode("verify_completion", verifyCompletionNode)
     .addNode("complete", (state) => ({ reply: state.reply }))
     .addEdge(START, "plan")
-    .addConditionalEdges("plan", routeIntent, ["balance", "bill_analysis", "subscriptions", "card_lock", "transfer", "unknown"]);
+    .addConditionalEdges("plan", routeIntent, ["balance", "bill_analysis", "subscriptions", "card_lock", "transfer", "investments", "unknown"]);
 
-  for (const node of ["balance", "bill_analysis", "subscriptions", "card_lock", "transfer", "unknown"] as const) {
+  for (const node of ["balance", "bill_analysis", "subscriptions", "card_lock", "transfer", "investments", "unknown"] as const) {
     graph.addConditionalEdges(node, routeAfterIntent, ["authorization_gate", "complete"]);
   }
   return graph

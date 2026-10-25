@@ -1,0 +1,11 @@
+.content { display: grid; gap: var(--space-3); }
+.meta { font-size: var(--text-xs); color: var(--muted); line-height: 1.6; }
+.stages { list-style: none; padding: 0; margin: 0; }
+.stages li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: var(--target-touch); padding: var(--space-2) 0; border-bottom: 1px solid var(--line-quiet); font-size: var(--text-sm); }
+.stages small { font-size: var(--text-xs); color: var(--muted); flex-shrink: 0; }
+.stages [data-state="进行中"] { color: var(--accent); }
+.stages [data-state="已停止"] { color: var(--danger-ink); }
+.result { font-size: var(--text-sm); line-height: 1.7; white-space: pre-line; overflow-wrap: anywhere; }
+.evidence { font-size: var(--text-xs); color: var(--muted); }
+.evidence summary { min-height: var(--target-touch); padding: var(--space-3) 0; color: var(--ink); }
+.evidence p { margin-bottom: var(--space-3); line-height: 1.6; overflow-wrap: anywhere; }

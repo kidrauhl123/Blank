@@ -7,9 +7,10 @@ import { consumeCustomerTotp } from "./auth";
 import { transferFingerprint } from "./transfer-binding";
 import { writeAudit } from "./audit";
 import { getBankStatement } from "./bank-statements";
+import { getInvestmentOverview } from "./investments";
 
 export async function getBankingOverview(customerId: string) {
-  const [customer, accounts, transactions, cards, subscriptions, statement] = await Promise.all([
+  const [customer, accounts, transactions, cards, subscriptions, statement, investments] = await Promise.all([
     query<{ id: string; display_name: string; phone: string; risk_profile: string; mfa_configured: boolean }>(
       `SELECT c.id,c.display_name,c.phone,c.risk_profile,(m.enabled_at IS NOT NULL) AS mfa_configured
        FROM customers c LEFT JOIN mfa_totp m ON m.customer_id=c.id WHERE c.id=$1 AND c.status='ACTIVE'`,
@@ -21,9 +22,12 @@ export async function getBankingOverview(customerId: string) {
       [customerId],
     ),
     query(
-      `SELECT bt.id,bt.merchant_name,bt.category,bt.amount_minor,bt.currency,bt.occurred_at,bt.is_anomaly,bt.metadata
+      `SELECT bt.id,bt.account_id,bt.merchant_name,bt.category,bt.amount_minor,bt.currency,bt.occurred_at,bt.is_anomaly,bt.metadata,
+              io.receipt AS investment_receipt
        FROM bank_transactions bt JOIN accounts a ON a.id=bt.account_id
-       WHERE a.customer_id=$1 ORDER BY occurred_at DESC LIMIT 50`,
+       LEFT JOIN investment_orders io ON io.operation_id=bt.metadata->>'operationId'
+         AND io.customer_id=a.customer_id AND io.account_id=bt.account_id AND io.status='SUCCEEDED'
+       WHERE a.customer_id=$1 ORDER BY bt.occurred_at DESC,bt.id DESC LIMIT 50`,
       [customerId],
     ),
     query(
@@ -37,10 +41,12 @@ export async function getBankingOverview(customerId: string) {
       [customerId],
     ),
     getBankStatement(customerId),
+    getInvestmentOverview(customerId),
   ]);
   if (!customer.rows[0]) throw new Error("CUSTOMER_UNAVAILABLE");
-  const totalMinor = accounts.rows.reduce((sum, row) => sum + Number(row.available_balance_minor), 0);
-  return { customer: customer.rows[0], totalMinor, accounts: accounts.rows, transactions: transactions.rows, cards: cards.rows, subscriptions: subscriptions.rows, statement };
+  const totalMinor = investments.cashMinor + investments.valueMinor;
+  return { customer: customer.rows[0], totalMinor, accounts: accounts.rows, transactions: transactions.rows, cards: cards.rows, subscriptions: subscriptions.rows, statement,
+    investmentValueMinor: investments.valueMinor };
 }
 
 export async function blockSubscription(customerId: string, subscriptionId: string) {

@@ -37,6 +37,10 @@ chmod 600 "$backup_dir/source.tar.gz"
 echo "Database, environment and source backed up."
 REMOTE_BACKUP
 
+# Install only Jev's explicitly configured local values after the private remote
+# environment backup exists. The helper streams secrets over SSH stdin.
+node scripts/configure-jev-remote.mjs "$target" "$release_stamp"
+
 rsync -az --delete \
   --exclude .git --exclude node_modules --exclude .next \
   --include '.env.example' --include 'deploy/.env.production.example' \
@@ -97,6 +101,21 @@ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='020_scheduled_tasks.sql') THEN
     RAISE EXCEPTION 'Scheduled task migration is missing';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='021_simulated_investments.sql')
+     OR to_regclass('public.investment_positions') IS NULL
+     OR to_regclass('public.investment_simulation_clocks') IS NULL THEN
+    RAISE EXCEPTION 'Simulated investments migration is missing';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='022_demo_investment_history.sql') THEN
+    RAISE EXCEPTION 'Demo investment history migration is missing';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='023_daily_ai_reviews.sql')
+     OR to_regclass('public.scheduled_ai_reviews') IS NULL THEN
+    RAISE EXCEPTION 'Daily AI review migration is missing';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='024_review_recording_support.sql') THEN
+    RAISE EXCEPTION 'Review recording support migration is missing';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='019_authorization_hardening.sql') THEN
     RAISE EXCEPTION 'Authorization hardening migration is missing';

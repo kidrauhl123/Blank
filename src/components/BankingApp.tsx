@@ -3,7 +3,7 @@
 import {
   ArrowDownLeft, ArrowUpRight, ChartNoAxesColumnIncreasing,
   ChevronRight, Clock3, CreditCard, Eye, EyeOff, House, Link2, LockKeyhole,
-  LogOut, Plus, RefreshCw, Settings, ShieldCheck, Sparkles,
+  LogOut, Plus, RefreshCw, Settings, ShieldCheck, Sparkles, TrendingUp,
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { ServiceWorkerRegister } from "./ServiceWorkerRegister";
@@ -11,18 +11,22 @@ import { AuthScreen } from "./AuthScreen";
 import { FloatingAppAgent } from "./FloatingAppAgent";
 import { LiquidBankCard } from "./LiquidBankCard";
 import { BankDialog as ModalShell } from "./BankDialog";
+import { InvestmentView } from "./InvestmentView";
+import { InvestmentReceiptDialog } from "./InvestmentReceiptDialog";
+import { ProactiveAttention } from "./ProactiveAttention";
+import type { InvestmentReceipt } from "@/lib/investment-types";
 import type { BankStatement } from "@/lib/banking-report";
 import { bankRequest, BankRequestError, jsonPost } from "@/lib/client-request";
 import styles from "./BankingApp.module.css";
 
 type Account = { id: string; name: string; account_no: string; masked_no: string; account_type: string; available_balance_minor: string; currency: string; status: string };
-type Transaction = { id: string; merchant_name: string; category: string; amount_minor: string; occurred_at: string; is_anomaly: boolean };
+type Transaction = { id: string; merchant_name: string; category: string; amount_minor: string; occurred_at: string; is_anomaly: boolean; investment_receipt?: InvestmentReceipt | null };
 type Card = { id: string; card_name: string; masked_no: string; card_type: string; status: string; daily_limit_minor: string };
-type Bootstrap = { customer: { display_name: string; phone: string; mfa_configured: boolean }; totalMinor: number; accounts: Account[]; transactions: Transaction[]; cards: Card[]; statement: BankStatement; ai: { configured: boolean; model: string | null } };
-type Tab = "home" | "activity" | "cards";
+type Bootstrap = { customer: { display_name: string; phone: string; mfa_configured: boolean }; totalMinor: number; accounts: Account[]; transactions: Transaction[]; cards: Card[]; statement: BankStatement; ai: { configured: boolean; model: string | null }; features?: { proactiveReviews: boolean } };
+type Tab = "home" | "activity" | "cards" | "wealth";
 
 const money = (minor: number | string) => new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", minimumFractionDigits: 2 }).format(Number(minor) / 100);
-const shortDate = (date: string) => new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric" }).format(new Date(date));
+const shortDate = (date: string) => new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", timeZone: "Asia/Shanghai" }).format(new Date(date));
 type PreparedTransfer = {
   operationId: string; riskLevel: "YELLOW" | "RED"; requiredAuth: "CONFIRM" | "MFA";
   taskId?: string;
@@ -112,10 +116,10 @@ export function BankingApp() {
   if (!data) return <main className={styles.stage}><section className={styles.unavailable}><ShieldCheck size={32} /><h1>账户数据暂不可用</h1><p role="alert">{error || "请重新读取账户信息。"}</p>{notice && <p className={styles.confirmedNotice} role="status">{notice} 请刷新查看最新账户状态。</p>}<button className={styles.primaryButton} disabled={loading} onClick={() => void load()}><RefreshCw size={17} />重新读取</button><small>读取失败不代表余额为零。操作结果请以回执和最新明细为准。</small></section></main>;
   const account = data.accounts[0];
 
-  return <main className={styles.stage} ref={appRoot} data-agent-page={dialog ?? ({ home: "首页", activity: "账户明细", cards: "卡片管理" }[tab])}>
+  return <main className={styles.stage} ref={appRoot} data-agent-page={dialog ?? ({ home: "首页", activity: "账户明细", cards: "卡片管理", wealth: "模拟理财" }[tab])}>
     <ServiceWorkerRegister />
     <section className={styles.phone} aria-label="BankPilot 手机银行">
-      <header className={styles.topbar}>
+      <header className={styles.topbar} inert={assistantVisible}>
         <button className={styles.avatar} aria-label="个人中心" onClick={() => setDialog("profile")}>{data.customer.display_name.slice(0, 2).toUpperCase()}</button>
         <div className={styles.wordmark}><span>B</span> BankPilot</div>
         <a className={styles.iconButton} href="/security" aria-label="安全中心"><ShieldCheck size={21} strokeWidth={1.8} /></a>
@@ -123,18 +127,20 @@ export function BankingApp() {
       {error && <div className={styles.connectionError} role="alert"><span>{error}</span><button disabled={loading} onClick={() => void load()}><RefreshCw size={15} />重新读取</button></div>}
       {notice && <div className={styles.confirmedNotice} role="status">{notice}<button onClick={() => setNotice("")} aria-label="关闭操作提示">关闭</button></div>}
       {loading && <p className={styles.refreshStatus} role="note">正在更新账户信息，以下为上次读取的数据…</p>}
-      <div className={styles.viewport} ref={viewportRef} data-agent-viewport>
+      <div className={styles.viewport} ref={viewportRef} data-agent-viewport inert={assistantVisible}>
         {tab === "home" && <HomeView data={data} loading={loading} visible={balanceVisible} toggleVisible={() => setBalanceVisible(!balanceVisible)} onDeposit={() => setDialog("deposit")} onTransfer={() => setDialog("transfer")} />}
         {tab === "activity" && <ActivityView data={data} />}
         {tab === "cards" && <CardsView data={data} disabled={loading} onCreate={() => setDialog("card")} onSelect={id => { setSelectedCard(id); setDialog("card-details"); }} />}
+        {tab === "wealth" && <InvestmentView accounts={data.accounts} mfaConfigured={data.customer.mfa_configured} onChanged={async message => { if (message) setNotice(message); await load(); }} />}
       </div>
       <nav className={styles.nav} aria-label="主导航">
         <NavButton agentId="nav-home" active={tab === "home" && !assistantVisible} label="首页" icon={<House size={21} />} onClick={() => navigate("home")} />
+        <NavButton agentId="nav-wealth" active={tab === "wealth" && !assistantVisible} label="理财" icon={<TrendingUp size={21} />} onClick={() => navigate("wealth")} />
         <NavButton active={assistantVisible} label="AI 助手" icon={<Sparkles size={21} />} onClick={openAssistant} />
         <NavButton agentId="nav-activity" active={tab === "activity" && !assistantVisible} label="明细" icon={<ChartNoAxesColumnIncreasing size={21} />} onClick={() => navigate("activity")} />
         <NavButton agentId="nav-cards" active={tab === "cards" && !assistantVisible} label="卡片" icon={<CreditCard size={21} />} onClick={() => navigate("cards")} />
       </nav>
-      <FloatingAppAgent rootRef={appRoot} configured={data.ai.configured} openSignal={assistantOpen} closeSignal={assistantClose} onOpenChange={setAssistantVisible} />
+      <FloatingAppAgent rootRef={appRoot} configured={data.ai.configured} openSignal={assistantOpen} closeSignal={assistantClose} onOpenChange={setAssistantVisible} presentation="page" />
     </section>
     {dialog === "deposit" && account && <DepositModal account={account} busy={actionBusy} close={() => setDialog(null)} done={() => afterAction("入金已完成。")} setBusy={setActionBusy} />}
     {dialog === "transfer" && account && <TransferModal account={account} mfaConfigured={data.customer.mfa_configured} prepared={prepared} setPrepared={setPrepared} busy={actionBusy} setBusy={setActionBusy} close={closeTransfer} code={mfaCode} setCode={setMfaCode} done={() => afterAction("转账已完成，请在明细中查看回执。")} />}
@@ -157,18 +163,25 @@ function HomeView({ data, loading, visible, toggleVisible, onDeposit, onTransfer
       <button data-agent-id="open-transfer" data-agent-permission="navigate" className={styles.primary} disabled={loading || !data.accounts[0]} onClick={onTransfer}><span><ArrowUpRight /></span>转账</button>
       <button data-agent-id="open-deposit" data-agent-permission="navigate" disabled={loading || !data.accounts[0]} onClick={onDeposit}><span><Plus /></span>入金</button>
     </div>
+    {data.features?.proactiveReviews && <ProactiveAttention key={data.customer.phone} />}
     <section className={styles.section}><div className={styles.sectionHead}><div><p>本月支出与转出</p><h2>{data ? money(data.statement.expenseMinor) : "—"}</h2></div><span className={styles.monthLabel}>{data?.statement.month ?? "本月"}</span></div>{categories.length > 0 && <div className={styles.spendingBreakdown}>{categories.map((category) => <div key={category.category}><span>{category.category}</span><b>{money(category.totalMinor)}</b></div>)}</div>}{data?.statement.expenseMinor === 0 && <p className={styles.emptyCopy}>本月还没有支出记录。</p>}</section>
     <section className={styles.section}><div className={styles.sectionTitle}><h2>最近交易</h2><span>{data?.transactions.length ?? 0} 笔</span></div><TransactionList items={data?.transactions.slice(0, 4) ?? []} /></section>
   </div>;
 }
 
 function TransactionList({ items }: { items: Transaction[] }) {
+  const [selected, setSelected] = useState<Transaction | null>(null);
   if (!items.length) return <div className={styles.emptyState}><span>还没有交易</span><small>入金或转账后会显示在这里。</small></div>;
-  return <div className={styles.transactionList}>{items.map((item) => <div className={styles.transaction} key={item.id}>
+  return <><div className={styles.transactionList}>{items.map((item) => {
+    const content = <>
     <span className={Number(item.amount_minor) >= 0 ? styles.txIconIn : styles.txIcon}>{Number(item.amount_minor) >= 0 ? <ArrowDownLeft size={19} /> : item.merchant_name.slice(0, 1)}</span>
-    <span className={styles.txCopy}><b>{item.merchant_name}</b><small>{item.category} · {shortDate(item.occurred_at)}{item.is_anomaly && <em>需核实</em>}</small></span>
+    <span className={styles.txCopy}><b>{item.merchant_name}</b><small>{item.category} · {shortDate(item.occurred_at)}{item.investment_receipt && " · 查看回执"}{item.is_anomaly && <em>需核实</em>}</small></span>
     <strong className={Number(item.amount_minor) >= 0 ? styles.positive : ""}>{Number(item.amount_minor) >= 0 ? "+" : "−"}{money(Math.abs(Number(item.amount_minor)))}</strong>
-  </div>)}</div>;
+    </>;
+    return item.investment_receipt
+      ? <button key={item.id} className={`${styles.transaction} ${styles.transactionButton}`} data-agent-id={`transaction-${item.id}`} data-agent-permission="navigate" aria-label={`查看${item.merchant_name}回执`} onClick={() => setSelected(item)}>{content}</button>
+      : <div className={styles.transaction} key={item.id}>{content}</div>;
+  })}</div>{selected?.investment_receipt && <InvestmentReceiptDialog receipt={selected.investment_receipt} postedAt={selected.occurred_at} close={() => setSelected(null)} />}</>;
 }
 
 function ActivityView({ data }: { data: Bootstrap | null }) {

@@ -8,6 +8,14 @@ can use the banking core; neither UI is a dependency of the other.
 
 ## Native screens
 
+- The bottom AI Assistant entry opens a full conversation page above the navigation,
+  without automatically sending a request. Messages remain when switching tabs.
+  Approved page actions reveal the banking screen with a compact progress control.
+- Wealth has six explicitly simulated products, comparisons, deterministic daily NAV,
+  risk assessment, TOTP subscription, full-lot redemption, positions and a customer-specific
+  demonstration date. Apply migration 021 before starting the updated app; see
+  [simulated investments](SIMULATED_INVESTMENTS.md).
+
 - Home has Transfer and Deposit shortcuts, an explicit AI card, a read-only monthly
   expense summary and recent transactions. Analysis and Subscriptions screens and
   navigation were removed at the user's request; bank actions do not redirect to AI.

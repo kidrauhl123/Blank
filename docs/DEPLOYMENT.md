@@ -32,6 +32,12 @@ AI 变量为空时，银行基础功能正常工作，内置助手明确显示�
 
 ## 发布
 
+2026-10-22 本地新增模拟理财及五位用户历史，需要先依次应用 `021_simulated_investments.sql`、`022_demo_investment_history.sql` 再启动新版 APP，否则新增的账户资产汇总和模拟身份登录无法读取。Compose 新安装及发布检查已纳入两项迁移；本地实现与验证边界见 [模拟理财](SIMULATED_INVESTMENTS.md)。这条说明不是生产发布记录。
+
+同日每日 AI 巡检还需要 `023_daily_ai_reviews.sql`、APP 私有环境中的 `TYPESAFE_API_KEY` 及现有主模型配置，迁移后重建 APP 并启动 scheduler。密钥不进入 Git 或源码同步；自动发布会在远端备份完成后，将本地私有配置中指定的 Jev 变量通过 SSH 标准输入安装到远端私有环境文件。见 [每日巡检](DAILY_AI_REVIEWS.md)。这条说明同样不是生产发布记录。
+
+首页主动关注及录制支持还需 `024_review_recording_support.sql`，发布检查已纳入。录屏流程见 [视频录制](DEMO_VIDEO.md)；当前尚无该批发布记录。
+
 含授权补强的版本必须应用 `019_authorization_hardening.sql` 后启动新版。迁移会取消升级前未完成的转账草稿及对应挑战/任务，保留资金和历史回执；已有 TOTP 用户可能需等待最多约 60 秒使用新的动态码。先在隔离 PostgreSQL 上通过全部回归，细节见 [授权补强与验证范围](AUTHORIZATION_HARDENING.md)。
 
 已配置服务器上的私有环境文件后，推荐在可访问部署服务器的本机执行：
@@ -41,6 +47,8 @@ bash scripts/deploy.sh CONTABO-jp
 ```
 
 脚本要求本地改动已提交，只同步当前提交的源码；先备份远端数据库、环境和代码，再构建、停用旧运行时、应用迁移、启动并核对账本不变量、LangGraph 健康与旧接口删除。失败时停止并输出备份路径，不自动恢复数据库。成功后将发布提交写入远端 `DEPLOYED_COMMIT`。首次配置环境及真实机器人平台联调仍按本文步骤完成。
+
+本地 `.env.local` 中有 `TYPESAFE_API_KEY` 时，`configure-jev-remote.mjs` 在备份后仅同步 `TYPESAFE_API_KEY`、可选的 `TYPESAFE_MODEL`、`JEV_TIMEOUT_MS` 和 `JEV_QUIET_THRESHOLD`；不覆盖服务器数据库、主模型或渠道配置，密钥不出现在命令参数或日志中，远端环境文件权限为 600。没有本地 Key 时保留服务器现有设置。手动发布不执行此辅助步骤，需自行配置远端私有变量。
 
 以下为手动发布步骤。
 

@@ -17,7 +17,7 @@ test("five profiles enter real accounts and switch without carrying an Agent run
     const overview = await (await page.request.get("/api/bootstrap")).json();
     expect(overview.customer.display_name).toBe(name);
     expect(overview.totalMinor).toBeGreaterThan(0);
-    expect(overview.transactions).toHaveLength(17);
+    expect(overview.transactions).toHaveLength(22);
     expect(overview.cards).toHaveLength(2);
     expect(overview.subscriptions).toHaveLength(2);
     identities.add(overview.accounts[0].id);

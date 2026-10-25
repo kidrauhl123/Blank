@@ -44,6 +44,39 @@ BEGIN
   END IF;
 
   IF EXISTS (
+    SELECT 1 FROM investment_positions p JOIN accounts a ON a.id=p.account_id WHERE p.customer_id<>a.customer_id OR a.customer_id IS NULL
+  ) OR EXISTS (
+    SELECT 1 FROM investment_orders o WHERE (o.quote IS NOT NULL OR o.suitability_evidence->>'source'='DEMO_SEED') AND o.status='SUCCEEDED'
+      AND (o.receipt IS NULL OR o.position_id IS NULL OR NOT EXISTS
+        (SELECT 1 FROM ledger_transactions l WHERE l.reference='LED-'||o.operation_id))
+  ) THEN
+    RAISE EXCEPTION 'Investment invariant failed: ownership or committed receipt mismatch';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM investment_orders o
+    WHERE (o.quote IS NOT NULL OR o.suitability_evidence->>'source'='DEMO_SEED') AND o.status='SUCCEEDED'
+      AND (
+        (SELECT count(*) FROM bank_transactions bt
+         WHERE bt.account_id=o.account_id AND bt.metadata->>'operationId'=o.operation_id)<>1
+        OR NOT EXISTS (
+          SELECT 1 FROM bank_transactions bt
+          JOIN accounts a ON a.id=bt.account_id AND a.customer_id=o.customer_id
+          JOIN ledger_transactions l ON l.reference=o.receipt->>'ledgerReference'
+          JOIN ledger_entries e ON e.ledger_transaction_id=l.id AND e.account_id=bt.account_id
+          WHERE bt.account_id=o.account_id AND bt.metadata->>'operationId'=o.operation_id
+            AND o.receipt->>'operationId'=o.operation_id
+            AND o.receipt->>'side'=o.side AND (o.receipt->>'amountMinor')::bigint=o.amount_minor
+            AND bt.metadata->>'ledgerReference'=l.reference
+            AND bt.amount_minor=CASE WHEN o.side='SUBSCRIBE' THEN -o.amount_minor ELSE (o.receipt->>'settlementMinor')::bigint END
+            AND e.amount_minor=bt.amount_minor AND bt.occurred_at=l.posted_at AND o.executed_at=bt.occurred_at
+        )
+      )
+  ) THEN
+    RAISE EXCEPTION 'Investment invariant failed: receipt, cash transaction or ledger mismatch';
+  END IF;
+
+  IF EXISTS (
     SELECT 1 FROM agent_runtime_runs r JOIN agent_threads t ON t.id=r.agent_thread_id
     WHERE r.customer_id<>t.customer_id
   ) THEN

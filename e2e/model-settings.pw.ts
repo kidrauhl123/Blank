@@ -6,8 +6,8 @@ test("debug model settings stay outside the assistant and persist only for the c
   await page.getByRole("button", { name: "以小土豆进入" }).click();
   const nav = page.getByRole("navigation", { name: "主导航" });
   await nav.getByRole("button", { name: "AI 助手" }).click();
-  await expect(page.getByRole("dialog", { name: "BankPilot 悬浮助手" }).getByRole("combobox")).toHaveCount(0);
-  await page.getByRole("button", { name: "关闭助手面板" }).click();
+  await expect(page.getByRole("region", { name: "AI 助手会话" }).getByRole("combobox", { name: "助手模型" })).toHaveCount(0);
+  await page.getByRole("button", { name: "返回银行页面" }).click();
   await page.getByRole("button", { name: "个人中心" }).click();
   await page.getByRole("link", { name: "设置 调试选项" }).click();
   const model = page.getByLabel("助手模型");

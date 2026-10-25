@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type RefObject } from "react";
-import { Check, ChevronDown, Mic, Pause, Play, Send, Sparkles, Square, Volume2, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Mic, Pause, Play, Send, Sparkles, Square, Volume2, X } from "lucide-react";
 import { applyPageAction, captureAppPage, type PageMotion } from "@/lib/app-page";
 import type { AppAgentView } from "@/lib/app-agent-protocol";
 import { parsePreferenceCommand } from "@/lib/preference-command";
@@ -9,7 +9,7 @@ import { TaskTimeline } from "@/features/voice-trace/TaskTimeline";
 import { useBrowserSpeech, type SpeechLanguage } from "@/features/voice-trace/useBrowserSpeech";
 import styles from "./FloatingAppAgent.module.css";
 
-type Message = { role: "user" | "assistant"; text: string };
+type Message = { role: "user" | "assistant"; text: string; runId?: string };
 type StepState = "ready" | "running" | "done" | "paused" | "blocked" | "waiting" | "cancelled" | "failed";
 type Step = { id: string; label: string; state: StepState };
 export type AppAgentTransport = {
@@ -43,7 +43,7 @@ function StepList({ items, compact = false }: { items: Step[]; compact?: boolean
   </div>;
 }
 
-export function FloatingAppAgent({ rootRef, configured, openSignal, closeSignal = 0, onOpenChange, transport = bankTransport }: { rootRef: RefObject<HTMLElement | null>; configured: boolean; openSignal: number; closeSignal?: number; onOpenChange?: (open: boolean) => void; transport?: AppAgentTransport }) {
+export function FloatingAppAgent({ rootRef, configured, openSignal, closeSignal = 0, onOpenChange, transport = bankTransport, presentation = "floating" }: { rootRef: RefObject<HTMLElement | null>; configured: boolean; openSignal: number; closeSignal?: number; onOpenChange?: (open: boolean) => void; transport?: AppAgentTransport; presentation?: "page" | "floating" }) {
   const [open, setOpen] = useState(false);
   const [observedCloseSignal, setObservedCloseSignal] = useState(closeSignal);
   if (observedCloseSignal !== closeSignal) { setObservedCloseSignal(closeSignal); setOpen(false); }
@@ -71,6 +71,7 @@ export function FloatingAppAgent({ rootRef, configured, openSignal, closeSignal 
   const alive = useRef(true);
   const endRequested = useRef(false);
   const historyEnd = useRef<HTMLDivElement>(null);
+  const lastOpenSignal = useRef(0);
   const answerInput = useRef<HTMLInputElement>(null);
   const markStep = useCallback((id: string, state: StepState) => {
     setSteps((items) => items.map((item) => item.id === id && !(state === "paused" && ["done", "blocked"].includes(item.state)) ? { ...item, state } : item));
@@ -103,6 +104,10 @@ export function FloatingAppAgent({ rootRef, configured, openSignal, closeSignal 
       paused.current = false;
       setMotion(null);
       setOpen(true);
+      setMessages(items => {
+        const message: Message = { role: "assistant", text: next.message, runId: next.id };
+        return items.some(item => item.runId === next.id) ? items.map(item => item.runId === next.id ? message : item) : [...items, message];
+      });
       // A run that just completed in this tab keeps its id so the timeline
       // survives a refresh; a finished run restored from a previous page was
       // already shown once and should not re-open the panel on every visit.
@@ -244,35 +249,41 @@ export function FloatingAppAgent({ rootRef, configured, openSignal, closeSignal 
     setOpen(true);
   };
   useEffect(() => {
-    if (!openSignal) return;
+    if (!openSignal || lastOpenSignal.current === openSignal) return;
+    lastOpenSignal.current = openSignal;
     pause();
     if (rootRef.current) setPageName(captureAppPage(rootRef.current).name);
     setOpen(true);
   }, [openSignal, pause, rootRef]);
   useEffect(() => { onOpenChange?.(open); }, [open, onOpenChange]);
+  const closeConversation = () => {
+    speech.cancelListening();
+    if (speech.speaking) speech.toggleSpeak();
+    pause(); setOpen(false);
+  };
   const question = run?.pending?.action.type === "question" ? run.pending.action : null;
   const active = Boolean(run?.pending);
   const visibleSteps: Step[] = run?.timeline ? run.timeline.map((event) => ({ id: event.id, label: event.title, state: event.state })) : steps;
   const status = run?.status === "PAUSED" ? "你已接管 · 已暂停" : run?.status === "HANDOFF" ? "等待你确认或验证"
     : busy ? run?.message ?? "正在理解需求" : run?.message ?? "";
 
-  return <div className={styles.root} data-agent-overlay>
+  return <div className={`${styles.root} ${presentation === "page" ? styles.pageRoot : ""}`} data-agent-overlay>
     {/* 助手的手和用户的手是同一种形状：画布上的一个圆形触点。 */}
     {motion && <div className={styles.cursor} data-phase={motion.phase} style={{ left: motion.x, top: motion.y }} aria-hidden="true"><span>{motion.phase === "typing" ? "正在填写" : motion.phase === "clicking" ? "点击" : "BankPilot"}</span></div>}
-    {!open && active && <StepList items={visibleSteps} compact />}
+    {!open && active && presentation !== "page" && <StepList items={visibleSteps} compact />}
     {/* 只在 agent 真的有事要报告时出现；平时首页的 AI 入口是底部导航那一个 */}
     {!open && active && <div className={styles.floating}>
-      <button className={styles.trigger} onClick={expand} aria-label="打开悬浮助手"><Sparkles size={18} /><span>{status}</span></button>
+      <button className={styles.trigger} onClick={expand} aria-label={presentation === "page" ? "查看 AI 助手会话" : "打开悬浮助手"}><Sparkles size={18} /><span>{status}</span></button>
       {run?.status === "PAUSED" || run?.status === "HANDOFF" ? <button onClick={continueRun} disabled={busy} aria-label="继续代操作"><Play size={17} /></button> : run?.controlGranted && run.status === "ACTION" ? <button onClick={pause} aria-label="暂停代操作"><Pause size={17} /></button> : null}
       <button onClick={cancel} aria-label="结束代操作"><Square size={15} /></button>
     </div>}
-    {open && <section className={styles.panel} role="dialog" aria-modal="false" aria-label="BankPilot 悬浮助手">
-      <header><span><Sparkles size={19} /><b>BankPilot</b></span><button onClick={() => { speech.cancelListening(); if (speech.speaking) speech.toggleSpeak(); setOpen(false); }} aria-label="收起助手"><ChevronDown size={21} /></button><button onClick={() => { speech.cancelListening(); if (speech.speaking) speech.toggleSpeak(); pause(); setOpen(false); }} aria-label="关闭助手面板"><X size={19} /></button></header>
+    {open && <section className={`${styles.panel} ${presentation === "page" ? styles.pagePanel : ""}`} role={presentation === "page" ? "region" : "dialog"} aria-modal={presentation === "page" ? undefined : "false"} aria-label={presentation === "page" ? "AI 助手会话" : "BankPilot 悬浮助手"}>
+      <header>{presentation === "page" && <button onClick={closeConversation} aria-label="返回银行页面"><ArrowLeft size={21} /></button>}<span><Sparkles size={19} /><b>{presentation === "page" ? "AI 助手" : "BankPilot"}</b></span>{presentation === "floating" && <><button onClick={closeConversation} aria-label="收起助手"><ChevronDown size={21} /></button><button onClick={closeConversation} aria-label="关闭助手面板"><X size={19} /></button></>}</header>
       <p className={styles.context}>已共享：{pageName} · 密码和验证码不共享</p>
       <div className={styles.messages}>
-        {!messages.length && !run && <><p className={styles.intro}>告诉我你想办理什么。我会先核对页面信息，必要时向你追问。涉及账户操作，由你确认。</p><div className={styles.choices}>{["查一下我的余额", "分析本月账单", "查看我的卡片"].map(prompt => <button key={prompt} disabled={busy || !configured} onClick={() => send(prompt)}>{prompt}</button>)}</div><a className={styles.channelLink} href="/channels">连接 QQ / 企业微信</a></>}
+        {!messages.length && !run && <><p className={styles.intro}>告诉我你想查询或办理什么。</p><div className={styles.choices}>{["查一下我的余额", "分析本月账单", "比较一下理财产品"].map(prompt => <button key={prompt} disabled={busy || !configured} onClick={() => send(prompt)}>{prompt}</button>)}</div></>}
         {messages.map((message, index) => <p key={index} className={message.role === "user" ? styles.user : styles.assistant}>{message.text}</p>)}
-        {run && <p className={styles.assistant}>{run.message}</p>}
+        {run?.pending && <p className={styles.assistant}>{run.message}</p>}
         {run?.timeline ? <TaskTimeline events={run.timeline} /> : <StepList items={steps} />}
         {question && <div className={styles.choices} aria-label={question.question}>{question.options.map((option) => <button key={option} disabled={busy} onClick={() => option === "自行输入" ? answerInput.current?.focus() : void send(option)}>{option}</button>)}<small>也可以在下方直接输入，无默认选项。</small></div>}
         {run?.status === "CONSENT" && <div className={styles.consent}><p>是否允许我接管页面？你操作页面时我会暂停，业务确认与强验证由你完成。</p><button disabled={busy} onClick={continueRun}>允许代操作</button><button disabled={busy} onClick={cancel}>暂不允许</button></div>}
@@ -287,7 +298,7 @@ export function FloatingAppAgent({ rootRef, configured, openSignal, closeSignal 
         {run?.message && <button type="button" onClick={() => speech.toggleSpeak(run.message)} aria-label={speech.speaking ? "停止播报" : "播报助手回复"}><Volume2 size={17} />{speech.speaking ? "停止播报" : "播报回复"}</button>}
       </div>
       <p className={styles.voiceHint} role="note">{speech.hint}</p>
-      <form onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}><input ref={answerInput} aria-label="向悬浮助手描述需求或回答问题" placeholder={question ? "选择选项，或直接输入…" : "描述你想办理的业务…"} value={input} onChange={(event) => setInput(event.target.value)} maxLength={1000} /><button type="button" className={styles.micButton} aria-label={speech.listening ? "停止录音" : "语音输入"} aria-pressed={speech.listening} disabled={!configured || busy} onClick={speech.toggleListening}>{speech.listening ? <Square size={17} /> : <Mic size={18} />}</button><button aria-label="发送给悬浮助手" disabled={(!configured && !parsePreferenceCommand(input)) || busy || speech.listening || !input.trim()}><Send size={18} /></button></form>
+      <form onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}><input ref={answerInput} aria-label={presentation === "page" ? "向 AI 助手描述需求或回答问题" : "向悬浮助手描述需求或回答问题"} placeholder={question ? "选择选项，或直接输入…" : "描述你想办理的业务…"} value={input} onChange={(event) => setInput(event.target.value)} maxLength={1000} /><button type="button" className={styles.micButton} aria-label={speech.listening ? "停止录音" : "语音输入"} aria-pressed={speech.listening} disabled={!configured || busy} onClick={speech.toggleListening}>{speech.listening ? <Square size={17} /> : <Mic size={18} />}</button><button aria-label={presentation === "page" ? "发送给 AI 助手" : "发送给悬浮助手"} disabled={(!configured && !parsePreferenceCommand(input)) || busy || speech.listening || !input.trim()}><Send size={18} /></button></form>
     </section>}
   </div>;
 }

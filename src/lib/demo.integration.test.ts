@@ -5,6 +5,8 @@ import { getBankingOverview } from "./bank-core";
 import { DEMO_PROFILES } from "./demo-catalog";
 import { ensureDemoProfiles, loginDemoProfile } from "./demo";
 import { db, query } from "./db";
+import { ensureDemoInvestmentHistory } from "./demo-investments";
+import { getInvestmentOverview } from "./investments";
 
 describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("fictional competition identities", () => {
   let sentinel: Awaited<ReturnType<typeof registerCustomer>>;
@@ -21,8 +23,12 @@ describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("fictional competition i
       const ids = (await query<{ customer_id: string }>("SELECT customer_id FROM demo_profiles WHERE profile_key=ANY($1::text[])", [DEMO_PROFILES.map((p) => p.key)])).rows.map((r) => r.customer_id);
       if (sentinel) ids.push(sentinel.customer.id);
       const accountIds = (await query<{ id: string }>("SELECT id FROM accounts WHERE customer_id=ANY($1::uuid[]) OR system_code='DEMO_SEED_CLEARING'", [ids])).rows.map((r) => r.id);
+      await query(`UPDATE accounts a SET available_balance_minor=a.available_balance_minor-x.total FROM
+        (SELECT e.account_id,sum(e.amount_minor) total FROM ledger_entries e JOIN ledger_transactions l ON l.id=e.ledger_transaction_id
+         WHERE l.reference LIKE 'LED-DEMO-INV-%' GROUP BY e.account_id) x WHERE a.id=x.account_id AND a.system_code='INVESTMENT_CUSTODY'`);
       await query("DELETE FROM ledger_entries WHERE ledger_transaction_id IN (SELECT id FROM ledger_transactions WHERE reference LIKE 'DEMO-%' OR reference LIKE 'LED-DEMO-%')");
       await query("DELETE FROM ledger_transactions WHERE reference LIKE 'DEMO-%' OR reference LIKE 'LED-DEMO-%'");
+      for (const table of ["investment_orders", "investment_positions", "investment_simulation_clocks"]) await query(`DELETE FROM ${table} WHERE customer_id=ANY($1::uuid[])`, [ids]);
       for (const table of ["audit_events", "subscriptions", "cards", "transfers", "beneficiaries", "demo_profiles"]) await query(`DELETE FROM ${table} WHERE customer_id=ANY($1::uuid[])`, [ids]);
       await query("DELETE FROM bank_transactions WHERE account_id=ANY($1::uuid[])", [accountIds]);
       await query("DELETE FROM accounts WHERE id=ANY($1::uuid[])", [accountIds]);
@@ -54,6 +60,39 @@ describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("fictional competition i
     const mismatches = await query("SELECT a.id FROM accounts a JOIN demo_profiles d ON d.customer_id=a.customer_id JOIN ledger_entries e ON e.account_id=a.id GROUP BY a.id HAVING a.available_balance_minor<>sum(e.amount_minor)");
     expect(mismatches.rows).toEqual([]);
     expect((await query("SELECT t.id FROM transfers t JOIN ledger_transactions l ON l.transfer_id=t.id WHERE t.operation_id LIKE 'DEMO-TRF-%'")).rowCount).toBe(5);
+  });
+  it("links every preset investment receipt to one account transaction and a balanced ledger", async () => {
+    const people = (await query<{ customer_id: string }>("SELECT customer_id FROM demo_profiles")).rows;
+    const balances = () => query("SELECT id,available_balance_minor FROM accounts WHERE customer_id=ANY($1::uuid[]) ORDER BY id", [people.map(person => person.customer_id)]);
+    const before = (await balances()).rows;
+    await Promise.all([ensureDemoInvestmentHistory(), ensureDemoInvestmentHistory(), ensureDemoInvestmentHistory()]);
+    expect((await balances()).rows).toEqual(before);
+    for (const person of people) {
+      const overview = await getBankingOverview(person.customer_id);
+      const portfolio = await getInvestmentOverview(person.customer_id);
+      expect(overview.transactions).toHaveLength(22);
+      expect(portfolio.positions).toHaveLength(2);
+      expect(portfolio.history).toHaveLength(4);
+      for (const { receipt, executedAt } of portfolio.history) {
+        const entries = overview.transactions.filter(transaction => transaction.metadata.operationId === receipt.operationId);
+        expect(entries).toHaveLength(1);
+        const transaction = entries[0];
+        expect(transaction.investment_receipt).toEqual(receipt);
+        expect(Number(transaction.amount_minor)).toBe(receipt.side === "SUBSCRIBE" ? -receipt.amountMinor : receipt.settlementMinor);
+        expect(transaction.metadata.ledgerReference).toBe(receipt.ledgerReference);
+        expect(new Date(transaction.occurred_at).toISOString()).toBe(executedAt);
+        const ledger = await query<{ total: string; count: number; cash: string }>(`SELECT sum(e.amount_minor)::text AS total,count(*)::int AS count,
+          sum(e.amount_minor) FILTER (WHERE e.account_id=$2)::text AS cash FROM ledger_transactions l
+          JOIN ledger_entries e ON e.ledger_transaction_id=l.id WHERE l.reference=$1`, [receipt.ledgerReference, transaction.account_id]);
+        expect(ledger.rows[0]).toEqual({ total: "0", count: 2, cash: String(transaction.amount_minor) });
+      }
+      expect(portfolio.history.filter(entry => entry.receipt.side === "REDEEM")).toHaveLength(1);
+    }
+    const after = (await balances()).rows;
+    await ensureDemoInvestmentHistory();
+    expect((await balances()).rows).toEqual(after);
+    expect((await query("SELECT count(*)::int AS count FROM investment_orders WHERE suitability_evidence->>'source'='DEMO_SEED'")).rows[0].count).toBe(20);
+    expect((await getInvestmentOverview(sentinel.customer.id)).positions).toEqual([]);
   });
   it("rotates real sessions and revokes the previous identity", async () => {
     const first = await loginDemoProfile({ profileKey: "potato" });

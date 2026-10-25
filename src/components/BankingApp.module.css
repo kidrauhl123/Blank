@@ -69,6 +69,8 @@
 .transactionList { display: flex; flex-direction: column; }
 .transaction { min-height: 68px; display: grid; grid-template-columns: 42px 1fr auto; gap: var(--space-3); align-items: center; border-bottom: 1px solid var(--line-quiet); }
 .transaction:last-child { border-bottom: 0; }
+.transactionButton { width: 100%; padding: 0; border-top: 0; border-left: 0; border-right: 0; background: none; color: var(--ink); text-align: left; }
+.transactionButton:active { background: var(--surface-pressed); }
 .txIcon, .txIconIn { width: 40px; height: 40px; border-radius: var(--radius-control); background: var(--accent-tint); display: grid; place-items: center; font-size: var(--text-sm); font-weight: 720; }
 .txIconIn { background: var(--positive-tint); color: var(--positive); }
 .txCopy { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
@@ -148,7 +150,7 @@
 .composer input { height: 48px; width: 100%; border: 0; background: var(--surface); border-radius: var(--radius-control); padding: 0 var(--space-4); font-size: var(--text-md); }
 .composer button { width: var(--target-touch); height: var(--target-touch); border: 0; background: var(--ink); color: var(--white); border-radius: var(--radius-control); display: grid; place-items: center; transition: background var(--motion-fast); }
 .composer button:disabled { background: var(--line); opacity: 1; }
-.nav { height: calc(var(--space-7) + var(--space-5) + env(safe-area-inset-bottom)); flex: 0 0 calc(var(--space-7) + var(--space-5) + env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(4,1fr); padding: var(--space-1) var(--space-3) calc(var(--space-1) + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--white); }
+.nav { height: calc(var(--space-7) + var(--space-5) + env(safe-area-inset-bottom)); flex: 0 0 calc(var(--space-7) + var(--space-5) + env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(5,1fr); padding: var(--space-1) var(--space-3) calc(var(--space-1) + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--white); }
 .nav button { border: 0; background: none; color: var(--muted); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-1); font-size: var(--text-xs); position: relative; border-radius: var(--radius-control); transition: color var(--motion-fast), background var(--motion-fast); }
 .nav button svg { stroke-width: 1.7; }.nav button.navActive { color: var(--accent); font-weight: 700; background: var(--accent-soft); }.nav button.navActive svg { stroke-width: 2; }
 

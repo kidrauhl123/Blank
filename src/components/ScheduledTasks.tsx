@@ -3,14 +3,15 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { bankRequest, jsonPost } from "@/lib/client-request";
+import type { ScheduleData } from "@/lib/scheduled-task-types";
+import { DailyReviewProgress } from "./DailyReviewProgress";
 import styles from "./ScheduledTasks.module.css";
 
-type Task = { id: string; title: string; status: string; frequency: string; next_run_at: string; retry_at: string | null; channel_identity_id: string | null };
-type Run = { id: string; title: string; status: string; summary: string; completed_at: string; delivery: { status: string; attempts: number } | null };
-type Data = { tasks: Task[]; runs: Run[]; scheduler: { running: boolean; lastTickAt: string | null } };
+type Data = ScheduleData;
 type Identity = { id: string; channelType: "QQ" | "WECOM"; status: string };
 const statusNames: Record<string, string> = { ACTIVE: "执行中", PAUSED: "已暂停", CANCELLED: "已取消", COMPLETED: "已结束", ERROR: "需处理" };
 const frequencyNames: Record<string, string> = { ONCE: "仅一次", DAILY: "每天", WEEKLY: "每周", MONTHLY: "每月" };
+const runStatusNames: Record<string, string> = { PENDING: "等待执行", RUNNING: "正在检查", SUCCEEDED: "已完成", SKIPPED: "无需进一步分析", FAILED: "执行失败", CANCELLED: "已停止" };
 function date(value: string) { return new Date(value).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false }); }
 function toISO(local: string) { return new Date(`${local}:00+08:00`).toISOString(); }
 
@@ -41,7 +42,7 @@ export function ScheduledTasks() {
   useEffect(() => {
     const refresh = () => { if (document.visibilityState === "visible") void load().catch(() => setError("暂时无法读取任务，请稍后刷新。")); };
     const initial = window.setTimeout(refresh, 0);
-    const timer = window.setInterval(refresh, 30_000);
+    const timer = window.setInterval(refresh, 5000);
     window.addEventListener("focus", refresh);
     return () => { window.clearTimeout(initial); window.clearInterval(timer); window.removeEventListener("focus", refresh); };
   }, [load]);
@@ -88,7 +89,7 @@ export function ScheduledTasks() {
   return <main className={styles.page}>
     <header><Link href="/">← 返回银行</Link><button disabled={busy} onClick={() => void load().then(() => setError("")).catch(() => setError("刷新失败，请稍后重试。"))}>刷新</button></header>
     <h1>定时任务</h1>
-    <p className={styles.muted}>提醒、月度账单与订阅检查。时间均为北京时间。</p>
+    <p className={styles.muted}>提醒、账单、订阅与每日 AI 巡检。时间均为北京时间。</p>
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {notice && <p role="status">{notice}</p>}
     {signedOut ? <p>请先<Link href="/">返回银行选择用户</Link>。</p> : !data ? <p>正在读取任务…</p> : <>
@@ -96,12 +97,18 @@ export function ScheduledTasks() {
       <section><h2>新建任务</h2>
         <form onSubmit={create}>
           <fieldset disabled={busy || uncertain}>
-            <label>任务类型<select value={kind} onChange={event => { setKind(event.target.value); if (event.target.value === "MONTHLY_REPORT") setFrequency("MONTHLY"); }}><option value="REMINDER">自定义提醒</option><option value="MONTHLY_REPORT">月度账单报告</option><option value="SUBSCRIPTION_CHECK">订阅到期检查</option></select></label>
+            <label>任务类型<select value={kind} onChange={event => { setKind(event.target.value); if (event.target.value === "MONTHLY_REPORT") setFrequency("MONTHLY"); if (event.target.value === "DAILY_AI_REVIEW") setFrequency("DAILY"); }}><option value="REMINDER">自定义提醒</option><option value="MONTHLY_REPORT">月度账单报告</option><option value="SUBSCRIPTION_CHECK">订阅到期检查</option><option value="DAILY_AI_REVIEW">每日 AI 巡检</option></select></label>
             <label>任务名称<input name="title" required maxLength={80} placeholder="例如：每月账单回顾" /></label>
             {kind === "REMINDER" && <label>提醒内容<textarea name="message" required maxLength={500} rows={3} /></label>}
             {kind === "MONTHLY_REPORT" && <p className={styles.muted}>生成执行日期前一个自然月的账面收支报告，包含转账等资金往来。</p>}
             {kind === "SUBSCRIPTION_CHECK" && <p className={styles.muted}>检查已保存订阅中未来 72 小时的到期记录；没有到期记录时仅保存检查结果。</p>}
-            <div className={styles.row}><label>执行频率<select value={frequency} onChange={event => setFrequency(event.target.value)} disabled={kind === "MONTHLY_REPORT"}>{Object.entries(frequencyNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>首次执行时间<input type="datetime-local" name="startsAt" required /></label></div>
+            {kind === "DAILY_AI_REVIEW" && <>
+              <p className={styles.muted}>每日检查账户、近期提醒、订阅与模拟持仓，先判断是否需要进一步分析。有新关注事项时才通知，仅提供检查结果。</p>
+              <label>关注事项（选填）<textarea name="message" maxLength={500} rows={3} placeholder="例如：关注近期提醒和订阅扣费准备" /></label>
+              {data.dailyReview && (!data.dailyReview.jev.configured || !data.dailyReview.mainModel.configured) && <p className={styles.warning}>分析服务尚未配置齐全，任务可保存，执行需等待配置完成。</p>}
+              <p className={styles.muted}>使用当前共享模拟账户的数据与已保存提醒，不读取浏览器私有记忆；本任务不预留资金或下单。</p>
+            </>}
+            <div className={styles.row}><label>执行频率<select value={frequency} onChange={event => setFrequency(event.target.value)} disabled={kind === "MONTHLY_REPORT" || kind === "DAILY_AI_REVIEW"}>{Object.entries(frequencyNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>首次执行时间<input type="datetime-local" name="startsAt" required /></label></div>
             <p className={styles.muted}>按月执行沿用首次日期，遇到短月在月末执行。服务恢复后补跑一次，暂停期间的周期不补跑。</p>
             <label>截止时间（选填）<input type="datetime-local" name="endsAt" /></label>
             <label>通知方式<select name="channelIdentityId"><option value="">仅在 APP 查看结果</option>{channels.map((channel, index) => <option key={channel.id} value={channel.id}>APP + {channel.channelType === "QQ" ? "QQ" : "企业微信"}{channels.filter(item => item.channelType === channel.channelType).length > 1 ? `（绑定 ${index + 1}）` : ""}</option>)}</select></label>
@@ -122,7 +129,9 @@ export function ScheduledTasks() {
         </article>)}
       </section>
       <section><h2>最近执行结果</h2><p className={styles.muted}>最近 50 条；任务列表优先显示未结束任务，最多 200 个。</p>{!data.runs.length && <p className={styles.muted}>任务执行后，结果会显示在这里。</p>}
-        {data.runs.map(run => <article className={styles.item} key={run.id}><div className={styles.row}><b>{run.title}</b><span>{run.status === "SUCCEEDED" ? "已完成" : "执行失败"}</span></div><p>{run.summary}</p><small className={styles.muted}>{date(run.completed_at)}{run.delivery ? ` · 通知${run.delivery.status === "SENT" ? "已发送" : run.delivery.attempts >= 8 ? "发送失败" : run.delivery.status === "FAILED" ? "等待重试" : "等待发送"}` : " · APP 内查看"}</small></article>)}
+        {data.runs.map(run => <article className={styles.item} key={run.id}><div className={styles.row}><b>{run.title}</b><span>{runStatusNames[run.status] ?? run.status}</span></div>{!run.ai && <p className={styles.result}>{run.summary}</p>}
+          {run.ai && <DailyReviewProgress run={run} />}
+          <small className={styles.muted}>{date(run.completed_at)}{run.delivery ? ` · 通知${run.delivery.status === "SENT" ? "已发送" : run.delivery.attempts >= 8 ? "发送失败" : run.delivery.status === "FAILED" ? "等待重试" : "等待发送"}` : " · APP 内查看"}</small></article>)}
       </section>
     </>}
   </main>;

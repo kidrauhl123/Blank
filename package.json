@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "eval:prompts": "node scripts/run-prompt-eval.mjs",
+    "record:daily-review": "node scripts/record-daily-review.mjs",
     "db:up": "docker-compose up -d --wait postgres",
     "db:migrate": "bash scripts/migrate.sh",
     "db:verify": "docker-compose exec -T postgres psql -U bankpilot -d bankpilot < db/invariants.sql",

@@ -32,6 +32,10 @@ services:
       - ../db/migrations/018_totp_replay_protection.sql:/docker-entrypoint-initdb.d/180-totp-replay-protection.sql:ro
       - ../db/migrations/019_authorization_hardening.sql:/docker-entrypoint-initdb.d/190-authorization-hardening.sql:ro
       - ../db/migrations/020_scheduled_tasks.sql:/docker-entrypoint-initdb.d/200-scheduled-tasks.sql:ro
+      - ../db/migrations/021_simulated_investments.sql:/docker-entrypoint-initdb.d/210-simulated-investments.sql:ro
+      - ../db/migrations/022_demo_investment_history.sql:/docker-entrypoint-initdb.d/220-demo-investment-history.sql:ro
+      - ../db/migrations/023_daily_ai_reviews.sql:/docker-entrypoint-initdb.d/230-daily-ai-reviews.sql:ro
+      - ../db/migrations/024_review_recording_support.sql:/docker-entrypoint-initdb.d/240-review-recording-support.sql:ro
     networks:
       - internal
     mem_limit: 512m
@@ -53,6 +57,10 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       SCHEDULER_TOKEN: ${SCHEDULER_TOKEN:-}
+      TYPESAFE_API_KEY: ${TYPESAFE_API_KEY:-}
+      TYPESAFE_MODEL: ${TYPESAFE_MODEL:-jev-1.13.0}
+      JEV_TIMEOUT_MS: ${JEV_TIMEOUT_MS:-8000}
+      JEV_QUIET_THRESHOLD: ${JEV_QUIET_THRESHOLD:-0.2}
       PASSWORD_PEPPER: ${PASSWORD_PEPPER}
       AI_BASE_URL: ${AI_BASE_URL:-}
       AI_API_KEY: ${AI_API_KEY:-}
