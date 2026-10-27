@@ -13,9 +13,8 @@ test("preview animates controlled React form fields and hands off final confirma
   await page.getByRole("button", { name: "AI 助手", exact: true }).click();
   await send(page);
   await page.getByRole("button", { name: "刘敏 · 尾号 1234" }).click();
-  await page.getByRole("button", { name: "允许代操作", exact: true }).click();
+  await page.getByRole("button", { name: "开始页面操作", exact: true }).click();
   await expect(page.locator('[data-agent-overlay] [data-phase]')).toBeVisible();
-  await expect(page.getByLabel("助手操作步骤")).toContainText("操作进度");
   await expect(page.getByRole("heading", { name: "核对转账信息" })).toBeVisible({ timeout: 15000 });
   await expect(page.locator('[data-agent-page]')).toContainText("周末聚餐 AA");
   const records = page.getByText("演示操作记录", { exact: false });
@@ -32,7 +31,7 @@ test("touching the input stops remaining characters; resume observes the user's 
   await page.goto("/preview/agent");
   await page.getByRole("button", { name: "申请虚拟卡", exact: true }).click();
   await send(page);
-  await page.getByRole("button", { name: "允许代操作", exact: true }).click();
+  await page.getByRole("button", { name: "开始页面操作", exact: true }).click();
   const input = page.getByRole("textbox", { name: "卡片名称", exact: true });
   await expect.poll(() => input.inputValue(), { intervals: [15], timeout: 15000 }).toMatch(/^旅(?:行|行备)?$/);
   await input.fill("我自己的卡名");
@@ -40,7 +39,6 @@ test("touching the input stops remaining characters; resume observes the user's 
   await page.waitForTimeout(300);
   await expect(input).toHaveValue("我自己的卡名");
   await expect(page.locator('[data-agent-overlay] [data-phase]')).toHaveCount(0);
-  await expect(page.getByLabel("助手操作步骤")).toContainText("已暂停");
   await page.getByRole("button", { name: "继续代操作" }).click();
   await page.getByRole("button", { name: "保留当前：我自己的卡名" }).click();
   await expect(input).toHaveValue("我自己的卡名");

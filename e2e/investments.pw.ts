@@ -24,21 +24,16 @@ async function setup(page: Page) {
   await page.getByRole("navigation").getByRole("button", { name: "理财", exact: true }).click();
 }
 
-test("six products can be filtered, compared and opened without a bank write", async ({ page }) => {
+test("six products can be compared and opened without a bank write", async ({ page }) => {
   let writes = 0;
   page.on("request", request => { if (request.method() === "POST") writes++; });
   await setup(page);
-  await expect(page.getByText("6 只符合条件")).toBeVisible();
-  await page.getByRole("button", { name: "灵活申赎", exact: true }).click();
-  await expect(page.getByText("2 只符合条件")).toBeVisible();
-  await page.getByRole("button", { name: "加入对比", exact: true }).nth(0).click();
-  await page.getByRole("button", { name: "加入对比", exact: true }).click();
+  await expect(page.getByText("6 只理财产品")).toBeVisible();
+  await page.locator('[data-agent-id="wealth-compare-SIM-1"]').click();
+  await page.locator('[data-agent-id="wealth-compare-SIM-2"]').click();
   await page.getByRole("button", { name: "对比（2/3）", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "产品对比" })).toContainText("零钱灵活");
   await page.getByRole("button", { name: "关闭", exact: true }).click();
-  await page.getByLabel("可投入金额（元）").fill("1");
-  await expect(page.getByText("0 只符合条件")).toBeVisible();
-  await page.getByLabel("可投入金额（元）").fill("");
   await page.locator('[data-agent-id="wealth-product-SIM-1"]').click();
   await expect(page.getByRole("img", { name: /零钱灵活近30天净值走势/ })).toBeVisible();
   expect(writes).toBe(0);

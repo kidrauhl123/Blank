@@ -16,14 +16,16 @@ test("all assistant entry points preserve one conversation and reflect navigatio
   const nav = page.getByRole("navigation", { name: "主导航" });
   await nav.getByRole("button", { name: "AI 助手" }).click();
   await expect(nav.getByRole("button", { name: "AI 助手" })).toHaveAttribute("aria-current", "page");
+  // The assistant is a peer tab: it keeps the bank top bar and fills the canvas width below it, clear of the bottom nav.
   const conversation = await page.getByRole("region", { name: "AI 助手会话" }).boundingBox();
   const canvas = await page.locator('[data-pointer="canvas"]').boundingBox();
+  const topbar = await page.getByRole("region", { name: "BankPilot 手机银行" }).locator("header").first().boundingBox();
   const navigation = await nav.boundingBox();
-  expect(conversation && canvas && navigation).toBeTruthy();
+  expect(conversation && canvas && topbar && navigation).toBeTruthy();
   expect(conversation!.x).toBeCloseTo(canvas!.x, 0);
-  expect(conversation!.y).toBeCloseTo(canvas!.y, 0);
   expect(conversation!.width).toBeCloseTo(canvas!.width, 0);
-  expect(conversation!.height).toBeCloseTo(navigation!.y - canvas!.y, 0);
+  expect(conversation!.y).toBeCloseTo(topbar!.y + topbar!.height, 0);
+  expect(conversation!.y + conversation!.height).toBeLessThanOrEqual(navigation!.y + 0.5);
   await page.getByRole("textbox", { name: "向 AI 助手描述需求或回答问题" }).fill("查看我的卡");
   await page.getByRole("button", { name: "发送给 AI 助手" }).click();
   await expect(page.getByRole("region", { name: "AI 助手会话" })).toContainText("请选择一张卡");
@@ -33,8 +35,7 @@ test("all assistant entry points preserve one conversation and reflect navigatio
   await page.getByRole("button", { name: "查看 AI 助手会话" }).click();
   await expect(page.getByRole("region", { name: "AI 助手会话" })).toContainText("查看我的卡");
   await expect(nav.getByRole("button", { name: "AI 助手" })).toHaveAttribute("aria-current", "page");
-  await page.getByRole("button", { name: "返回银行页面" }).click();
-  await nav.getByRole("button", { name: "首页", exact: true }).click();
+  await nav.getByRole("button", { name: "明细", exact: true }).click();
   await nav.getByRole("button", { name: "AI 助手", exact: true }).click();
   await expect(page.getByRole("region", { name: "AI 助手会话" })).toHaveCount(1);
   await expect(page.getByRole("region", { name: "AI 助手会话" })).toContainText("查看我的卡");
