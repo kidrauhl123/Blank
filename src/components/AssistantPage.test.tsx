@@ -23,7 +23,7 @@ describe("bottom navigation assistant page", () => {
     await render(1);
     expect(container.querySelector('[role="region"][aria-label="AI 助手会话"]')).not.toBeNull();
     expect(container.querySelector('[role="dialog"]')).toBeNull();
-    expect(container.querySelector('[aria-label="返回银行页面"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="返回银行页面"]')).toBeNull();
     expect(request).not.toHaveBeenCalled();
   });
   it("keeps the conversation when switching to banking and returning", async () => {

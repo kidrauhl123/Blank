@@ -72,7 +72,7 @@ describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("persistent scheduled ta
     await tickScheduledTasks();
     const run = (await listScheduledTasks(owner)).runs.find(item => item.schedule_id === task.id)!;
     expect(run.summary).toContain("2026-09"); expect(run.summary).toContain("60 笔"); expect(run.summary).toContain("¥60.00");
-    expect(run.summary).toContain("不等于真实消费"); expect(run.summary).toContain("绑定已失效"); expect(run.delivery).toBeNull();
+    expect(run.summary).toContain("不等同于消费支出"); expect(run.summary).toContain("绑定已失效"); expect(run.delivery).toBeNull();
     await changeScheduledTask(owner, task.id, "cancel");
   });
   it("ends expired schedules and saves quiet subscription checks", async () => {
