@@ -85,3 +85,38 @@
 .half:first-child { justify-content: flex-end; border-right: 1px solid var(--line-control); }
 .out { height: 100%; border-radius: 4px 0 0 4px; background: var(--flow-out); }
 .in { height: 100%; border-radius: 0 4px 4px 0; background: var(--flow-in); }
+
+.hero b span { font-size: var(--text-lg); letter-spacing: 0; }
+.pips { display: flex; gap: 4px; margin: var(--space-1) 0; }
+.pips i { width: 22px; height: 6px; border-radius: 3px; background: var(--surface-strong); }
+.pips i[data-on] { background: var(--series-1); }
+
+/* 甘特式时间线：今天在最左，圆点是扣费日，点前的细条是"还要等多久"。 */
+.timeline { display: grid; gap: var(--space-3); }
+.timelineAxis, .timelineRow { display: grid; grid-template-columns: 76px 1fr; gap: var(--space-2); align-items: center; }
+.timelineTicks { position: relative; height: 14px; }
+.timelineTicks i { position: absolute; transform: translateX(-50%); font-style: normal; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.timelineTicks i:first-child { transform: none; }
+.timelineTicks i:last-child { transform: translateX(-100%); }
+.timelineTrack { position: relative; height: 28px; }
+.gridLine { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line-quiet); }
+.gridLine:first-child { background: var(--line-control); }
+.runway { position: absolute; left: 0; top: 50%; height: 4px; margin-top: -2px; border-radius: 0 4px 4px 0; background: var(--surface-strong); }
+.dot { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--series-1); box-shadow: 0 0 0 2px var(--white); }
+.dotLabel { position: absolute; top: 50%; transform: translate(10px, -50%); white-space: nowrap; font-size: var(--text-xs); font-weight: 600; font-variant-numeric: tabular-nums; }
+.dotLabel[data-side="left"] { transform: translate(calc(-100% - 10px), -50%); }
+.timelineRow[data-highlight] .dot { width: 16px; height: 16px; margin: -8px 0 0 -8px; background: var(--series-2); }
+.timelineRow[data-highlight] .runway { background: color-mix(in srgb, var(--series-2) 35%, transparent); }
+.timelineRow[data-highlight] .barLabel { font-weight: 650; }
+.timelineRow:not([data-highlight]) .dotLabel { color: var(--muted); font-weight: 500; }
+
+/* 持仓折线。 */
+.lineWrap { position: relative; }
+.line { display: block; width: 100%; height: 120px; overflow: visible; touch-action: pan-y; }
+.linePath { fill: none; stroke: var(--series-1); stroke-width: 2; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.lineArea { fill: color-mix(in srgb, var(--series-1) 12%, transparent); }
+.baseline { stroke: var(--line-control); stroke-width: 1; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
+.crosshair { stroke: var(--line-control); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.lineDot { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: var(--series-1); box-shadow: 0 0 0 2px var(--white); pointer-events: none; }
+.baselineKey { display: inline-flex; align-items: center; gap: 6px; }
+.baselineKey i { width: 14px; border-top: 1px dashed var(--line-control); }

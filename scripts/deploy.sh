@@ -127,6 +127,11 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='025_business_display_labels.sql') THEN
     RAISE EXCEPTION 'Business display labels migration is missing';
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='027_feed_posts.sql')
+     OR to_regclass('public.feed_posts') IS NULL
+     OR to_regclass('public.feed_publisher_state') IS NULL THEN
+    RAISE EXCEPTION 'Feed posts migration is missing';
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='019_authorization_hardening.sql') THEN
     RAISE EXCEPTION 'Authorization hardening migration is missing';
   END IF;

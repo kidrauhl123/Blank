@@ -15,7 +15,7 @@ while (!stopped) {
     });
     if (!response.ok) throw new Error(`TICK_HTTP_${response.status}`);
     const result = await response.json();
-    if (result.processed || result.reviews) console.info(`[scheduler] processed ${result.processed} tasks, ${result.reviews ?? 0} AI reviews`);
+    if (result.processed || result.reviews || result.posts) console.info(`[scheduler] processed ${result.processed} tasks, ${result.reviews ?? 0} AI reviews, ${result.posts ?? 0} feed posts`);
   } catch (error) {
     if (!stopped) console.error("[scheduler] tick failed", error instanceof Error && /^TICK_HTTP_\d+$/.test(error.message) ? error.message : "CONNECTION_OR_EXECUTION_ERROR");
   }

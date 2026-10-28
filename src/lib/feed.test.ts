@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildFeed, yuan, type FeedTransaction } from "./feed";
+import { buildFeed, publishedLabel, yuan, type FeedTransaction } from "./feed";
 
 const now = new Date("2026-10-28T04:00:00Z"); // 北京时间周三中午
 const daysAgo = (days: number) => new Date(now.getTime() - days * 86_400_000).toISOString();
@@ -64,14 +64,57 @@ describe("feed", () => {
     expect(post.title).toBe("近两个月，小橘子净转给你 ¥200");
   });
 
-  it("summarises active subscriptions only", () => {
+  it("counts down the next charge on a 30-day timeline and sums subscriptions once a month", () => {
     const subscriptions = [
       { id: "s1", merchant_name: "网盘", amount_minor: 1800, next_charge_at: daysAgo(-3), status: "ACTIVE" },
       { id: "s2", merchant_name: "音乐", amount_minor: 1500, next_charge_at: daysAgo(-10), status: "ACTIVE" },
       { id: "s3", merchant_name: "已退订", amount_minor: 9900, next_charge_at: daysAgo(-1), status: "CANCELLED" },
     ];
-    const post = buildFeed({ transactions: [], subscriptions }, now)[0];
-    expect(post).toMatchObject({ kind: "subscriptions", title: "2 项订阅，每月一共 ¥33", factIds: ["s1", "s2"] });
-    expect(post.body).toContain("网盘，3 天后扣 ¥18");
+    const [due, monthly] = buildFeed({ transactions: [], subscriptions }, now);
+    expect(due).toMatchObject({ kind: "subscription-due", key: "subscription-due:s1:2026-10-31", title: "3 天后，网盘要扣 ¥18", factIds: ["s1"] });
+    if (due.chart.type !== "timeline") throw new Error("timeline expected");
+    expect(due.chart).toMatchObject({ start: "2026-10-28", days: 30 });
+    expect(due.chart.items).toEqual([
+      { label: "网盘", date: "2026-10-31", minor: 1800, highlight: true },
+      { label: "音乐", date: "2026-11-07", minor: 1500 },
+    ]);
+    expect(monthly).toMatchObject({ kind: "subscriptions", key: "subscriptions:2026-10", title: "软件订阅每月花 ¥33，一年就是 ¥396", factIds: ["s1", "s2"] });
+  });
+
+  it("skips the countdown when no charge is within a week", () => {
+    const subscriptions = [{ id: "s2", merchant_name: "音乐", amount_minor: 1500, next_charge_at: daysAgo(-10), status: "ACTIVE" }];
+    expect(buildFeed({ transactions: [], subscriptions }, now).map(post => post.kind)).toEqual(["subscriptions"]);
+  });
+
+  it("charts the largest holding since purchase and counts down its unlock", () => {
+    const history = Array.from({ length: 31 }, (_, index) => ({ date: `2026-10-${String(index + 1).padStart(2, "0")}`, valueMinor: 100000 + index * 10 }));
+    const locked = { id: "p1", productName: "定享 90 天", costMinor: 100000, valueMinor: 100250, profitMinor: 250, purchasedOn: "2026-10-06",
+      unlocksOn: "2026-11-03", redeemable: false, businessDate: "2026-10-31", history };
+    const small = { ...locked, id: "p2", productName: "零钱灵活", valueMinor: 5000, redeemable: true };
+    const posts = buildFeed({ transactions: [], subscriptions: [], positions: [small, locked] }, now);
+    const unlock = posts.find(post => post.kind === "unlock")!;
+    expect(unlock).toMatchObject({ key: "unlock:p1", title: "定享 90 天还有 3 天可以赎回", chart: { type: "countdown", days: 3 } });
+    const position = posts.find(post => post.kind === "position")!;
+    expect(position.title).toBe("定享 90 天持有 25 天，赚了 ¥2.50");
+    if (position.chart.type !== "line") throw new Error("line expected");
+    expect(position.chart.points[0]).toEqual({ date: "2026-10-06", minor: 100050 });
+    expect(position.chart.baselineMinor).toBe(100000);
+    expect(position.body).toContain("你一共有 2 笔持仓");
+  });
+
+  it("uses stable weekly keys so a week's posts publish once", () => {
+    const transactions = [1, 2, 3, 4, 5, 6].map(day => tx(day, -3000));
+    const keys = (at: Date) => buildFeed({ transactions, subscriptions: [] }, at).map(post => post.key);
+    expect(keys(now)).toEqual(keys(new Date("2026-10-29T04:00:00Z")));
+    expect(keys(now)).toContain("spending-calendar:2026-10-26");
+  });
+
+  it("labels publish times relative to Beijing days", () => {
+    const at = new Date("2026-10-28T04:00:00Z");
+    expect(publishedLabel("2026-10-28T03:59:30Z", at)).toBe("刚刚");
+    expect(publishedLabel("2026-10-27T23:02:00Z", at)).toBe("今天 07:02");
+    expect(publishedLabel("2026-10-27T01:00:00Z", at)).toBe("昨天 09:00");
+    expect(publishedLabel("2026-10-24T01:00:00Z", at)).toBe("4 天前");
+    expect(publishedLabel("2026-10-10T01:00:00Z", at)).toBe("10 月 10 日");
   });
 });

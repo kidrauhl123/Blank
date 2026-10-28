@@ -1,13 +1,14 @@
 "use client";
 
 import { MessageCircle, ThumbsDown, ThumbsUp } from "lucide-react";
-import { useEffect, useState } from "react";
-import { yuan, type FeedChart, type FeedKind, type FeedPost } from "@/lib/feed";
+import { useEffect, useState, type PointerEvent } from "react";
+import { publishedLabel, yuan, type FeedChart, type FeedKind, type FeedPost } from "@/lib/feed";
 import { AssistantMark } from "./AssistantMark";
 import styles from "./FeedPanel.module.css";
 
 type Reaction = "up" | "down";
-type Taste = { reactions: Record<string, Reaction>; kinds: Partial<Record<FeedKind, number>> };
+// kinds 是每类帖子的口味分；mutedSince 记录某类被踩成负分的时间，此后新发的同类帖子不再显示。
+type Taste = { reactions: Record<string, Reaction>; kinds: Partial<Record<FeedKind, number>>; mutedSince?: Partial<Record<FeedKind, string>> };
 export type FeedQuote = { id: string; title: string; text: string };
 
 // 演示账户由所有访客共用，口味只记在本浏览器、按用户区分，不写进共享账户。
@@ -20,10 +21,13 @@ function readTaste(owner: string): Taste {
   return { reactions: {}, kinds: {} };
 }
 
-// 赞踩只影响以后：排序在读取时按口味计算一次，当前列表不跟着跳动。
-function rank(posts: FeedPost[], taste: Taste) {
-  return posts.map((post, index) => ({ post, index, score: (post.attention ? 100 : 0) + (taste.kinds[post.kind] ?? 0) }))
-    .sort((a, b) => b.score - a.score || a.index - b.index).map(item => item.post);
+// 赞踩只影响以后：读取时过滤掉"被踩之后才发布"的同类帖子，已经看过的保留，当前列表也不跳动。
+// 需要你看看的帖子不受口味影响。
+function visible(posts: FeedPost[], taste: Taste) {
+  return posts.filter(post => {
+    const since = taste.mutedSince?.[post.kind];
+    return post.attention || !since || (taste.kinds[post.kind] ?? 0) >= 0 || post.publishedAt <= since;
+  });
 }
 
 export function FeedPanel({ owner, onDiscuss }: { owner: string; onDiscuss: (quote: FeedQuote) => void }) {
@@ -37,7 +41,7 @@ export function FeedPanel({ owner, onDiscuss }: { owner: string; onDiscuss: (quo
       if (!alive) return;
       if (!response.ok || !Array.isArray(result?.posts)) { setFailed(true); return; }
       const saved = readTaste(owner);
-      setTaste(saved); setPosts(rank(result.posts, saved));
+      setTaste(saved); setPosts(visible(result.posts, saved));
     }).catch(() => { if (alive) setFailed(true); });
     return () => { alive = false; };
   }, [owner]);
@@ -49,7 +53,10 @@ export function FeedPanel({ owner, onDiscuss }: { owner: string; onDiscuss: (quo
       const delta = (next === "up" ? 1 : next === "down" ? -1 : 0) - (previous === "up" ? 1 : previous === "down" ? -1 : 0);
       const reactions = { ...current.reactions };
       if (next) reactions[post.id] = next; else delete reactions[post.id];
-      const updated = { reactions, kinds: { ...current.kinds, [post.kind]: (current.kinds[post.kind] ?? 0) + delta } };
+      const score = (current.kinds[post.kind] ?? 0) + delta;
+      const mutedSince = { ...current.mutedSince };
+      if (score < 0) mutedSince[post.kind] ??= new Date().toISOString(); else delete mutedSince[post.kind];
+      const updated = { reactions, kinds: { ...current.kinds, [post.kind]: score }, mutedSince };
       try { localStorage.setItem(tasteKey(owner), JSON.stringify(updated)); } catch { /* 存储不可用时仅本次有效 */ }
       return updated;
     });
@@ -66,7 +73,7 @@ export function FeedPanel({ owner, onDiscuss }: { owner: string; onDiscuss: (quo
         <Chart chart={post.chart} />
         <p className={styles.body}>{post.body}</p>
         <footer>
-          <span className={styles.byline}><AssistantMark size={14} />BankPilot · {post.source}</span>
+          <span className={styles.byline}><AssistantMark size={14} /><time dateTime={post.publishedAt}>{publishedLabel(post.publishedAt)}</time> · {post.source}</span>
           <span className={styles.actions}>
             <button aria-label="赞" aria-pressed={taste.reactions[post.id] === "up"} onClick={() => react(post, "up")}><ThumbsUp size={17} /></button>
             <button aria-label="踩" aria-pressed={taste.reactions[post.id] === "down"} onClick={() => react(post, "down")}><ThumbsDown size={17} /></button>
@@ -83,6 +90,9 @@ function Chart({ chart }: { chart: FeedChart }) {
   if (chart.type === "flow") return <FlowChart chart={chart} />;
   if (chart.type === "bars") return <BarChart items={chart.items} />;
   if (chart.type === "diverging") return <DivergingChart items={chart.items} />;
+  if (chart.type === "timeline") return <TimelineChart chart={chart} />;
+  if (chart.type === "line") return <LineChart chart={chart} />;
+  if (chart.type === "countdown") return <div className={styles.hero}><b>{chart.days}<span> 天</span></b><Pips days={chart.days} /><small>{chart.caption}</small></div>;
   return <div className={styles.hero}><b>{yuan(chart.minor)}</b><small>{chart.caption}</small></div>;
 }
 
@@ -151,4 +161,73 @@ function DivergingChart({ items }: { items: Array<{ label: string; netMinor: num
       </li>)}
     </ul>
   </figure>;
+}
+
+const daysFrom = (start: string, date: string) => Math.round((new Date(`${date}T12:00:00+08:00`).getTime() - new Date(`${start}T12:00:00+08:00`).getTime()) / 86_400_000);
+const shiftDay = (start: string, days: number) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" }).format(new Date(new Date(`${start}T12:00:00+08:00`).getTime() + days * 86_400_000));
+const shortDay = (date: string) => `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
+
+// 甘特式扣费时间线：每个订阅一行，圆点落在扣费日，左边竖线是今天。
+function TimelineChart({ chart }: { chart: Extract<FeedChart, { type: "timeline" }> }) {
+  const at = (date: string) => daysFrom(chart.start, date) / (chart.days - 1) * 100;
+  const ticks = [0, 7, 14, 21, chart.days - 1];
+  return <figure className={styles.figure}>
+    <div className={styles.timeline} role="img" aria-label={chart.items.map(item => `${item.label} ${shortDay(item.date)} 扣 ${yuan(item.minor)}`).join("，")}>
+      <div className={styles.timelineAxis} aria-hidden="true"><span />{<span className={styles.timelineTicks}>{ticks.map(tick => <i key={tick} style={{ left: `${tick / (chart.days - 1) * 100}%` }}>{tick === 0 ? "今天" : shortDay(shiftDay(chart.start, tick))}</i>)}</span>}</div>
+      {chart.items.map(item => {
+        const position = at(item.date);
+        const days = daysFrom(chart.start, item.date);
+        return <div key={`${item.label}-${item.date}`} className={styles.timelineRow} data-highlight={item.highlight || undefined}>
+          <span className={styles.barLabel}>{item.label}</span>
+          <span className={styles.timelineTrack}>
+            {ticks.map(tick => <i key={tick} className={styles.gridLine} style={{ left: `${tick / (chart.days - 1) * 100}%` }} />)}
+            <span className={styles.runway} style={{ width: `${position}%` }} />
+            <span className={styles.dot} style={{ left: `${position}%` }} />
+            <b className={styles.dotLabel} data-side={position > 60 ? "left" : "right"} style={{ left: `${position}%` }}>{days === 0 ? "今天" : `${days} 天`} · {yuan(item.minor)}</b>
+          </span>
+        </div>;
+      })}
+    </div>
+  </figure>;
+}
+
+// 持仓走势：单系列折线加面积，虚线是投入本金；指向任意位置看当天估值。
+function LineChart({ chart }: { chart: Extract<FeedChart, { type: "line" }> }) {
+  const [active, setActive] = useState<number | null>(null);
+  const width = 320, height = 120, pad = 6;
+  const values = chart.points.map(point => point.minor).concat(chart.baselineMinor);
+  const low = Math.min(...values), high = Math.max(...values);
+  const span = Math.max(1, high - low);
+  const x = (index: number) => index / Math.max(1, chart.points.length - 1) * width;
+  const y = (minor: number) => pad + (1 - (minor - low) / span) * (height - pad * 2);
+  const line = chart.points.map((point, index) => `${index ? "L" : "M"}${x(index).toFixed(1)},${y(point.minor).toFixed(1)}`).join("");
+  const area = `${line}L${width},${height}L0,${height}Z`;
+  const shown = chart.points[active ?? chart.points.length - 1];
+  const pick = (event: PointerEvent<SVGSVGElement>) => {
+    const box = event.currentTarget.getBoundingClientRect();
+    setActive(Math.max(0, Math.min(chart.points.length - 1, Math.round((event.clientX - box.left) / box.width * (chart.points.length - 1)))));
+  };
+  const index = active ?? chart.points.length - 1;
+  return <figure className={styles.figure}>
+    <div className={styles.lineWrap}>
+    <svg className={styles.line} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img"
+      aria-label={`${shortDay(chart.points[0].date)} 到 ${shortDay(chart.points.at(-1)!.date)}，从 ${yuan(chart.points[0].minor)} 到 ${yuan(chart.points.at(-1)!.minor)}`}
+      onPointerMove={pick} onPointerDown={pick} onPointerLeave={() => setActive(null)}>
+      <path d={area} className={styles.lineArea} />
+      <line x1={0} x2={width} y1={y(chart.baselineMinor)} y2={y(chart.baselineMinor)} className={styles.baseline} />
+      <path d={line} className={styles.linePath} />
+      {active !== null && <line x1={x(index)} x2={x(index)} y1={0} y2={height} className={styles.crosshair} />}
+    </svg>
+    <span className={styles.lineDot} style={{ left: `${x(index) / width * 100}%`, top: `${y(chart.points[index].minor) / height * 100}%` }} aria-hidden="true" />
+    </div>
+    <figcaption className={styles.readout}>
+      <span>{shortDay(shown.date)} · {yuan(shown.minor)}</span>
+      <span className={styles.baselineKey}><i />{chart.baselineLabel} {yuan(chart.baselineMinor)}</span>
+    </figcaption>
+  </figure>;
+}
+
+// 倒数的小格子：一格一天，最多显示 7 格。
+function Pips({ days }: { days: number }) {
+  return <span className={styles.pips} aria-hidden="true">{Array.from({ length: 7 }, (_, index) => <i key={index} data-on={index < 7 - Math.min(7, days) || undefined} />)}</span>;
 }
