@@ -60,7 +60,7 @@ export function appPageTools() {
       const { id, post, values } = await previewRecipe(customerId, ownerId, input);
       return JSON.stringify({ cardId: id, marker: `[[card:${id}]]`, headline: post.title, values,
         instruction: "接着调用 ask_user：question 以 marker 开头（原样写出，用户会看到卡片预览），再用一句话说明这张卡看什么、多久发一次，不要写金额（数字都在卡片上）；options 用“加入动态”“再改改”“算了”。用户选择加入后调用 save_feed_card。金额单位为分。" });
-    }, { name: "preview_feed_card", description: "按用户描述设计一张动态卡片并生成预览（不会发布）。配方只描述看哪些流水、用哪些积木、多久发一次；数字由服务端按账本计算。", schema: recipeSchema }),
+    }, { name: "preview_feed_card", description: "按用户描述设计一张动态卡片并生成预览（不会发布）。配方只描述看哪些流水、用哪些积木、多久发一次；数字由服务端按账本计算。每次请求只预览一次，结果为零也直接交给用户决定，不要反复试探。", schema: recipeSchema }),
     tool(async (input, runtime: ToolRuntime) => {
       const { customerId, ownerId } = cardOwner(runtime);
       return JSON.stringify(await saveRecipe(customerId, ownerId, input.cardId, input.replaces));
