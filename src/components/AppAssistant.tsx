@@ -15,7 +15,8 @@ import type { AppAgentStreamEvent } from "@/lib/app-agent-stream-protocol";
 import { AssistantMark } from "./AssistantMark";
 import styles from "./AppAssistant.module.css";
 
-type Message = { role: "user" | "assistant"; text: string; runId?: string };
+type Message = { role: "user" | "assistant"; text: string; runId?: string; quote?: string };
+export type AssistantQuote = { id: string; title: string; text: string };
 type StepState = "ready" | "running" | "done" | "paused" | "blocked" | "waiting" | "cancelled" | "failed";
 type Step = { id: string; label: string; state: StepState };
 export type AppAgentTransport = {
@@ -43,7 +44,7 @@ function StepList({ items, compact = false }: { items: Step[]; compact?: boolean
   </div>;
 }
 
-export function AppAssistant({ rootRef, configured, voiceEnabled = false, openSignal, closeSignal = 0, onOpenChange, transport = bankTransport, presentation = "floating", pageHost, pageActive, onShowPage, onShowBankPage }: { rootRef: RefObject<HTMLElement | null>; configured: boolean; voiceEnabled?: boolean; openSignal: number; closeSignal?: number; onOpenChange?: (open: boolean) => void; transport?: AppAgentTransport; presentation?: "page" | "floating"; pageHost?: HTMLElement | null; pageActive?: boolean; onShowPage?: () => void; onShowBankPage?: () => void }) {
+export function AppAssistant({ rootRef, configured, voiceEnabled = false, openSignal, closeSignal = 0, onOpenChange, transport = bankTransport, presentation = "floating", pageHost, pageActive, onShowPage, onShowBankPage, quote = null, onQuoteClear }: { rootRef: RefObject<HTMLElement | null>; configured: boolean; voiceEnabled?: boolean; openSignal: number; closeSignal?: number; onOpenChange?: (open: boolean) => void; transport?: AppAgentTransport; presentation?: "page" | "floating"; pageHost?: HTMLElement | null; pageActive?: boolean; onShowPage?: () => void; onShowBankPage?: () => void; quote?: AssistantQuote | null; onQuoteClear?: () => void }) {
   const [floatingOpen, setFloatingOpen] = useState(false);
   const controlledPage = presentation === "page" && pageActive !== undefined;
   const open = controlledPage ? pageActive : floatingOpen;
@@ -235,12 +236,16 @@ export function AppAssistant({ rootRef, configured, voiceEnabled = false, openSi
   }, [run, busy, rootRef, receive, pause, ask, markStep, controlledPage, onShowBankPage]);
 
   const send = async (text = input) => {
-    const message = text.trim();
-    const preferenceCommand = parsePreferenceCommand(message);
+    // 讨论一条动态时，帖子原文作为上下文随消息发出；空输入也可以直接请助手展开。
+    const typed = text.trim() || (quote ? "展开说说这条动态" : "");
+    const quoted = quote && typed ? quote : null;
+    const message = quoted ? `【引用动态】${quoted.text}\n\n${typed}`.slice(0, 1000) : typed;
+    const preferenceCommand = quoted ? null : parsePreferenceCommand(message);
     if (!message || busy || !rootRef.current || (!configured && !preferenceCommand)) return;
     followOutput.current = true;
     setInput(""); setError(""); setBusy(true);
-    setMessages((items) => [...items, { role: "user", text: message }]);
+    if (quoted) onQuoteClear?.();
+    setMessages((items) => [...items, { role: "user", text: typed, quote: quoted?.title }]);
     const current = viewRef.current;
     try {
       if (current?.pending?.action.type === "question" && !preferenceCommand) {
@@ -317,7 +322,7 @@ export function AppAssistant({ rootRef, configured, voiceEnabled = false, openSi
       {presentation !== "page" && <p className={styles.context}>已共享：{pageName} · 密码和验证码不共享</p>}
       <div className={styles.messages} onScroll={event => { const node = event.currentTarget; followOutput.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80; }}>
         {!messages.length && !run && <><p className={styles.intro}>告诉我你想查询或办理什么。</p><div className={styles.choices}>{["查一下我的余额", "分析本月账单", "比较一下理财产品"].map(prompt => <button key={prompt} disabled={busy || !configured} onClick={() => send(prompt)}>{prompt}</button>)}</div></>}
-        {messages.map((message, index) => message.role === "user" ? <p key={index} className={styles.user}>{message.text}</p> : <div key={index} className={styles.assistant}><AssistantMarkdown text={message.text} /></div>)}
+        {messages.map((message, index) => message.role === "user" ? <div key={index} className={styles.userTurn}>{message.quote && <p className={styles.quoted}>{message.quote}</p>}<p className={styles.user}>{message.text}</p></div> : <div key={index} className={styles.assistant}><AssistantMarkdown text={message.text} /></div>)}
         {draft?.text && <div className={styles.assistant} aria-busy={generating} data-streaming={generating && !draft.finished}><AssistantMarkdown text={draft.text} /></div>}
         {run?.pending && !generating && <div className={styles.assistant}><AssistantMarkdown text={run.message} /></div>}
         {(run?.timeline?.length || steps.length > 0) ? <details className={styles.audit}><summary>查看操作记录</summary>{run?.timeline ? <TaskTimeline events={run.timeline} /> : <StepList items={steps} />}</details> : null}
@@ -329,7 +334,8 @@ export function AppAssistant({ rootRef, configured, voiceEnabled = false, openSi
         {!configured && <p className={styles.error}>助手模型暂不可用；仍可输入明确的偏好管理指令，或通过页面办理业务。</p>}
         <div ref={historyEnd} />
       </div>
-      <form onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}><input ref={answerInput} aria-label={presentation === "page" ? "向 AI 助手描述需求或回答问题" : "向悬浮助手描述需求或回答问题"} placeholder={question ? "选择选项，或直接输入…" : "描述你想办理的业务…"} value={input} onChange={(event) => setInput(event.target.value)} maxLength={1000} />{voiceEnabled && <button type="button" className={styles.micButton} aria-label="开始语音通话" disabled={busy || active} onClick={() => { pause(); setVoiceOpen(true); void voice.start(); }}><Phone size={18} /></button>}{generating ? <button type="button" aria-label="停止生成" onClick={() => activeRequest.current?.abort()}><Square size={17} /></button> : <button aria-label={presentation === "page" ? "发送给 AI 助手" : "发送给悬浮助手"} disabled={(!configured && !parsePreferenceCommand(input)) || busy || !input.trim()}><Send size={18} /></button>}</form>
+      {quote && <div className={styles.quoteBar} aria-label="正在引用的动态"><span><small>引用动态</small>{quote.title}</span><button type="button" onClick={onQuoteClear} aria-label="取消引用"><X size={16} /></button></div>}
+      <form onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}><input ref={answerInput} aria-label={presentation === "page" ? "向 AI 助手描述需求或回答问题" : "向悬浮助手描述需求或回答问题"} placeholder={question ? "选择选项，或直接输入…" : quote ? "聊聊这条动态，或直接发送…" : "描述你想办理的业务…"} value={input} onChange={(event) => setInput(event.target.value)} maxLength={1000} />{voiceEnabled && <button type="button" className={styles.micButton} aria-label="开始语音通话" disabled={busy || active} onClick={() => { pause(); setVoiceOpen(true); void voice.start(); }}><Phone size={18} /></button>}{generating ? <button type="button" aria-label="停止生成" onClick={() => activeRequest.current?.abort()}><Square size={17} /></button> : <button aria-label={presentation === "page" ? "发送给 AI 助手" : "发送给悬浮助手"} disabled={(!configured && !parsePreferenceCommand(input)) || busy || (!input.trim() && !quote)}><Send size={18} /></button>}</form>
       </>}
     </section>
   ) : null;

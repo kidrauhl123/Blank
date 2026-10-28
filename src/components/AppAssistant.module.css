@@ -74,3 +74,13 @@ li[data-state="done"] .stepMark { background: var(--positive-tint); color: var(-
 
 .cursor[data-phase="resting"] { opacity: .55; }
 @media (prefers-reduced-motion: reduce) { .cursor { transition: none; } .cursor[data-phase="clicking"]::before { animation: none; } }
+.userTurn { align-self: flex-end; max-width: 88%; display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-1); }
+.userTurn .user { max-width: 100%; }
+.userTurn p { margin: 0; white-space: pre-wrap; line-height: 1.65; font-size: var(--text-sm); }
+.userTurn .quoted { font-size: var(--text-xs); line-height: 1.5; }
+.quoted { margin: 0; padding: var(--space-1) var(--space-3); border-left: 2px solid var(--action-fill); font-size: var(--text-xs); line-height: 1.5; color: var(--muted); }
+.quoteBar { display: flex; align-items: center; gap: var(--space-2); margin: 0 var(--space-4); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3); border-radius: var(--radius-control); background: var(--white); box-shadow: inset 2px 0 0 var(--action-fill); }
+.quoteBar span { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: var(--text-sm); overflow: hidden; }
+.quoteBar span, .quoteBar small { white-space: nowrap; text-overflow: ellipsis; }
+.quoteBar small { font-size: var(--text-xs); color: var(--muted); }
+.quoteBar button { flex-shrink: 0; width: var(--target); height: var(--target); display: grid; place-items: center; border: 0; border-radius: var(--radius-control); background: none; color: var(--muted); }
