@@ -1,7 +1,7 @@
 "use client";
 
-import { MessageCircle, ThumbsDown, ThumbsUp } from "lucide-react";
-import { useEffect, useState, type PointerEvent } from "react";
+import { ArrowUpRight, Eye, EyeOff, MessageCircle, Plus, ThumbsDown, ThumbsUp } from "lucide-react";
+import { useEffect, useState, type PointerEvent, type ReactNode } from "react";
 import { publishedLabel, yuan, type FeedChart, type FeedKind, type FeedPost } from "@/lib/feed";
 import { AssistantMark } from "./AssistantMark";
 import styles from "./FeedPanel.module.css";
@@ -30,7 +30,8 @@ function visible(posts: FeedPost[], taste: Taste) {
   });
 }
 
-export function FeedPanel({ owner, onDiscuss }: { owner: string; onDiscuss: (quote: FeedQuote) => void }) {
+// 首页就是动态流；pinned 是默认置顶的组件（例如资产卡），和帖子用同一个卡片外壳。
+export function FeedPanel({ owner, onDiscuss, pinned }: { owner: string; onDiscuss: (quote: FeedQuote) => void; pinned?: ReactNode }) {
   const [posts, setPosts] = useState<FeedPost[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [taste, setTaste] = useState<Taste>({ reactions: {}, kinds: {} });
@@ -62,10 +63,11 @@ export function FeedPanel({ owner, onDiscuss }: { owner: string; onDiscuss: (quo
     });
   };
 
-  if (failed) return null;
   return <section className={styles.feed} aria-label="动态">
-    <div className={styles.head}><h2>动态</h2><span>BankPilot 根据你的账户整理</span></div>
-    {posts === null ? <p className={styles.empty} role="status">正在整理…</p>
+    <div className={styles.head}><h1>动态</h1><span>BankPilot 根据你的账户整理</span></div>
+    {pinned}
+    {failed ? <p className={styles.empty}>动态暂时无法读取，稍后再来看看。</p>
+      : posts === null ? <p className={styles.empty} role="status">正在整理…</p>
       : posts.length === 0 ? <p className={styles.empty}>今天一切正常，没有新动态。</p>
       : posts.map(post => <article key={post.id} className={styles.post} data-attention={post.attention || undefined} aria-label={post.title}>
         {post.attention && <span className={styles.flag}>需要你看看</span>}
@@ -230,4 +232,33 @@ function LineChart({ chart }: { chart: Extract<FeedChart, { type: "line" }> }) {
 // 倒数的小格子：一格一天，最多显示 7 格。
 function Pips({ days }: { days: number }) {
   return <span className={styles.pips} aria-hidden="true">{Array.from({ length: 7 }, (_, index) => <i key={index} data-on={index < 7 - Math.min(7, days) || undefined} />)}</span>;
+}
+
+// 资产卡：默认置顶的组件。转账和入金入口留在这里，AI 代操作时也从这里打开表单。
+export function AssetCard({ totalMinor, cashMinor, investedMinor, visible, toggleVisible, disabled, onTransfer, onDeposit, onDiscuss }: {
+  totalMinor: number; cashMinor: number; investedMinor: number; visible: boolean; toggleVisible: () => void; disabled: boolean;
+  onTransfer: () => void; onDeposit: () => void; onDiscuss: (quote: FeedQuote) => void;
+}) {
+  const parts = [{ label: "活期", minor: cashMinor, series: 1 }, { label: "理财", minor: investedMinor, series: 3 }].filter(part => part.minor > 0);
+  const amount = (minor: number) => visible ? yuan(minor) : "••••";
+  const exact = (minor: number) => visible ? new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", minimumFractionDigits: 2 }).format(minor / 100) : "••••••";
+  return <article className={styles.post} aria-label="资产" data-pinned>
+    <div className={styles.assetHead}><span>总资产 · CNY</span>
+      <button onClick={toggleVisible} aria-label={visible ? "隐藏余额" : "显示余额"} aria-pressed={!visible}>{visible ? <Eye size={18} /> : <EyeOff size={18} />}</button></div>
+    <div className={styles.assetTotal}>{exact(totalMinor)}</div>
+    {parts.length > 1 && <figure className={styles.figure}>
+      <div className={styles.flowBar} role="img" aria-label={parts.map(part => `${part.label} ${amount(part.minor)}`).join("，")}>
+        {parts.map(part => <span key={part.label} data-series={part.series} style={{ flexGrow: part.minor }} />)}
+      </div>
+      <ul className={styles.legend}>{parts.map(part => <li key={part.label}><i data-series={part.series} /><span>{part.label}</span><b>{amount(part.minor)}</b><small>{Math.round(part.minor / totalMinor * 100)}%</small></li>)}</ul>
+    </figure>}
+    <footer>
+      <span className={styles.byline}><AssistantMark size={14} />实时 · 置顶</span>
+      <span className={styles.actions}>
+        <button data-agent-id="open-transfer" data-agent-permission="navigate" disabled={disabled} onClick={onTransfer}><ArrowUpRight size={17} />转账</button>
+        <button data-agent-id="open-deposit" data-agent-permission="navigate" disabled={disabled} onClick={onDeposit}><Plus size={17} />入金</button>
+        <button className={styles.discuss} onClick={() => onDiscuss({ id: "assets", title: "我的资产", text: `总资产 ${yuan(totalMinor)}，其中活期 ${yuan(cashMinor)}、理财 ${yuan(investedMinor)}。` })}><MessageCircle size={17} />讨论</button>
+      </span>
+    </footer>
+  </article>;
 }

@@ -106,8 +106,8 @@ test("unavailable account data is distinct from a genuine zero balance", async (
   await expect(page.getByText("¥0.00", { exact: true })).toHaveCount(0);
   available = true;
   await page.getByRole("button", { name: "重新读取", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "你好，测试客户" })).toBeVisible();
-  await expect(page.getByText("¥0.00", { exact: true })).toHaveCount(1); // 总资产；首页月度支出已并入动态
+  await expect(page.getByRole("article", { name: "资产" })).toBeVisible();
+  await expect(page.getByText("¥0.00", { exact: true })).toHaveCount(1); // 置顶资产卡的总资产
 });
 
 test("demo verifier enrollment explains the shared account and requires explicit consent", async ({ page }) => {

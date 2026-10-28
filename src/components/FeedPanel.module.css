@@ -1,6 +1,5 @@
 /* 图表色板经 dataviz 校验：浅色与深色各一套，绿/橙相邻处靠 2px 间隔和文字标签作第二编码。 */
 .feed {
-  margin-top: var(--space-6);
   --series-1: #2f7d32; --series-2: #d97a1e; --series-3: #2f6fc0; --series-4: #9aac00; --series-other: #b4b9bf;
   --heat-1: #dbe8c4; --heat-2: #a9c97a; --heat-3: #6b9a3f; --heat-4: #3a6420;
   --flow-in: #2f7d32; --flow-out: #d97a1e;
@@ -13,7 +12,7 @@
   }
 }
 .head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); padding: 0 var(--space-1) var(--space-3); }
-.head h2 { font-size: var(--text-xl); letter-spacing: -.03em; }
+.head h1 { font-size: var(--text-xl); letter-spacing: -.03em; }
 .head span, .empty { font-size: var(--text-xs); color: var(--muted); }
 .empty { padding: var(--space-5) var(--space-1); }
 
@@ -120,3 +119,9 @@
 .lineDot { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: var(--series-1); box-shadow: 0 0 0 2px var(--white); pointer-events: none; }
 .baselineKey { display: inline-flex; align-items: center; gap: 6px; }
 .baselineKey i { width: 14px; border-top: 1px dashed var(--line-control); }
+
+/* 置顶的资产卡：同一个卡片外壳，金额是主角。 */
+.assetHead { display: flex; align-items: center; justify-content: space-between; font-size: var(--text-sm); color: var(--muted); }
+.assetHead button { width: var(--target-touch); height: var(--target-touch); margin: calc(var(--space-3) * -1) calc(var(--space-3) * -1) calc(var(--space-3) * -1) 0; display: grid; place-items: center; border: 0; border-radius: var(--radius-control); background: none; color: var(--muted); }
+.assetTotal { margin-top: var(--space-1); font-size: var(--text-display); font-weight: 700; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.actions button:disabled { opacity: .45; }

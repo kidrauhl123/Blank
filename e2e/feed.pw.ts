@@ -32,10 +32,12 @@ test("feed posts take a reaction and open a quoted discussion without touching t
   });
   await page.goto("/");
   const feed = page.getByRole("region", { name: "动态" });
-  const anomaly = feed.getByRole("article").first();
+  // 第一张是置顶的资产卡，帖子从第二张开始。
+  await expect(feed.getByRole("article").first()).toHaveAccessibleName("资产");
+  const anomaly = feed.getByRole("article").nth(1);
   await expect(anomaly).toContainText("这笔 ¥3,999 和你平时不太一样");
   await expect(anomaly).toContainText("需要你看看");
-  await expect(feed.getByRole("article")).toHaveCount(posts.length);
+  await expect(feed.getByRole("article")).toHaveCount(posts.length + 1);
   await expect(anomaly.locator("time")).toHaveText(/^(刚刚|今天 \d\d:\d\d|昨天 \d\d:\d\d)$/);
 
   const subscriptions = feed.getByRole("article", { name: "软件订阅每月花 ¥18，一年就是 ¥216" });
@@ -48,7 +50,7 @@ test("feed posts take a reaction and open a quoted discussion without touching t
   const later = { ...posts.find(post => post.kind === "subscriptions")!, id: "later", title: "下个月的订阅总账", publishedAt: new Date(Date.now() + 60_000).toISOString() };
   served = [later, ...posts];
   await page.reload();
-  await expect(feed.getByRole("article")).toHaveCount(posts.length);
+  await expect(feed.getByRole("article")).toHaveCount(posts.length + 1);
   await expect(subscriptions).toBeVisible();
   await expect(feed.getByRole("article", { name: "下个月的订阅总账" })).toHaveCount(0);
 

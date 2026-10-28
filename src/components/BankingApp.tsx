@@ -1,8 +1,8 @@
 "use client";
 
 import {
-  ArrowUpRight, ChartNoAxesColumnIncreasing,
-  ChevronRight, Clock3, CreditCard, Eye, EyeOff, House, Link2,
+  ChartNoAxesColumnIncreasing,
+  ChevronRight, Clock3, CreditCard, House, Link2,
   LogOut, Plus, RefreshCw, Settings, ShieldCheck, TrendingUp,
 } from "lucide-react";
 import { FormEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
@@ -15,7 +15,7 @@ import { BankDialog as ModalShell } from "./BankDialog";
 import { InvestmentView } from "./InvestmentView";
 import { AssistantMark } from "./AssistantMark";
 import { InvestmentReceiptDialog } from "./InvestmentReceiptDialog";
-import { FeedPanel, type FeedQuote } from "./FeedPanel";
+import { AssetCard, FeedPanel, type FeedQuote } from "./FeedPanel";
 import type { InvestmentReceipt } from "@/lib/investment-types";
 import type { BankStatement } from "@/lib/banking-report";
 import { bankRequest, BankRequestError, jsonPost } from "@/lib/client-request";
@@ -24,7 +24,7 @@ import styles from "./BankingApp.module.css";
 type Account = { id: string; name: string; account_no: string; masked_no: string; account_type: string; available_balance_minor: string; currency: string; status: string };
 type Transaction = { id: string; merchant_name: string; category: string; amount_minor: string; occurred_at: string; is_anomaly: boolean; investment_receipt?: InvestmentReceipt | null };
 type Card = { id: string; card_name: string; masked_no: string; card_type: string; status: string; daily_limit_minor: string };
-type Bootstrap = { customer: { display_name: string; phone: string; mfa_configured: boolean }; totalMinor: number; accounts: Account[]; transactions: Transaction[]; cards: Card[]; statement: BankStatement; ai: { configured: boolean; model: string | null }; features?: { voiceCalls?: boolean } };
+type Bootstrap = { customer: { display_name: string; phone: string; mfa_configured: boolean }; totalMinor: number; accounts: Account[]; transactions: Transaction[]; cards: Card[]; statement: BankStatement; investmentValueMinor?: number; ai: { configured: boolean; model: string | null }; features?: { voiceCalls?: boolean } };
 type BusinessTab = "home" | "activity" | "cards" | "wealth";
 type Tab = BusinessTab | "assistant";
 
@@ -165,15 +165,12 @@ function NavButton({ active, label, icon, onClick, agentId }: { active: boolean;
 }
 
 function HomeView({ data, loading, visible, toggleVisible, onDeposit, onTransfer, onDiscuss }: { data: Bootstrap; loading: boolean; visible: boolean; toggleVisible: () => void; onDeposit: () => void; onTransfer: () => void; onDiscuss: (quote: FeedQuote) => void }) {
+  const cashMinor = data.accounts.reduce((sum, account) => sum + Number(account.available_balance_minor ?? 0), 0);
+  // 首页只有动态流，资产是默认置顶的一个组件。
   return <div className={styles.home}>
-    <div className={styles.homeGreeting}><div><h1>你好，{data?.customer.display_name ?? "欢迎回来"}</h1></div><span>账户总览</span></div>
-    <section className={styles.balanceBlock} aria-label="账户资产总览"><div className={styles.labelRow}><span>总资产 · CNY</span><button onClick={toggleVisible} aria-label={visible ? "隐藏余额" : "显示余额"} aria-pressed={!visible}>{visible ? <Eye size={18} /> : <EyeOff size={18} />}</button></div><div className={styles.balance}>{visible ? money(data.totalMinor) : "••••••"}</div><div className={styles.balanceMeta}><span>{loading ? "上次读取的账户资产" : "账户资产"}</span><span>{data.accounts[0]?.masked_no ?? "暂无可用账户"}</span></div>
-    <div className={styles.quickActions}>
-      <button data-agent-id="open-transfer" data-agent-permission="navigate" className={styles.primary} disabled={loading || !data.accounts[0]} onClick={onTransfer}><span><ArrowUpRight /></span>转账</button>
-      <button data-agent-id="open-deposit" data-agent-permission="navigate" disabled={loading || !data.accounts[0]} onClick={onDeposit}><span><Plus /></span>入金</button>
-    </div>
-    </section>
-    <FeedPanel key={data.customer.phone} owner={data.customer.phone} onDiscuss={onDiscuss} />
+    <FeedPanel key={data.customer.phone} owner={data.customer.phone} onDiscuss={onDiscuss}
+      pinned={<AssetCard totalMinor={data.totalMinor} cashMinor={cashMinor} investedMinor={data.investmentValueMinor ?? Math.max(0, data.totalMinor - cashMinor)}
+        visible={visible} toggleVisible={toggleVisible} disabled={loading || !data.accounts[0]} onTransfer={onTransfer} onDeposit={onDeposit} onDiscuss={onDiscuss} />} />
   </div>;
 }
 
