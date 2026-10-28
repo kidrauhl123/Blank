@@ -15,7 +15,6 @@ import { BankDialog as ModalShell } from "./BankDialog";
 import { InvestmentView } from "./InvestmentView";
 import { AssistantMark } from "./AssistantMark";
 import { InvestmentReceiptDialog } from "./InvestmentReceiptDialog";
-import { ProactiveAttention } from "./ProactiveAttention";
 import { FeedPanel, type FeedQuote } from "./FeedPanel";
 import type { InvestmentReceipt } from "@/lib/investment-types";
 import type { BankStatement } from "@/lib/banking-report";
@@ -25,7 +24,7 @@ import styles from "./BankingApp.module.css";
 type Account = { id: string; name: string; account_no: string; masked_no: string; account_type: string; available_balance_minor: string; currency: string; status: string };
 type Transaction = { id: string; merchant_name: string; category: string; amount_minor: string; occurred_at: string; is_anomaly: boolean; investment_receipt?: InvestmentReceipt | null };
 type Card = { id: string; card_name: string; masked_no: string; card_type: string; status: string; daily_limit_minor: string };
-type Bootstrap = { customer: { display_name: string; phone: string; mfa_configured: boolean }; totalMinor: number; accounts: Account[]; transactions: Transaction[]; cards: Card[]; statement: BankStatement; ai: { configured: boolean; model: string | null }; features?: { proactiveReviews: boolean; voiceCalls?: boolean } };
+type Bootstrap = { customer: { display_name: string; phone: string; mfa_configured: boolean }; totalMinor: number; accounts: Account[]; transactions: Transaction[]; cards: Card[]; statement: BankStatement; ai: { configured: boolean; model: string | null }; features?: { voiceCalls?: boolean } };
 type BusinessTab = "home" | "activity" | "cards" | "wealth";
 type Tab = BusinessTab | "assistant";
 
@@ -175,7 +174,6 @@ function HomeView({ data, loading, visible, toggleVisible, onDeposit, onTransfer
     </div>
     </section>
     <FeedPanel key={data.customer.phone} owner={data.customer.phone} onDiscuss={onDiscuss} />
-    {data.features?.proactiveReviews && <ProactiveAttention key={data.customer.phone} />}
   </div>;
 }
 
