@@ -132,6 +132,10 @@ BEGIN
      OR to_regclass('public.feed_publisher_state') IS NULL THEN
     RAISE EXCEPTION 'Feed posts migration is missing';
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='028_demo_life.sql')
+     OR to_regclass('public.demo_life_state') IS NULL THEN
+    RAISE EXCEPTION 'Demo life migration is missing';
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='019_authorization_hardening.sql') THEN
     RAISE EXCEPTION 'Authorization hardening migration is missing';
   END IF;

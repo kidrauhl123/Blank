@@ -7,6 +7,7 @@ import { processDailyReview } from "./scheduled-ai-reviews";
 import { getJevStatus } from "./jev";
 import { getAIStatus } from "./ai";
 import { publishDueFeeds } from "./feed-store";
+import { advanceShowcaseLife } from "./demo-life";
 
 export type ScheduledTask = {
   id: string; customer_id: string; kind: ScheduleInput["kind"]; title: string; message: string;
@@ -160,7 +161,8 @@ export async function tickScheduledTasks() {
   }
   await query("INSERT INTO scheduler_heartbeat(id,last_tick_at) VALUES(1,now()) ON CONFLICT(id) DO UPDATE SET last_tick_at=excluded.last_tick_at");
   const reviews = await processDailyReview();
-  // 动态发帖失败不影响定时任务和巡检的心跳。
+  // 展示账户的生活模拟和动态发帖失败都不影响定时任务和巡检的心跳。
+  await advanceShowcaseLife().catch(() => null);
   const posts = await publishDueFeeds().catch(() => 0);
   await query("UPDATE scheduler_heartbeat SET last_tick_at=now() WHERE id=1");
   return { processed, reviews, posts };

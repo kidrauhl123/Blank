@@ -29,7 +29,8 @@ export type FeedDraft = {
 export type FeedPost = Omit<FeedDraft, "key"> & { id: string; publishedAt: string };
 
 const DAY = 86_400_000;
-const NON_SPENDING = new Set(["转账", "理财", "工资", "入金"]);
+// 房租这类大额固定支出会把日历压成一片浅色，和转账、理财一样不计入消费。
+const NON_SPENDING = new Set(["转账", "理财", "工资", "入金", "住房"]);
 const WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 export const dateKey = (date: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
 const noon = (key: string) => new Date(`${key}T12:00:00+08:00`).getTime();
@@ -82,7 +83,7 @@ function spendingCalendar(transactions: FeedTransaction[], now: Date): FeedDraft
     ? `${monthDay(peakDate)}一天花了 ${yuan(peakMinor)}，是你平常一天的 ${Math.round(peakMinor / typical)} 倍`
     : quiet >= 7 ? `近 5 周，你有 ${quiet} 天一分钱没花`
     : `近 5 周有 ${active.length} 天在花钱，最多的一天是${weekday(peakDate || active[0].date)}`;
-  const body = `有消费的日子里，一天通常花 ${yuan(Math.round(typical))}。颜色越深花得越多，转账和理财不算在内。`;
+  const body = `有消费的日子里，一天通常花 ${yuan(Math.round(typical))}。颜色越深花得越多，转账、理财和房租不算在内。`;
   return { key: `spending-calendar:${weekStart(now)}`, kind: "spending-calendar", title, body, source: "近 5 周消费", attention: false,
     chart: { type: "calendar", days }, factIds: used };
 }

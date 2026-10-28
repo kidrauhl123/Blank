@@ -5,6 +5,7 @@ export const DEMO_PROFILES = [
   { key: "watermelon", name: "小西瓜", emoji: "🍉", initialMinor: 3500000, salaryMinor: 1600000, phone: "99000000004", color: "#f4e3e9" },
   { key: "orange", name: "小橘子", emoji: "🍊", initialMinor: 2600000, salaryMinor: 1450000, phone: "99000000005", color: "#e8e4f3" },
 ] as const;
+// 登录页只展示一个体验入口；其他几位仍是小土豆转账与 AA 的朋友，账户照常存在。
 export function publicDemoProfiles() {
-  return DEMO_PROFILES.map(({ key, name, emoji, color }) => ({ key, name, emoji, color }));
+  return DEMO_PROFILES.filter(profile => profile.key === "potato").map(({ key, name, emoji, color }) => ({ key, name, emoji, color }));
 }
