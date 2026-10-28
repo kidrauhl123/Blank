@@ -28,8 +28,7 @@ function failure(error: unknown) {
     return Response.json({ error: error.code, message: preferenceMessages[error.code] ?? "请在银行 APP 重新登录后操作" }, { status: error.status });
   }
   const { code, status, message, upstreamStatus } = appAgentFailure(error);
-  // 附上异常的类型与前 200 个字符（内部错误码或框架报错，不含用户输入），便于定位中断原因。
-  console.error("APP_AGENT_REQUEST_FAILED", { code, upstreamStatus, cause: error instanceof Error ? `${error.name}: ${error.message.slice(0, 200)}` : typeof error });
+  console.error("APP_AGENT_REQUEST_FAILED", { code, upstreamStatus });
   return Response.json({ error: code, message }, { status });
 }
 export async function GET(request: Request) {
