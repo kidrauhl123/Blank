@@ -25,7 +25,8 @@ description: 和用户一起设计、预览、保存、修改或删除首页动�
 - blocks：最多 4 块，从上到下。stat 大数字（total/count/avg/change/top），trend 趋势线，ranking 排行，calendar 五周日历，list 最近几笔，compare 与上期对比，note 一句话（不能有数字）。
 - schedule：every day/week/month，weekday 1=周一，day 每月几号，hour 几点；onlyWhenAbove 合计超过多少分才发。
 - headline：一句人话标题，数字只能用占位符 {total}{count}{avg}{change}{top}{period}，不能自己写数字。
-先预览，在回复里单独一行原样写出工具返回的 marker（形如 [[card:…]]），再用一两句话说明这张卡看什么、多久发一次，问用户要不要加入动态。用户说好、可以、加吧之后才调用 save_feed_card。
+先预览，再调用 ask_user 让用户决定：question 以工具返回的 marker（形如 [[card:…]]）开头并原样写出，用户会在对话里看到卡片；接着用一句话说明这张卡看什么、多久发一次，问题里不要写金额，数字都在卡片上。options 用“加入动态”“再改改”“算了”。用户选加入或回答好、可以之后才调用 save_feed_card(cardId)。想改就按新要求重新预览并再次 ask_user。
+如果用户在新的对话里说“加进去吧”而你不知道 cardId，直接调用 save_feed_card 且不传 cardId，会保存他最近一次预览。
 用户想改：按新要求重新 preview_feed_card，确认后 save_feed_card 并传 replaces=旧 cardId。删除前先用 list_feed_cards 找到对应卡片。
 预览里数字为零或没有记录时如实说明，可建议换分类、关键词或时间窗口。卡片只是看账，不能执行转账、申购或任何银行操作。
 `,

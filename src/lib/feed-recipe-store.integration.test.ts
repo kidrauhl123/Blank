@@ -63,6 +63,14 @@ describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("feed card recipes", () 
     expect((await listFeed(customerId, visitors[0])).some(post => post.kind === "custom")).toBe(false);
   });
 
+  it("saves the visitor's latest preview when the yes comes in a new conversation", async () => {
+    await expect(saveRecipe(customerId, visitors[1])).rejects.toThrow("RECIPE_NOT_FOUND");
+    const draft = await previewRecipe(customerId, visitors[1], { ...recipe, name: "咖啡日报" });
+    await previewRecipe(customerId, visitors[0], { ...recipe, name: "别人的卡" });
+    expect(await saveRecipe(customerId, visitors[1])).toMatchObject({ id: draft.id, name: "咖啡日报" });
+    await deleteRecipe(customerId, visitors[1], draft.id);
+  });
+
   it("does not post the same system story twice when nothing changed", async () => {
     await publishFeed(customerId);
     const before = (await listFeed(customerId)).filter(post => post.kind === "money-flow");

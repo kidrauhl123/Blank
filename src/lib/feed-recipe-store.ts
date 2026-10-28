@@ -49,7 +49,14 @@ export async function getRecipePreview(customerId: string, ownerId: string, id: 
 }
 
 // 启用草稿并立刻发出本周期的第一条；replaces 用于"改一改"：旧配方和它的帖子一并移除。
-export async function saveRecipe(customerId: string, ownerId: string, id: string, replaces?: string) {
+// 不传 id 时保存这位访客 30 分钟内最近的一张预览：用户可能在新的对话里才说"好"。
+export async function saveRecipe(customerId: string, ownerId: string, id?: string, replaces?: string) {
+  if (!id) {
+    const latest = await query<{ id: string }>(`SELECT id FROM feed_recipes WHERE customer_id=$1 AND visitor_owner_id=$2 AND status='DRAFT'
+      AND created_at > now() - interval '30 minutes' ORDER BY created_at DESC LIMIT 1`, [customerId, ownerId]);
+    id = latest.rows[0]?.id;
+    if (!id) throw new Error("RECIPE_NOT_FOUND");
+  }
   const row = await ownRecipe(customerId, ownerId, id);
   if (!row || row.status === "DELETED") throw new Error("RECIPE_NOT_FOUND");
   await query("UPDATE feed_recipes SET status='ACTIVE',updated_at=now() WHERE id=$1", [id]);

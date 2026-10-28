@@ -59,12 +59,12 @@ export function appPageTools() {
       const { customerId, ownerId } = cardOwner(runtime);
       const { id, post, values } = await previewRecipe(customerId, ownerId, input);
       return JSON.stringify({ cardId: id, marker: `[[card:${id}]]`, headline: post.title, values,
-        instruction: "在回复里单独一行原样写出 marker，用户就能看到这张卡的预览。用户确认后再调用 save_feed_card；想改就重新预览。金额单位为分。" });
+        instruction: "接着调用 ask_user：question 以 marker 开头（原样写出，用户会看到卡片预览），再用一句话说明这张卡看什么、多久发一次，不要写金额（数字都在卡片上）；options 用“加入动态”“再改改”“算了”。用户选择加入后调用 save_feed_card。金额单位为分。" });
     }, { name: "preview_feed_card", description: "按用户描述设计一张动态卡片并生成预览（不会发布）。配方只描述看哪些流水、用哪些积木、多久发一次；数字由服务端按账本计算。", schema: recipeSchema }),
     tool(async (input, runtime: ToolRuntime) => {
       const { customerId, ownerId } = cardOwner(runtime);
       return JSON.stringify(await saveRecipe(customerId, ownerId, input.cardId, input.replaces));
-    }, { name: "save_feed_card", description: "用户明确同意后，把预览过的卡片加入用户的动态，并立刻发出第一条。修改已有卡片时传 replaces=旧 cardId。", schema: z.object({ cardId, replaces: cardId.optional() }) }),
+    }, { name: "save_feed_card", description: "用户明确同意后，把预览过的卡片加入用户的动态，并立刻发出第一条。修改已有卡片时传 replaces=旧 cardId。不知道 cardId 时省略，会保存用户最近一次预览。", schema: z.object({ cardId: cardId.optional(), replaces: cardId.optional() }) }),
     tool(async (_, runtime: ToolRuntime) => {
       const { customerId, ownerId } = cardOwner(runtime);
       return JSON.stringify({ cards: await listRecipes(customerId, ownerId) });
