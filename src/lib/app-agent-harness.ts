@@ -10,7 +10,9 @@ import { AIConfigurationError, getAIStatus } from "./ai";
 import { actionResultSchema, type PageAction } from "./app-agent-protocol";
 import { appAgentSkillFiles } from "./app-agent-skills";
 import { APP_AGENT_PROMPT } from "./bank-agent-prompts";
-import { currentPreferenceData } from "./preference-runtime";
+import { currentPreferenceData, currentPreferenceScope } from "./preference-runtime";
+import { recipeSchema } from "./feed-recipe";
+import { deleteRecipe, listRecipes, previewRecipe, saveRecipe } from "./feed-recipe-store";
 import { investmentFiltersSchema, listInvestmentProducts } from "./investments";
 
 import { readBankFacts } from "./bank-agent-facts";
@@ -24,6 +26,16 @@ function bridge(action: PageAction, runtime: ToolRuntime) {
 const description = z.string().min(1).max(200).describe("向用户展示本步要做什么");
 const pageVersion = z.string().max(40).describe("最新页面快照 version，页面变化后重新读取");
 const target = z.string().max(120).describe("最新页面 controls 中的 id，不是 CSS 选择器");
+const cardId = z.string().uuid().describe("preview_feed_card 返回的 cardId");
+
+// 卡片配方只属于当前访客（演示账户由访客共用）；没有访客身份时不能创建。
+function cardOwner(runtime: ToolRuntime) {
+  const customerId = runtime.config.configurable?.bank_customer_id;
+  if (typeof customerId !== "string") throw new Error("BANK_APP_SESSION_REQUIRED");
+  const scope = currentPreferenceScope();
+  if (!scope) throw new Error("卡片需要访客身份，请刷新页面后重试");
+  return { customerId, ownerId: scope.ownerId };
+}
 
 export function appPageTools() {
   return [
@@ -43,6 +55,24 @@ export function appPageTools() {
       return JSON.stringify({ ...result, products: result.products.map(product => ({ ...product, history: undefined })),
         scope: "产品来自本项目目录；历史净值变化不是预期收益。候选筛选不等于风险测评或申购授权。" });
     }, { name: "search_investment_products", description: "查询当前客户理财日期下的产品，可按金额、风险、持有期限和类型筛选。返回产品事实、费用及净值，不进行交易。", schema: investmentFiltersSchema }),
+    tool(async (input, runtime: ToolRuntime) => {
+      const { customerId, ownerId } = cardOwner(runtime);
+      const { id, post, values } = await previewRecipe(customerId, ownerId, input);
+      return JSON.stringify({ cardId: id, marker: `[[card:${id}]]`, headline: post.title, values,
+        instruction: "在回复里单独一行原样写出 marker，用户就能看到这张卡的预览。用户确认后再调用 save_feed_card；想改就重新预览。金额单位为分。" });
+    }, { name: "preview_feed_card", description: "按用户描述设计一张动态卡片并生成预览（不会发布）。配方只描述看哪些流水、用哪些积木、多久发一次；数字由服务端按账本计算。", schema: recipeSchema }),
+    tool(async (input, runtime: ToolRuntime) => {
+      const { customerId, ownerId } = cardOwner(runtime);
+      return JSON.stringify(await saveRecipe(customerId, ownerId, input.cardId, input.replaces));
+    }, { name: "save_feed_card", description: "用户明确同意后，把预览过的卡片加入用户的动态，并立刻发出第一条。修改已有卡片时传 replaces=旧 cardId。", schema: z.object({ cardId, replaces: cardId.optional() }) }),
+    tool(async (_, runtime: ToolRuntime) => {
+      const { customerId, ownerId } = cardOwner(runtime);
+      return JSON.stringify({ cards: await listRecipes(customerId, ownerId) });
+    }, { name: "list_feed_cards", description: "列出用户自己创建、正在生效的动态卡片。", schema: z.object({}) }),
+    tool(async (input, runtime: ToolRuntime) => {
+      const { customerId, ownerId } = cardOwner(runtime);
+      return JSON.stringify({ deleted: await deleteRecipe(customerId, ownerId, input.cardId) });
+    }, { name: "delete_feed_card", description: "删除用户自己创建的一张动态卡片及它发过的帖子。", schema: z.object({ cardId }) }),
     tool((_, runtime: ToolRuntime) => bridge({ type: "inspect", description: "正在查看当前页面" }, runtime), {
       name: "inspect_page", description: "读取用户正在看的 BankPilot 页面、可见数据及可用控件。不会读取密码或验证码。", schema: z.object({}),
     }),

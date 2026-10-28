@@ -66,3 +66,35 @@ test("feed posts take a reaction and open a quoted discussion without touching t
   await expect(conversation.locator("p", { hasText: "这笔 ¥3,999 和你平时不太一样" })).toBeVisible();
   expect(writes).toEqual([]);
 });
+
+test("a card designed in chat renders as a live preview, then shows as added", async ({ page }) => {
+  const cardId = "00000000-0000-4000-8000-0000000000c1";
+  let status: "DRAFT" | "ACTIVE" = "DRAFT";
+  const preview: FeedPost = { id: cardId, recipeId: cardId, kind: "custom", title: "本周咖啡花了 ¥90，比上周同期多 50%", source: "咖啡周报", attention: false,
+    body: "你创建的「咖啡周报」，每周一 8 点更新。", publishedAt: new Date().toISOString(), factIds: [],
+    chart: { type: "recipe", blocks: [{ type: "stat", label: "笔数", text: "3 笔" }, { type: "bars", items: [{ label: "漫拿咖啡", minor: 6200, note: "2 笔" }] }] } };
+  const replies = [`好的，先给你看看这张卡：\n\n[[card:${cardId}]]\n\n每周一早上 8 点更新，要加入动态吗？`, `已经加到你的动态里了。\n\n[[card:${cardId}]]`];
+  await page.route("**/api/bootstrap", route => route.fulfill({ json: overview }));
+  await page.route("**/api/v1/feed", route => route.fulfill({ json: { posts } }));
+  await page.route(`**/api/v1/feed/recipes/${cardId}`, route => route.fulfill({ json: { status, post: preview } }));
+  await page.route("**/api/agent/app", async route => {
+    const message = replies.shift()!;
+    if (!replies.length) status = "ACTIVE";
+    // 用户说“好”是一次新的对话运行，编号不同。
+    await route.fulfill({ json: { id: `00000000-0000-4000-8000-00000000000${replies.length + 4}`, status: "COMPLETED", pending: null, controlGranted: false, steps: 0, message } });
+  });
+  await page.goto("/");
+  await page.getByRole("navigation", { name: "主导航" }).getByRole("button", { name: "AI 助手" }).click();
+  const conversation = page.getByRole("region", { name: "AI 助手会话" });
+  const input = conversation.getByRole("textbox", { name: "向 AI 助手描述需求或回答问题" });
+  await input.fill("每周一帮我做张卡，看看咖啡花了多少");
+  await conversation.getByRole("button", { name: "发送给 AI 助手" }).click();
+  const card = conversation.getByRole("article", { name: `卡片预览：${preview.title}` });
+  await expect(card).toContainText("3 笔");
+  await expect(card).toContainText("漫拿咖啡");
+  await expect(card).toContainText("说“好”就加入动态");
+  await expect(conversation).not.toContainText("[[card:");
+  await input.fill("好");
+  await conversation.getByRole("button", { name: "发送给 AI 助手" }).click();
+  await expect(conversation.getByText("已加入你的动态")).toBeVisible();
+});

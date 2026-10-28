@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildFeed, publishedLabel, yuan, type FeedTransaction } from "./feed";
 
 const now = new Date("2026-10-28T04:00:00Z"); // 北京时间周三中午
+const saturday = new Date("2026-10-31T04:00:00Z"); // 周报类帖子到周六都已发出
 const daysAgo = (days: number) => new Date(now.getTime() - days * 86_400_000).toISOString();
 let seq = 0;
 const tx = (days: number, amount: number, category = "餐饮", merchant = "店", anomaly = false): FeedTransaction =>
@@ -58,7 +59,7 @@ describe("feed", () => {
 
   it("nets transfers per friend in both directions", () => {
     const transactions = [tx(5, -8800, "转账", "转账给小板栗"), tx(4, 3000, "转账", "来自小板栗的转账"), tx(3, 20000, "转账", "来自小橘子的转账")];
-    const post = buildFeed({ transactions, subscriptions: [] }, now).find(item => item.kind === "friends")!;
+    const post = buildFeed({ transactions, subscriptions: [] }, saturday).find(item => item.kind === "friends")!;
     if (post.chart.type !== "diverging") throw new Error("diverging chart expected");
     expect(post.chart.items).toEqual([{ label: "小橘子", netMinor: 20000 }, { label: "小板栗", netMinor: -5800 }]);
     expect(post.title).toBe("近两个月，小橘子净转给你 ¥200");
@@ -91,7 +92,7 @@ describe("feed", () => {
     const locked = { id: "p1", productName: "定享 90 天", costMinor: 100000, valueMinor: 100250, profitMinor: 250, purchasedOn: "2026-10-06",
       unlocksOn: "2026-11-03", redeemable: false, businessDate: "2026-10-31", history };
     const small = { ...locked, id: "p2", productName: "零钱灵活", valueMinor: 5000, redeemable: true };
-    const posts = buildFeed({ transactions: [], subscriptions: [], positions: [small, locked] }, now);
+    const posts = buildFeed({ transactions: [], subscriptions: [], positions: [small, locked] }, saturday);
     const unlock = posts.find(post => post.kind === "unlock")!;
     expect(unlock).toMatchObject({ key: "unlock:p1", title: "定享 90 天还有 3 天可以赎回", chart: { type: "countdown", days: 3 } });
     const position = posts.find(post => post.kind === "position")!;
@@ -107,6 +108,17 @@ describe("feed", () => {
     const keys = (at: Date) => buildFeed({ transactions, subscriptions: [] }, at).map(post => post.key);
     expect(keys(now)).toEqual(keys(new Date("2026-10-29T04:00:00Z")));
     expect(keys(now)).toContain("spending-calendar:2026-10-26");
+  });
+
+  it("spreads weekly posts over the week: calendar Monday, flow Wednesday, holdings Thursday, friends Saturday", () => {
+    const transactions = [1, 2, 3, 4, 5, 6].map(day => tx(day, -3000)).concat(tx(2, -8800, "转账", "转账给小板栗"));
+    const history = Array.from({ length: 31 }, (_, index) => ({ date: `2026-10-${String(index + 1).padStart(2, "0")}`, valueMinor: 100000 + index }));
+    const positions = [{ id: "p1", productName: "稳享 30 天", costMinor: 100000, valueMinor: 100030, profitMinor: 30, purchasedOn: "2026-10-01", unlocksOn: "2026-12-01", redeemable: false, businessDate: "2026-10-31", history }];
+    const weekly = (at: string) => buildFeed({ transactions, subscriptions: [], positions }, new Date(at)).map(post => post.kind).filter(kind => kind !== "anomaly");
+    expect(weekly("2026-10-26T04:00:00Z")).toEqual(["spending-calendar"]);
+    expect(weekly("2026-10-28T04:00:00Z")).toEqual(["spending-calendar", "money-flow"]);
+    expect(weekly("2026-10-29T04:00:00Z")).toEqual(["spending-calendar", "money-flow", "position"]);
+    expect(weekly("2026-10-31T04:00:00Z")).toEqual(["spending-calendar", "money-flow", "position", "friends"]);
   });
 
   it("labels publish times relative to Beijing days", () => {

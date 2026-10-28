@@ -24,5 +24,6 @@
 ## 开关与重置
 
 - 只有设置 `BANKPILOT_SHOWCASE_LIFE=1` 才运行；生产 compose 已开启，本地与测试库默认关闭，小土豆保持预置数据。
+- 运维重置：`POST /api/internal/showcase/reset`（调度器凭据），下一轮调度从头回放。
 - `resetShowcaseLife()` 撤销模拟写入的一切：按分录扣回余额，删除流水、定投订单与持仓、新增订阅与动态，恢复订阅扣费日与理财估值日期。预置历史数据不受影响。
 - 进度与开始前的快照存在 `demo_life_state`（迁移 `028_demo_life.sql`）。

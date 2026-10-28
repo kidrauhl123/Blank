@@ -2,7 +2,7 @@
 
 import { ArrowUpRight, Eye, EyeOff, MessageCircle, Plus, ThumbsDown, ThumbsUp } from "lucide-react";
 import { useEffect, useState, type PointerEvent, type ReactNode } from "react";
-import { publishedLabel, yuan, type FeedChart, type FeedKind, type FeedPost } from "@/lib/feed";
+import { publishedLabel, yuan, type FeedChart, type FeedKind, type FeedPost, type RecipeView } from "@/lib/feed";
 import { AssistantMark } from "./AssistantMark";
 import styles from "./FeedPanel.module.css";
 
@@ -31,7 +31,7 @@ function visible(posts: FeedPost[], taste: Taste) {
 }
 
 // 首页就是动态流；pinned 是默认置顶的组件（例如资产卡），和帖子用同一个卡片外壳。
-export function FeedPanel({ owner, onDiscuss, pinned }: { owner: string; onDiscuss: (quote: FeedQuote) => void; pinned?: ReactNode }) {
+export function FeedPanel({ owner, onDiscuss, pinned, refresh = 0 }: { owner: string; onDiscuss: (quote: FeedQuote) => void; pinned?: ReactNode; refresh?: number }) {
   const [posts, setPosts] = useState<FeedPost[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [taste, setTaste] = useState<Taste>({ reactions: {}, kinds: {} });
@@ -45,7 +45,7 @@ export function FeedPanel({ owner, onDiscuss, pinned }: { owner: string; onDiscu
       setTaste(saved); setPosts(visible(result.posts, saved));
     }).catch(() => { if (alive) setFailed(true); });
     return () => { alive = false; };
-  }, [owner]);
+  }, [owner, refresh]);
 
   const react = (post: FeedPost, reaction: Reaction) => {
     setTaste(current => {
@@ -67,13 +67,10 @@ export function FeedPanel({ owner, onDiscuss, pinned }: { owner: string; onDiscu
     <div className={styles.head}><h1>动态</h1><span>BankPilot 根据你的账户整理</span></div>
     {pinned}
     {failed ? <p className={styles.empty}>动态暂时无法读取，稍后再来看看。</p>
-      : posts === null ? <p className={styles.empty} role="status">正在整理…</p>
+      : posts === null ? <p className={styles.empty} aria-busy="true">正在整理…</p>
       : posts.length === 0 ? <p className={styles.empty}>今天一切正常，没有新动态。</p>
       : posts.map(post => <article key={post.id} className={styles.post} data-attention={post.attention || undefined} aria-label={post.title}>
-        {post.attention && <span className={styles.flag}>需要你看看</span>}
-        <h3>{post.title}</h3>
-        <Chart chart={post.chart} />
-        <p className={styles.body}>{post.body}</p>
+        <PostContent post={post} />
         <footer>
           <span className={styles.byline}><AssistantMark size={14} /><time dateTime={post.publishedAt}>{publishedLabel(post.publishedAt)}</time> · {post.source}</span>
           <span className={styles.actions}>
@@ -87,7 +84,57 @@ export function FeedPanel({ owner, onDiscuss, pinned }: { owner: string; onDiscu
   </section>;
 }
 
+// 帖子主体：动态里和对话里的配方预览共用。
+export function PostContent({ post }: { post: Pick<FeedPost, "title" | "body" | "chart" | "attention" | "recipeId"> }) {
+  return <>
+    {post.attention && <span className={styles.flag}>需要你看看</span>}
+    {post.recipeId && <span className={styles.mine}>你创建的</span>}
+    <h3>{post.title}</h3>
+    <Chart chart={post.chart} />
+    <p className={styles.body}>{post.body}</p>
+  </>;
+}
+
+// 对话里展示的配方卡：和动态同一个外壳，底部写明状态。
+export function RecipePreviewCard({ post, status }: { post: FeedPost; status: "DRAFT" | "ACTIVE" }) {
+  return <article className={`${styles.post} ${styles.previewCard}`} aria-label={`卡片预览：${post.title}`}>
+    <PostContent post={post} />
+    <footer><span className={styles.byline}><AssistantMark size={14} />{status === "ACTIVE" ? "已加入你的动态" : "预览 · 说“好”就加入动态"}</span></footer>
+  </article>;
+}
+
+// 对话里按编号读取并展示配方卡；每次出现都重新读取，保存后会显示"已加入你的动态"。
+export function RecipeCardById({ id }: { id: string }) {
+  const [state, setState] = useState<{ post: FeedPost; status: "DRAFT" | "ACTIVE" } | "missing" | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/v1/feed/recipes/${encodeURIComponent(id)}`, { cache: "no-store" })
+      .then(async response => { const result = await response.json().catch(() => null); if (alive) setState(response.ok && result?.post ? result : "missing"); })
+      .catch(() => { if (alive) setState("missing"); });
+    return () => { alive = false; };
+  }, [id]);
+  if (state === null) return <p className={styles.empty} aria-busy="true">正在生成卡片预览…</p>;
+  if (state === "missing") return <p className={styles.empty}>这张卡片已删除或暂时无法读取。</p>;
+  return <RecipePreviewCard post={state.post} status={state.status} />;
+}
+
+function RecipeBlocks({ blocks }: { blocks: RecipeView[] }) {
+  return <div className={styles.recipe}>{blocks.map((block, index) => {
+    if (block.type === "stat") return <div key={index} className={styles.stat}><small>{block.label}</small><b>{block.text}</b></div>;
+    if (block.type === "note") return <p key={index} className={styles.note}>{block.text}</p>;
+    if (block.type === "list") return <ul key={index} className={styles.list}>{block.items.length ? block.items.map((item, row) => <li key={row}><span>{item.label}</span><small>{item.note}</small><b>{yuan(item.minor)}</b></li>) : <li><span>这段时间没有记录</span></li>}</ul>;
+    if (block.type === "compare") {
+      const max = Math.max(block.current, block.previous, 1);
+      return <ul key={index} className={styles.bars} aria-label="与上期对比">{[[block.currentLabel, block.current, true], [block.previousLabel, block.previous, false]].map(([label, minor, now]) =>
+        <li key={String(label)} data-muted={!now || undefined}><span className={styles.barLabel}>{label}</span><span className={styles.track}><span className={styles.bar} style={{ width: `${Math.max(2, Number(minor) / max * 100)}%` }} /></span><b>{yuan(Number(minor))}</b><small /></li>)}</ul>;
+    }
+    if (block.type === "bars" && !block.items.length) return <p key={index} className={styles.note}>这段时间没有记录。</p>;
+    return <Chart key={index} chart={block} />;
+  })}</div>;
+}
+
 function Chart({ chart }: { chart: FeedChart }) {
+  if (chart.type === "recipe") return <RecipeBlocks blocks={chart.blocks} />;
   if (chart.type === "calendar") return <CalendarChart days={chart.days} />;
   if (chart.type === "flow") return <FlowChart chart={chart} />;
   if (chart.type === "bars") return <BarChart items={chart.items} />;
@@ -139,7 +186,7 @@ function FlowChart({ chart }: { chart: Extract<FeedChart, { type: "flow" }> }) {
 
 function BarChart({ items }: { items: Array<{ label: string; minor: number; note: string }> }) {
   const max = Math.max(...items.map(item => item.minor));
-  return <ul className={styles.bars} aria-label="订阅金额">
+  return <ul className={styles.bars} aria-label="金额排行">
     {items.map(item => <li key={item.label}>
       <span className={styles.barLabel}>{item.label}</span>
       <span className={styles.track}><span className={styles.bar} style={{ width: `${Math.max(4, item.minor / max * 100)}%` }} /></span>

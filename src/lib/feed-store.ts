@@ -2,6 +2,7 @@ import { query } from "./db";
 import { buildFeed, type FeedChart, type FeedDraft, type FeedPosition, type FeedPost, type FeedSubscription, type FeedTransaction } from "./feed";
 import { getInvestmentOverview } from "./investments";
 import { investmentValue } from "./investment-model";
+import { publishRecipes } from "./feed-recipe-store";
 
 const PUBLISH_INTERVAL = "10 minutes";
 // 每条帖子按去重键错开发布时间，像 AI 在不同时刻想到的：事件类 2–9 分钟后，其余在检查后一个半小时内；但不晚于现在。
@@ -51,11 +52,18 @@ export async function publishFeed(customerId: string, asOf = new Date()) {
   let published = 0;
   // 列表按发布时间倒序，同一批里越重要的帖子时间越晚、排得越靠上。
   for (const [index, draft] of [...drafts].reverse().entries()) {
+    // 没有新变化就不发：和同类上一条的标题完全一样，说明事实没变，像机器在刷屏。
+    if (!draft.attention) {
+      const last = await query<{ title: string }>("SELECT title FROM feed_posts WHERE customer_id=$1 AND kind=$2 AND visitor_owner_id IS NULL AND published_at<=$3 ORDER BY published_at DESC LIMIT 1", [customerId, draft.kind, asOf]);
+      if (last.rows[0]?.title === draft.title) continue;
+    }
     const inserted = await query(`INSERT INTO feed_posts(customer_id,dedupe_key,kind,title,body,source,attention,chart,fact_ids,published_at)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10) ON CONFLICT(customer_id,dedupe_key) DO NOTHING`,
     [customerId, draft.key, draft.kind, draft.title, draft.body, draft.source, draft.attention, JSON.stringify(draft.chart), draft.factIds, publishTime(draft, asOf, index)]);
     published += inserted.rowCount ?? 0;
   }
+  // 用户配方只按"现在"发布；补过去的日子时不替配方补发旧帖。
+  if (Date.now() - asOf.getTime() < 15 * 60_000) published += await publishRecipes(customerId, asOf);
   await query(`INSERT INTO feed_publisher_state(customer_id,checked_at) VALUES($1,now())
     ON CONFLICT(customer_id) DO UPDATE SET checked_at=excluded.checked_at`, [customerId]);
   return published;
@@ -73,10 +81,11 @@ export async function publishDueFeeds(limit = 5) {
   return published;
 }
 
-export async function listFeed(customerId: string): Promise<FeedPost[]> {
-  const read = () => query<{ id: string; kind: FeedPost["kind"]; title: string; body: string; source: string; attention: boolean; chart: FeedChart; fact_ids: string[]; published_at: Date }>(
-    `SELECT id,kind,title,body,source,attention,chart,fact_ids,published_at FROM feed_posts
-     WHERE customer_id=$1 ORDER BY published_at DESC,attention DESC,id LIMIT 60`, [customerId]);
+// ownerId 是当前访客：系统帖子大家都能看到，配方帖子只给创建它的访客。
+export async function listFeed(customerId: string, ownerId: string | null = null): Promise<FeedPost[]> {
+  const read = () => query<{ id: string; kind: FeedPost["kind"]; title: string; body: string; source: string; attention: boolean; chart: FeedChart; fact_ids: string[]; published_at: Date; recipe_id: string | null }>(
+    `SELECT id,kind,title,body,source,attention,chart,fact_ids,published_at,recipe_id FROM feed_posts
+     WHERE customer_id=$1 AND (visitor_owner_id IS NULL OR visitor_owner_id=$2) ORDER BY published_at DESC,attention DESC,id LIMIT 60`, [customerId, ownerId]);
   let rows = (await read()).rows;
   // 第一次打开时还没有任何帖子，就地发布一次，不必等后台下一轮。
   if (!rows.length) {
@@ -84,5 +93,5 @@ export async function listFeed(customerId: string): Promise<FeedPost[]> {
     if (!catchingUp.rowCount) { await publishFeed(customerId); rows = (await read()).rows; }
   }
   return rows.map(row => ({ id: row.id, kind: row.kind, title: row.title, body: row.body, source: row.source, attention: row.attention,
-    chart: row.chart, factIds: row.fact_ids, publishedAt: row.published_at.toISOString() }));
+    chart: row.chart, factIds: row.fact_ids, publishedAt: row.published_at.toISOString(), ...(row.recipe_id ? { recipeId: row.recipe_id } : {}) }));
 }

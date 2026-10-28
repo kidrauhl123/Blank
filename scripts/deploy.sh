@@ -136,6 +136,10 @@ BEGIN
      OR to_regclass('public.demo_life_state') IS NULL THEN
     RAISE EXCEPTION 'Demo life migration is missing';
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='029_feed_recipes.sql')
+     OR to_regclass('public.feed_recipes') IS NULL THEN
+    RAISE EXCEPTION 'Feed recipes migration is missing';
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='019_authorization_hardening.sql') THEN
     RAISE EXCEPTION 'Authorization hardening migration is missing';
   END IF;

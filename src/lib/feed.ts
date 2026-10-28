@@ -18,15 +18,24 @@ export type FeedChart =
   | { type: "hero"; minor: number; caption: string }
   | { type: "timeline"; start: string; days: number; items: Array<{ label: string; date: string; minor: number; highlight?: boolean }> }
   | { type: "line"; points: Array<{ date: string; minor: number }>; baselineMinor: number; baselineLabel: string }
-  | { type: "countdown"; days: number; caption: string };
+  | { type: "countdown"; days: number; caption: string }
+  | { type: "recipe"; blocks: RecipeView[] };
 
-export type FeedKind = "spending-calendar" | "money-flow" | "subscriptions" | "subscription-due" | "anomaly" | "friends" | "position" | "unlock";
+// 用户配方卡由积木拼成：部分积木直接复用上面的图表。
+export type RecipeView =
+  | Extract<FeedChart, { type: "line" | "bars" | "calendar" }>
+  | { type: "stat"; label: string; text: string }
+  | { type: "list"; items: Array<{ label: string; note: string; minor: number }> }
+  | { type: "compare"; current: number; previous: number; currentLabel: string; previousLabel: string }
+  | { type: "note"; text: string };
+
+export type FeedKind = "spending-calendar" | "money-flow" | "subscriptions" | "subscription-due" | "anomaly" | "friends" | "position" | "unlock" | "custom";
 // key 是去重键：同一个 key 只会发布一次，它决定了每类帖子的发帖节奏。
 export type FeedDraft = {
   key: string; kind: FeedKind; title: string; body: string; source: string;
   attention: boolean; chart: FeedChart; factIds: string[];
 };
-export type FeedPost = Omit<FeedDraft, "key"> & { id: string; publishedAt: string };
+export type FeedPost = Omit<FeedDraft, "key"> & { id: string; publishedAt: string; recipeId?: string };
 
 const DAY = 86_400_000;
 // 房租这类大额固定支出会把日历压成一片浅色，和转账、理财一样不计入消费。
@@ -38,7 +47,7 @@ const monthDay = (key: string) => `${Number(key.slice(5, 7))} 月 ${Number(key.s
 const weekday = (key: string) => WEEKDAYS[new Date(noon(key)).getUTCDay()];
 const daysBetween = (from: string, to: string) => Math.round((noon(to) - noon(from)) / DAY);
 // 本周一（北京时间），周更类帖子都以它为去重键。
-const weekStart = (now: Date) => { const today = dateKey(now); return dateKey(new Date(noon(today) - ((new Date(noon(today)).getUTCDay() + 6) % 7) * DAY)); };
+export const weekStart = (now: Date) => { const today = dateKey(now); return dateKey(new Date(noon(today) - ((new Date(noon(today)).getUTCDay() + 6) % 7) * DAY)); };
 const relativeDay = (days: number) => days === 0 ? "今天" : days === 1 ? "明天" : days === 2 ? "后天" : `${days} 天后`;
 
 export function yuan(minor: number) {
@@ -216,8 +225,13 @@ function unlock(positions: FeedPosition[]): FeedDraft | null {
     source: "模拟理财", chart: { type: "countdown", days: next.days, caption: `${monthDay(next.item.unlocksOn)} · ${yuan(next.item.valueMinor)}` }, factIds: [next.item.id] };
 }
 
+// 周报类帖子分散在一周不同的日子：周一消费日历、周三资金去向、周四理财走势、周六朋友往来。
+const WEEKLY_DAY: Partial<Record<FeedKind, number>> = { "spending-calendar": 1, "money-flow": 3, position: 4, friends: 6 };
+const isoWeekday = (now: Date) => ((new Date(noon(dateKey(now))).getUTCDay() + 6) % 7) + 1;
+
 export function buildFeed(input: { transactions: FeedTransaction[]; subscriptions: FeedSubscription[]; positions?: FeedPosition[] }, now = new Date()): FeedDraft[] {
   const positions = input.positions ?? [];
+  const today = isoWeekday(now);
   return [
     anomaly(input.transactions, now),
     subscriptionDue(input.subscriptions, now),
@@ -227,7 +241,7 @@ export function buildFeed(input: { transactions: FeedTransaction[]; subscription
     position(positions, now),
     friends(input.transactions, now),
     subscriptions(input.subscriptions, now),
-  ].filter((post): post is FeedDraft => post !== null);
+  ].filter((post): post is FeedDraft => post !== null && today >= (WEEKLY_DAY[post.kind] ?? 1));
 }
 
 // 帖子发布时间的口语化显示，例如"今天 07:02"、"昨天"、"3 天前"。

@@ -15,6 +15,20 @@ description: 查询余额、分析完整月度账单、分类支出、异常记�
 产品比较用 search_investment_products；不编造产品、收益或交易结果。建议引用实际分类金额和占比，不能声称已保存预算或执行交易。
 `,
   "bank-daily-review": DAILY_REVIEW_SKILL,
+  "bank-feed-cards": `---
+name: bank-feed-cards
+description: 和用户一起设计、预览、保存、修改或删除首页动态里的自定义卡片（卡片配方）。
+---
+# 动态卡片
+用户想"做一张卡""每周告诉我……""帮我盯着……"时，用 preview_feed_card 设计一张卡片配方。配方不是代码：
+- query：direction 支出 out / 收入 in；categories 分类（餐饮、交通、购物、订阅、转账、理财、生活缴费、住房、工资、收入）；merchantKeywords 商户关键词（如 咖啡、外卖、打车）；period 时间窗口；groupBy 趋势用 day/week，排行用 category/merchant。
+- blocks：最多 4 块，从上到下。stat 大数字（total/count/avg/change/top），trend 趋势线，ranking 排行，calendar 五周日历，list 最近几笔，compare 与上期对比，note 一句话（不能有数字）。
+- schedule：every day/week/month，weekday 1=周一，day 每月几号，hour 几点；onlyWhenAbove 合计超过多少分才发。
+- headline：一句人话标题，数字只能用占位符 {total}{count}{avg}{change}{top}{period}，不能自己写数字。
+先预览，在回复里单独一行原样写出工具返回的 marker（形如 [[card:…]]），再用一两句话说明这张卡看什么、多久发一次，问用户要不要加入动态。用户说好、可以、加吧之后才调用 save_feed_card。
+用户想改：按新要求重新 preview_feed_card，确认后 save_feed_card 并传 replaces=旧 cardId。删除前先用 list_feed_cards 找到对应卡片。
+预览里数字为零或没有记录时如实说明，可建议换分类、关键词或时间窗口。卡片只是看账，不能执行转账、申购或任何银行操作。
+`,
   "bank-investments": `---
 name: bank-investments
 description: 查询、筛选、比较理财产品，准备申购或赎回并交回客户确认。

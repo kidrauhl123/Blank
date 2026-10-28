@@ -7,8 +7,10 @@ import { advanceShowcaseLife, resetShowcaseLife } from "./demo-life";
 import { listFeed } from "./feed-store";
 import { removeDemoSeed } from "./demo-test-seed";
 
-// 银行不变量检查（db/invariants.sql 中的 DO 块），不依赖 psql。
-const invariants = readFileSync("db/invariants.sql", "utf8").match(/DO \$\$[\s\S]*?END \$\$;/)![0];
+// 银行不变量检查（db/invariants.sql 中的 DO 块），不依赖 psql。去掉"客户必须有凭据"这一条：
+// 它检查的是全库状态，其他集成测试的临时客户可能正好还在，和生活模拟无关。
+const invariants = readFileSync("db/invariants.sql", "utf8").match(/DO \$\$[\s\S]*?END \$\$;/)![0]
+  .replace(/\n\s*IF EXISTS \(\s*SELECT 1 FROM customers c\s+LEFT JOIN auth_credentials[\s\S]*?END IF;/, "");
 
 // Opt in only against a disposable PostgreSQL cluster (all migrations applied).
 describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("showcase life simulation", () => {

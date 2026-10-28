@@ -54,6 +54,10 @@ export function BankingApp() {
   const assistantVisible = tab === "assistant";
   const showAssistant = useCallback(() => setTab("assistant"), []);
   const [quote, setQuote] = useState<FeedQuote | null>(null);
+  // 从 AI 助手回到银行页面时重新读取动态，刚在对话里创建的卡片马上能看到。
+  const [feedVersion, setFeedVersion] = useState(0);
+  const [wasAssistant, setWasAssistant] = useState(false);
+  if (wasAssistant !== assistantVisible) { setWasAssistant(assistantVisible); if (!assistantVisible) setFeedVersion(version => version + 1); }
   const discuss = useCallback((next: FeedQuote) => { setQuote(next); setTab("assistant"); }, []);
   const showBankPage = useCallback(() => setTab(lastBusinessTab.current), []);
   const appRoot = useRef<HTMLElement>(null);
@@ -135,7 +139,7 @@ export function BankingApp() {
       {notice && <div className={styles.confirmedNotice} role="status">{notice}<button onClick={() => setNotice("")} aria-label="关闭操作提示">关闭</button></div>}
       {loading && <p className={styles.refreshStatus} role="note">正在更新账户信息，以下为上次读取的数据…</p>}
       <div className={styles.viewport} ref={viewportRef} data-agent-viewport hidden={assistantVisible}>
-        {businessTab === "home" && <HomeView data={data} loading={loading} visible={balanceVisible} toggleVisible={() => setBalanceVisible(!balanceVisible)} onDeposit={() => setDialog("deposit")} onTransfer={() => setDialog("transfer")} onDiscuss={discuss} />}
+        {businessTab === "home" && <HomeView data={data} loading={loading} visible={balanceVisible} toggleVisible={() => setBalanceVisible(!balanceVisible)} onDeposit={() => setDialog("deposit")} onTransfer={() => setDialog("transfer")} onDiscuss={discuss} feedVersion={feedVersion} />}
         {businessTab === "activity" && <ActivityView data={data} />}
         {businessTab === "cards" && <CardsView data={data} disabled={loading} onCreate={() => setDialog("card")} onSelect={id => { setSelectedCard(id); setDialog("card-details"); }} />}
         {businessTab === "wealth" && <InvestmentView accounts={data.accounts} mfaConfigured={data.customer.mfa_configured} onChanged={async message => { if (message) setNotice(message); await load(); }} />}
@@ -164,11 +168,11 @@ function NavButton({ active, label, icon, onClick, agentId }: { active: boolean;
   return <button data-agent-id={agentId} data-agent-permission="navigate" aria-current={active ? "page" : undefined} className={active ? styles.navActive : ""} onClick={onClick}>{icon}<span>{label}</span></button>;
 }
 
-function HomeView({ data, loading, visible, toggleVisible, onDeposit, onTransfer, onDiscuss }: { data: Bootstrap; loading: boolean; visible: boolean; toggleVisible: () => void; onDeposit: () => void; onTransfer: () => void; onDiscuss: (quote: FeedQuote) => void }) {
+function HomeView({ data, loading, visible, toggleVisible, onDeposit, onTransfer, onDiscuss, feedVersion }: { data: Bootstrap; loading: boolean; visible: boolean; toggleVisible: () => void; onDeposit: () => void; onTransfer: () => void; onDiscuss: (quote: FeedQuote) => void; feedVersion: number }) {
   const cashMinor = data.accounts.reduce((sum, account) => sum + Number(account.available_balance_minor ?? 0), 0);
   // 首页只有动态流，资产是默认置顶的一个组件。
   return <div className={styles.home}>
-    <FeedPanel key={data.customer.phone} owner={data.customer.phone} onDiscuss={onDiscuss}
+    <FeedPanel key={data.customer.phone} owner={data.customer.phone} onDiscuss={onDiscuss} refresh={feedVersion}
       pinned={<AssetCard totalMinor={data.totalMinor} cashMinor={cashMinor} investedMinor={data.investmentValueMinor ?? Math.max(0, data.totalMinor - cashMinor)}
         visible={visible} toggleVisible={toggleVisible} disabled={loading || !data.accounts[0]} onTransfer={onTransfer} onDeposit={onDeposit} onDiscuss={onDiscuss} />} />
   </div>;
