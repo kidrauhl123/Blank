@@ -72,7 +72,8 @@ test("a card designed in chat renders as a live preview, then shows as added", a
   let status: "DRAFT" | "ACTIVE" = "DRAFT";
   const preview: FeedPost = { id: cardId, recipeId: cardId, kind: "custom", title: "本周咖啡花了 ¥90，比上周同期多 50%", source: "咖啡周报", attention: false,
     body: "你创建的「咖啡周报」，每周一 8 点更新。", publishedAt: new Date().toISOString(), factIds: [],
-    chart: { type: "recipe", blocks: [{ type: "stat", label: "笔数", text: "3 笔" }, { type: "bars", items: [{ label: "漫拿咖啡", minor: 6200, note: "2 笔" }] }] } };
+    chart: { type: "recipe", blocks: [{ type: "stat", label: "笔数", text: "3 笔" }, { type: "bars", items: [{ label: "漫拿咖啡", minor: 6200, note: "2 笔" }] },
+      { type: "line", baselineMinor: 3000, baselineLabel: "每天平均", points: [{ date: "2026-10-26", minor: 3200 }, { date: "2026-10-27", minor: 2800 }, { date: "2026-10-28", minor: 3000 }] }] } };
   const replies = [`好的，先给你看看这张卡：\n\n[[card:${cardId}]]\n\n每周一早上 8 点更新，要加入动态吗？`, `已经加到你的动态里了。\n\n[[card:${cardId}]]`];
   await page.route("**/api/bootstrap", route => route.fulfill({ json: overview }));
   await page.route("**/api/v1/feed", route => route.fulfill({ json: { posts } }));
@@ -93,6 +94,9 @@ test("a card designed in chat renders as a live preview, then shows as added", a
   await expect(card).toContainText("3 笔");
   await expect(card).toContainText("漫拿咖啡");
   await expect(card).toContainText("选“加入动态”后生效");
+  // 预览卡不在首页容器里，图表颜色仍必须来自校验过的色板（曾经因为变量只定义在首页容器而回退成黑色）。
+  const stroke = await card.locator("svg[role='img'] path").last().evaluate(path => getComputedStyle(path).stroke);
+  expect(stroke).toBe("rgb(47, 125, 50)");
   await expect(conversation).not.toContainText("[[card:");
   await input.fill("好");
   await conversation.getByRole("button", { name: "发送给 Blank" }).click();

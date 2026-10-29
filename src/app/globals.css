@@ -184,3 +184,18 @@ a:active, button:not(:disabled):active, summary:active, [role="button"]:active {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* 图表色板经 dataviz 校验：浅色与深色各一套，绿/橙相邻处靠 2px 间隔和文字标签作第二编码。
+   放在全局，因为图表会出现在首页动态、对话里的预览卡和自定义页面里。 */
+:root {
+  --series-1: #2f7d32; --series-2: #d97a1e; --series-3: #2f6fc0; --series-4: #9aac00; --series-other: #b4b9bf;
+  --heat-1: #dbe8c4; --heat-2: #a9c97a; --heat-3: #6b9a3f; --heat-4: #3a6420;
+  --flow-in: #2f7d32; --flow-out: #d97a1e;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --series-1: #2a8a5a; --series-2: #c8691e; --series-3: #4a86d8; --series-4: #8f9e10; --series-other: #5d615c;
+    --heat-1: #2f3b26; --heat-2: #4b6a31; --heat-3: #74a043; --heat-4: #b4d77a;
+    --flow-in: #2a8a5a; --flow-out: #c8691e;
+  }
+}

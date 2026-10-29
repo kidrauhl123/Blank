@@ -3,7 +3,7 @@ import "@fontsource-variable/inter";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Blank · 留白",
+  title: "Blank · 银行 AI 智能体",
   description: "能理解、会规划、受约束的银行 AI 智能体演示系统",
   applicationName: "Blank",
   appleWebApp: { capable: true, statusBarStyle: "default", title: "Blank" },
