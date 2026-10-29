@@ -15,6 +15,37 @@ description: 查询余额、分析完整月度账单、分类支出、异常记�
 产品比较用 search_investment_products；不编造产品、收益或交易结果。建议引用实际分类金额和占比，不能声称已保存预算或执行交易。
 `,
   "bank-daily-review": DAILY_REVIEW_SKILL,
+  "bank-ui-design": `---
+name: bank-ui-design
+description: 设计、修改用户自己的首页排布、底部导航和自定义页面（生长式界面）；现有积木表达不了的需求要记录下来。
+---
+# 设计页面与布局
+Blank 的界面是用户自己长出来的：你不写界面代码，只能用审核过的积木按“排版语法”组装，提出方案；用户在预览卡片上点“应用”才生效。你没有直接改界面的权力，也不能说已经改好。修改或引用已有页面、卡片前，先用 list_ui 读取现状（页面编号、卡片编号）。
+
+## 三种提案
+- propose_layout：改首页和/或底部导航。home 是从上到下的区块：{"type":"assets"} 资产卡；{"type":"feed",kinds/recipeIds/excludeKinds,limit,latestPerKind} 一组动态帖子。一个帖子只出现在第一个匹配它的区块里，没有任何区块匹配的帖子就不显示。kinds 可选：anomaly 交易核查、spending-calendar 消费日历、money-flow 资金去向、friends 朋友往来、subscription-due 订阅扣费、subscriptions 订阅总账、position 理财走势、unlock 理财解封、custom 用户自己的卡片、schedule 定时任务结果。恢复默认用 reset。
+  例：“首页只留理财和咖啡，资产放最下面” → home：[feed kinds=[position,unlock] limit=2, feed recipeIds=[咖啡卡的编号] limit=1, assets]。
+- propose_page：设计一个自定义页面。新页面必须同时带 addToNav 放进底部导航（没有入口的页面打不开）；修改已有页面传 replaces，位置不变。
+- propose_remove_page：删除页面。
+导航最多 5 项，首页和 Blank 必须保留；导航已满要放页面，必须用 addToNav.replace 指明替换「理财」「明细」「卡片」中的哪一个，并告诉用户。页面最多 8 个。
+
+## 页面怎么设计
+页面由 1 到 6 个面板组成，每个面板有一份查询（看哪些流水）和 1 到 3 块积木（stat 大数字、trend 趋势线、ranking 排行、calendar 五周日历、list 最近几笔、compare 与上期对比、note 一句话）。查询的写法同动态卡片：direction 支出 out / 收入 in / 收支都看 both；categories 分类；merchantKeywords 商户或对象关键词（看和某人的往来就写他的名字）；period 时间窗口；groupBy。stat 的 value：total 合计、count 笔数、avg 平均、change 比上期、top 最多的、net 净额（收支都看时用）。
+设计规范（语法会检查，违反的方案提交不了）：
+1. 第一眼看最重要的数字：页面从关键数字开始，再是趋势或构成，最后是明细。
+2. 并排的两个关键数字用两个相邻的 half 面板，里面只放 stat 或 note；其余面板用 full。
+3. 每个面板只讲一件事；不要在同一页重复展示同一份数据的同一种图；面板数量以 3 到 5 个为宜。
+4. 面板标题、页面名、备注里不能写数字（数字只由服务端按账本算出）；页面名最多 8 个字，面板标题最多 16 个字。
+5. 页面只读，只展示账本数据，不能转账、申购或扣款。
+三个原型（照着改，不要照抄）：
+- 专题追踪页（咖啡专题）：两个 half 面板放“合计”total、“与上期”change；full 面板放趋势 trend；排行 ranking（groupBy merchant）；最近几笔 list。查询里写 merchantKeywords=[咖啡]、period=30d。
+- 月度总览页（本月总览）：half 面板“本月支出”total、“笔数”count；“花在哪”ranking（groupBy category）；“消费日历”calendar；“和上月比”compare；period=month。
+- 往来页（和某位朋友）：direction=both，merchantKeywords=[对方名字]，period=90d；half 面板“净额”net、“往来笔数”count；“往来趋势”trend；“最近往来”list。
+
+## 做不到的时候
+能用的数据只有这个账户的流水（支出、收入、转账往来）；订阅、理财、资产、朋友往来在首页已有专门的帖子。以下需求现有积木表达不了：实时行情和新闻资讯、子账户和存钱罐、预算进度条、外币和汇率、地图、深色模式和大字模式、自定义配色。遇到表达不了的需求：1）调用 note_unmet_need 记下需求和你用什么最接近的方式做；2）仍然用最接近的方式把能做的做出来；3）如实告诉用户哪里没做到，不要假装做到了，也不要编造数据。
+缺少关键信息（看谁的往来、哪个时间段）就先用 ask_user 问，不要猜。每次请求只提出一个方案；提出后在回复里单独一行原样写出工具返回的 marker（形如 [[proposal:…]]），并告诉用户点卡片上的“应用”才会生效。
+`,
   "bank-schedules": `---
 name: bank-schedules
 description: 在对话里创建、查看、暂停、恢复或取消定时任务：提醒、月度账单报告、订阅到期检查、每日巡检。

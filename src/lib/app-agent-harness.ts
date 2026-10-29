@@ -13,6 +13,8 @@ import { APP_AGENT_PROMPT } from "./bank-agent-prompts";
 import { currentPreferenceData, currentPreferenceScope } from "./preference-runtime";
 import { recipeSchema } from "./feed-recipe";
 import { deleteRecipe, listRecipes, previewRecipe, saveRecipe } from "./feed-recipe-store";
+import { describeUi, createProposal, recordUnmetNeed } from "./ui-store";
+import { layoutProposalInput, pageProposalInput, removePageProposalInput } from "./ui-schema";
 import { changeMySchedule, listMySchedules, previewSchedule, saveSchedule, scheduleDraftInput } from "./schedule-chat";
 import { investmentFiltersSchema, listInvestmentProducts } from "./investments";
 
@@ -28,6 +30,9 @@ const description = z.string().min(1).max(200).describe("向用户展示本步�
 const pageVersion = z.string().max(40).describe("最新页面快照 version，页面变化后重新读取");
 const target = z.string().max(120).describe("最新页面 controls 中的 id，不是 CSS 选择器");
 const cardId = z.string().uuid().describe("preview_feed_card 返回的 cardId");
+function proposalResult(result: { proposalId: string; marker: string } | { error: string }) {
+  return "error" in result ? result : { ...result, instruction: "在回复里单独一行原样写出 marker，用户会看到方案预览；再用一两句话说明改了什么，并告诉用户点卡片上的“应用”才会生效。不要再调用别的工具，也不要说已经改好了。" };
+}
 
 // 卡片配方、定时任务只属于当前访客（演示账户由访客共用）；没有访客身份时不能创建。
 function cardOwner(runtime: ToolRuntime) {
@@ -92,6 +97,27 @@ export function appPageTools() {
       const { customerId, ownerId } = cardOwner(runtime);
       return JSON.stringify(await changeMySchedule(customerId, ownerId, input.scheduleId, input.action));
     }, { name: "change_schedule", description: "暂停、恢复或取消用户自己的定时任务。取消不可恢复，取消前先用 ask_user 确认。", schema: z.object({ scheduleId: z.string().uuid(), action: z.enum(["pause", "resume", "cancel"]) }) }),
+    tool(async (_, runtime: ToolRuntime) => {
+      const { customerId, ownerId } = cardOwner(runtime);
+      return JSON.stringify(await describeUi(customerId, ownerId));
+    }, { name: "list_ui", description: "读取用户当前的首页排布、底部导航、自定义页面和自己创建的动态卡片（带编号）。修改或引用已有页面、卡片之前先调用。", schema: z.object({}) }),
+    tool(async (input, runtime: ToolRuntime) => {
+      const { customerId, ownerId } = cardOwner(runtime);
+      return JSON.stringify(proposalResult(await createProposal(customerId, ownerId, "layout", input)));
+    }, { name: "propose_layout", description: "提议新的首页排布和/或底部导航（排序、显隐、哪些帖子放首页、资产放哪里）。只是提案，用户在预览卡片上点“应用”才生效，你无权直接修改界面。", schema: layoutProposalInput }),
+    tool(async (input, runtime: ToolRuntime) => {
+      const { customerId, ownerId } = cardOwner(runtime);
+      return JSON.stringify(proposalResult(await createProposal(customerId, ownerId, "page", input)));
+    }, { name: "propose_page", description: "设计一个自定义页面（一组面板，每个面板用现有积木展示一份账本数据），可同时提议放进底部导航；也用于修改已有页面（replaces）。只是提案，用户点“应用”才生效。", schema: pageProposalInput }),
+    tool(async (input, runtime: ToolRuntime) => {
+      const { customerId, ownerId } = cardOwner(runtime);
+      return JSON.stringify(proposalResult(await createProposal(customerId, ownerId, "remove-page", input)));
+    }, { name: "propose_remove_page", description: "提议删除用户的一个自定义页面。只是提案，用户点“应用”才生效。", schema: removePageProposalInput }),
+    tool(async (input, runtime: ToolRuntime) => {
+      const { customerId, ownerId } = cardOwner(runtime);
+      await recordUnmetNeed(customerId, ownerId, input.need, input.closest);
+      return JSON.stringify({ recorded: true });
+    }, { name: "note_unmet_need", description: "用户想要的界面或数据，现有积木和数据源表达不了时调用：记下需求，供开发补充新积木。调用后仍然用最接近的方式把能做的做出来，并如实告诉用户哪里没做到。", schema: z.object({ need: z.string().trim().min(1).max(200).describe("用户想要什么、为什么现有积木做不到"), closest: z.string().trim().max(200).default("").describe("你用什么最接近的方式做了") }) }),
     tool((_, runtime: ToolRuntime) => bridge({ type: "inspect", description: "正在查看当前页面" }, runtime), {
       name: "inspect_page", description: "读取用户正在看的 Blank 页面、可见数据及可用控件。不会读取密码或验证码。", schema: z.object({}),
     }),

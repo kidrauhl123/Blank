@@ -3,6 +3,7 @@
 import { ArrowUpRight, Eye, EyeOff, MessageCircle, Plus, ThumbsDown, ThumbsUp } from "lucide-react";
 import { useEffect, useState, type PointerEvent, type ReactNode } from "react";
 import { publishedLabel, yuan, type FeedChart, type FeedKind, type FeedPost, type RecipeView } from "@/lib/feed";
+import { DEFAULT_LAYOUT, type Section } from "@/lib/ui-schema";
 import { AssistantMark } from "./AssistantMark";
 import styles from "./FeedPanel.module.css";
 
@@ -30,8 +31,26 @@ function visible(posts: FeedPost[], taste: Taste) {
   });
 }
 
-// 首页就是动态流；pinned 是默认置顶的组件（例如资产卡），和帖子用同一个卡片外壳。
-export function FeedPanel({ owner, onDiscuss, pinned, refresh = 0 }: { owner: string; onDiscuss: (quote: FeedQuote) => void; pinned?: ReactNode; refresh?: number }) {
+// 一个帖子只出现在第一个匹配它的区块里；没有任何区块匹配的帖子不显示（用户说“首页只留理财和咖啡”就是这个意思）。
+function matches(section: Extract<Section, { type: "feed" }>, post: FeedPost) {
+  if (section.excludeKinds?.includes(post.kind)) return false;
+  if (!section.kinds?.length && !section.recipeIds?.length) return true;
+  return Boolean(section.kinds?.includes(post.kind) || (post.recipeId && section.recipeIds?.includes(post.recipeId)));
+}
+export function arrange(posts: FeedPost[], sections: Section[]) {
+  const taken = new Set<string>();
+  return sections.map(section => {
+    if (section.type === "assets") return { section, posts: [] as FeedPost[] };
+    let found = posts.filter(post => !taken.has(post.id) && matches(section, post));
+    if (section.latestPerKind) { const seen = new Set<string>(); found = found.filter(post => { const key = post.recipeId ?? post.kind; if (seen.has(key)) return false; seen.add(key); return true; }); }
+    found = found.slice(0, section.limit);
+    for (const post of found) taken.add(post.id);
+    return { section, posts: found };
+  });
+}
+
+// 首页由布局决定：assets 是资产卡（和帖子用同一个卡片外壳），feed 是一组帖子；默认布局是“资产置顶 + 全部动态”。
+export function FeedPanel({ owner, onDiscuss, assets, sections = DEFAULT_LAYOUT.home, refresh = 0 }: { owner: string; onDiscuss: (quote: FeedQuote) => void; assets?: ReactNode; sections?: Section[]; refresh?: number }) {
   const [posts, setPosts] = useState<FeedPost[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [taste, setTaste] = useState<Taste>({ reactions: {}, kinds: {} });
@@ -63,24 +82,29 @@ export function FeedPanel({ owner, onDiscuss, pinned, refresh = 0 }: { owner: st
     });
   };
 
+  const renderPost = (post: FeedPost) => <article key={post.id} className={styles.post} data-attention={post.attention || undefined} aria-label={post.title}>
+    <PostContent post={post} />
+    <footer>
+      <span className={styles.byline}><AssistantMark size={14} /><time dateTime={post.publishedAt}>{publishedLabel(post.publishedAt)}</time> · {post.source}</span>
+      <span className={styles.actions}>
+        <button aria-label="赞" aria-pressed={taste.reactions[post.id] === "up"} onClick={() => react(post, "up")}><ThumbsUp size={17} /></button>
+        <button aria-label="踩" aria-pressed={taste.reactions[post.id] === "down"} onClick={() => react(post, "down")}><ThumbsDown size={17} /></button>
+        <button className={styles.discuss} onClick={() => onDiscuss({ id: post.id, title: post.title, text: `${post.title}。${post.body}` })}><MessageCircle size={17} />讨论</button>
+      </span>
+    </footer>
+    {taste.reactions[post.id] === "down" && <p className={styles.tasteNote} role="status">收到，以后少发这类。</p>}
+  </article>;
+  const groups = posts ? arrange(posts, sections) : null;
   return <section className={styles.feed} aria-label="动态">
     <div className={styles.head}><h1>动态</h1><span>Blank 根据你的账户整理</span></div>
-    {pinned}
-    {failed ? <p className={styles.empty}>动态暂时无法读取，稍后再来看看。</p>
-      : posts === null ? <p className={styles.empty} aria-busy="true">正在整理…</p>
-      : posts.length === 0 ? <p className={styles.empty}>今天一切正常，没有新动态。</p>
-      : posts.map(post => <article key={post.id} className={styles.post} data-attention={post.attention || undefined} aria-label={post.title}>
-        <PostContent post={post} />
-        <footer>
-          <span className={styles.byline}><AssistantMark size={14} /><time dateTime={post.publishedAt}>{publishedLabel(post.publishedAt)}</time> · {post.source}</span>
-          <span className={styles.actions}>
-            <button aria-label="赞" aria-pressed={taste.reactions[post.id] === "up"} onClick={() => react(post, "up")}><ThumbsUp size={17} /></button>
-            <button aria-label="踩" aria-pressed={taste.reactions[post.id] === "down"} onClick={() => react(post, "down")}><ThumbsDown size={17} /></button>
-            <button className={styles.discuss} onClick={() => onDiscuss({ id: post.id, title: post.title, text: `${post.title}。${post.body}` })}><MessageCircle size={17} />讨论</button>
-          </span>
-        </footer>
-        {taste.reactions[post.id] === "down" && <p className={styles.tasteNote} role="status">收到，以后少发这类。</p>}
-      </article>)}
+    {failed ? <>{assets}<p className={styles.empty}>动态暂时无法读取，稍后再来看看。</p></>
+      : groups === null ? <>{sections.some(section => section.type === "assets") && assets}<p className={styles.empty} aria-busy="true">正在整理…</p></>
+      : <>
+        {groups.map(({ section, posts: found }, index) => section.type === "assets"
+          ? <div key={`assets-${index}`}>{assets}</div>
+          : <div key={`feed-${index}`}>{found.length > 0 && section.title && <h2 className={styles.groupTitle}>{section.title}</h2>}{found.map(renderPost)}</div>)}
+        {groups.every(group => group.section.type === "assets" || group.posts.length === 0) && <p className={styles.empty}>{posts!.length === 0 ? "今天一切正常，没有新动态。" : "这个首页上没有要显示的动态。"}</p>}
+      </>}
   </section>;
 }
 
@@ -118,7 +142,7 @@ export function RecipeCardById({ id }: { id: string }) {
   return <RecipePreviewCard post={state.post} status={state.status} />;
 }
 
-function RecipeBlocks({ blocks }: { blocks: RecipeView[] }) {
+export function RecipeBlocks({ blocks }: { blocks: RecipeView[] }) {
   if (!blocks.length) return null;
   return <div className={styles.recipe}>{blocks.map((block, index) => {
     if (block.type === "stat") return <div key={index} className={styles.stat}><small>{block.label}</small><b>{block.text}</b></div>;

@@ -147,6 +147,11 @@ BEGIN
      OR NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='scheduled_tasks' AND column_name='visitor_owner_id') THEN
     RAISE EXCEPTION 'Schedule chat migration is missing';
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='032_ui_layout.sql')
+     OR to_regclass('public.ui_layouts') IS NULL OR to_regclass('public.ui_pages') IS NULL
+     OR to_regclass('public.ui_proposals') IS NULL OR to_regclass('public.ui_unmet_needs') IS NULL THEN
+    RAISE EXCEPTION 'UI layout migration is missing';
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='019_authorization_hardening.sql') THEN
     RAISE EXCEPTION 'Authorization hardening migration is missing';
   END IF;

@@ -5,7 +5,7 @@ import { evaluateRecipe, recipeDraft, recipePeriodKey, recipeSchema, type CardRe
 // 配方的存取与发布。每个配方只属于创建它的访客（演示账户由访客共用）。
 type RecipeRow = { id: string; status: string; recipe: CardRecipe; visitor_owner_id: string };
 
-async function loadTransactions(customerId: string, asOf: Date): Promise<FeedTransaction[]> {
+export async function loadTransactions(customerId: string, asOf: Date): Promise<FeedTransaction[]> {
   const rows = await query<Omit<FeedTransaction, "amount_minor" | "occurred_at"> & { amount_minor: string; occurred_at: Date }>(
     `SELECT bt.id,bt.merchant_name,bt.category,bt.amount_minor,bt.occurred_at,bt.is_anomaly
      FROM bank_transactions bt JOIN accounts a ON a.id=bt.account_id

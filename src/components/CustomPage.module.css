@@ -1,0 +1,13 @@
+.page { padding: var(--space-5) var(--space-5) var(--space-6); }
+.head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); padding: 0 var(--space-1) var(--space-3); }
+.head h1 { font-size: var(--text-xl); letter-spacing: -.03em; }
+.head span, .empty { font-size: var(--text-xs); color: var(--muted); }
+.empty { padding: var(--space-5) var(--space-1); }
+/* 面板网格：整行面板独占一行，半宽面板两个并排；面板间距统一。 */
+.panels { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+.panel { grid-column: 1 / -1; padding: var(--space-4) var(--space-5) var(--space-5); border-radius: var(--radius-container); background: var(--white); min-width: 0; }
+.panel[data-width="half"] { grid-column: auto; padding: var(--space-4); }
+.panel h2 { font-size: var(--text-sm); font-weight: 650; color: var(--muted); }
+/* 半宽面板里的大数字改成上下排，窄屏不挤。 */
+.panel[data-width="half"] > div > div { flex-direction: column; align-items: flex-start; gap: var(--space-1); }
+.panel[data-width="half"] > div > div b { font-size: var(--text-lg); }

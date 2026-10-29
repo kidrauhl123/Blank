@@ -7,28 +7,31 @@ const NO_DIGITS = /^[^0-9０-９]*$/;
 const PLACEHOLDERS = ["total", "count", "avg", "change", "top", "period"] as const;
 const withoutPlaceholders = (text: string) => text.replace(new RegExp(`\\{(${PLACEHOLDERS.join("|")})\\}`, "g"), "");
 
+// 查询与积木同时给"动态卡片"和"自定义页面的面板"使用。
+export const recipeQuerySchema = z.object({
+  direction: z.enum(["out", "in", "both"]).default("out").describe("out 支出，in 收入，both 收支都看（看和某个人的往来时用，配合“净额”大数字）"),
+  categories: z.array(z.string().trim().min(1).max(8)).max(6).optional().describe("只看这些分类，例如 餐饮、交通、购物、订阅、转账、理财"),
+  merchantKeywords: z.array(z.string().trim().min(1).max(12)).max(6).optional().describe("商户名包含任一关键词，例如 咖啡、外卖；转账的商户名是“转账给小板栗”“来自小板栗的转账”，所以关键词写人名就能看到和他的往来"),
+  period: z.enum(["7d", "week", "30d", "month", "90d"]).describe("7d 近7天，week 本周，30d 近30天，month 本月，90d 近90天"),
+  groupBy: z.enum(["day", "week", "category", "merchant"]).describe("趋势按 day/week 分组；排行按 category/merchant 分组"),
+});
+export const recipeBlockSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("stat"), value: z.enum(["total", "count", "avg", "change", "top", "net"]), label: z.string().trim().min(1).max(12).regex(NO_DIGITS).optional() }),
+  z.object({ type: z.literal("trend") }),
+  z.object({ type: z.literal("ranking"), limit: z.number().int().min(2).max(6).default(5) }),
+  z.object({ type: z.literal("calendar") }),
+  z.object({ type: z.literal("list"), limit: z.number().int().min(2).max(6).default(4) }),
+  z.object({ type: z.literal("compare") }),
+  z.object({ type: z.literal("note"), text: z.string().trim().min(1).max(80).regex(NO_DIGITS, "备注里不能写数字") }),
+]);
 export const recipeSchema = z.object({
   name: z.string().trim().min(1).max(20).describe("卡片名，例如“咖啡周报”"),
   headline: z.string().trim().min(1).max(60)
     .refine(text => NO_DIGITS.test(withoutPlaceholders(text)), "标题里的数字必须用占位符")
     .refine(text => !/\{(?!(?:total|count|avg|change|top|period)\})[^}]*\}/.test(text), "只能使用 {total}{count}{avg}{change}{top}{period}")
     .describe("标题模板，数字只能用占位符：{total}合计 {count}笔数 {avg}平均每笔 {change}与上期相比 {top}最多的分类或商户 {period}时间范围"),
-  query: z.object({
-    direction: z.enum(["out", "in"]).default("out").describe("out 支出，in 收入"),
-    categories: z.array(z.string().trim().min(1).max(8)).max(6).optional().describe("只看这些分类，例如 餐饮、交通、购物、订阅、转账、理财"),
-    merchantKeywords: z.array(z.string().trim().min(1).max(12)).max(6).optional().describe("商户名包含任一关键词，例如 咖啡、外卖"),
-    period: z.enum(["7d", "week", "30d", "month", "90d"]).describe("7d 近7天，week 本周，30d 近30天，month 本月，90d 近90天"),
-    groupBy: z.enum(["day", "week", "category", "merchant"]).describe("趋势按 day/week 分组；排行按 category/merchant 分组"),
-  }),
-  blocks: z.array(z.discriminatedUnion("type", [
-    z.object({ type: z.literal("stat"), value: z.enum(["total", "count", "avg", "change", "top"]), label: z.string().trim().min(1).max(12).regex(NO_DIGITS).optional() }),
-    z.object({ type: z.literal("trend") }),
-    z.object({ type: z.literal("ranking"), limit: z.number().int().min(2).max(6).default(5) }),
-    z.object({ type: z.literal("calendar") }),
-    z.object({ type: z.literal("list"), limit: z.number().int().min(2).max(6).default(4) }),
-    z.object({ type: z.literal("compare") }),
-    z.object({ type: z.literal("note"), text: z.string().trim().min(1).max(80).regex(NO_DIGITS, "备注里不能写数字") }),
-  ])).min(1).max(4).describe("卡片积木，从上到下排列，最多 4 块"),
+  query: recipeQuerySchema,
+  blocks: z.array(recipeBlockSchema).min(1).max(4).describe("卡片积木，从上到下排列，最多 4 块"),
   schedule: z.object({
     every: z.enum(["day", "week", "month"]),
     weekday: z.number().int().min(1).max(7).optional().describe("每周几发，1=周一"),
@@ -64,7 +67,7 @@ export function recipeWindow(period: CardRecipe["query"]["period"], now: Date) {
 }
 
 function matches(query: CardRecipe["query"], item: FeedTransaction) {
-  if (query.direction === "out" ? item.amount_minor >= 0 : item.amount_minor <= 0) return false;
+  if (query.direction === "out" ? item.amount_minor >= 0 : query.direction === "in" && item.amount_minor <= 0) return false;
   if (query.categories?.length && !query.categories.includes(item.category)) return false;
   if (query.merchantKeywords?.length && !query.merchantKeywords.some(word => item.merchant_name.includes(word))) return false;
   return true;
@@ -76,7 +79,7 @@ function groupTotals(items: FeedTransaction[], key: (item: FeedTransaction) => s
   return [...totals].sort((a, b) => b[1] - a[1]);
 }
 
-export type RecipeValues = { total: number; count: number; avg: number; previous: number; change: number | null; top: string | null; period: string };
+export type RecipeValues = { total: number; count: number; avg: number; previous: number; change: number | null; top: string | null; period: string; net: number };
 
 export function evaluateRecipe(recipe: CardRecipe, transactions: FeedTransaction[], now: Date) {
   const window = recipeWindow(recipe.query.period, now);
@@ -85,13 +88,15 @@ export function evaluateRecipe(recipe: CardRecipe, transactions: FeedTransaction
   const current = matching.filter(item => inside(item, window.start, window.end)).sort((a, b) => b.occurred_at.localeCompare(a.occurred_at));
   const previous = matching.filter(item => inside(item, window.previousStart, window.previousEnd));
   const total = current.reduce((sum, item) => sum + Math.abs(item.amount_minor), 0);
+  const net = current.reduce((sum, item) => sum + item.amount_minor, 0);
   const previousTotal = previous.reduce((sum, item) => sum + Math.abs(item.amount_minor), 0);
   const rankBy = recipe.query.groupBy === "category" ? (item: FeedTransaction) => item.category : (item: FeedTransaction) => item.merchant_name;
   const ranked = groupTotals(current, rankBy);
   const values: RecipeValues = { total, count: current.length, avg: current.length ? Math.round(total / current.length) : 0, previous: previousTotal,
-    change: previousTotal ? Math.round((total - previousTotal) / previousTotal * 100) : null, top: ranked[0]?.[0] ?? null, period: PERIOD_LABEL[recipe.query.period] };
+    change: previousTotal ? Math.round((total - previousTotal) / previousTotal * 100) : null, top: ranked[0]?.[0] ?? null, period: PERIOD_LABEL[recipe.query.period], net };
 
   const text = (value: Exclude<keyof RecipeValues, "previous">) => {
+    if (value === "net") return net === 0 ? "收支持平" : `净${net > 0 ? "流入" : "流出"} ${yuan(net)}`;
     if (value === "total" || value === "avg") return yuan(values[value]);
     if (value === "count") return `${values.count} 笔`;
     if (value === "top") return values.top ?? "暂无";
@@ -122,7 +127,7 @@ export function evaluateRecipe(recipe: CardRecipe, transactions: FeedTransaction
     return { type: "calendar", days };
   };
   const blocks: RecipeView[] = recipe.blocks.map(block => {
-    if (block.type === "stat") return { type: "stat", label: block.label ?? { total: "合计", count: "笔数", avg: "平均每笔", change: "与上期相比", top: recipe.query.groupBy === "category" ? "最多的分类" : "最多的商户" }[block.value], text: text(block.value) };
+    if (block.type === "stat") return { type: "stat", label: block.label ?? { total: "合计", count: "笔数", avg: "平均每笔", change: "与上期相比", top: recipe.query.groupBy === "category" ? "最多的分类" : "最多的商户", net: "净额" }[block.value], text: text(block.value) };
     if (block.type === "trend") return trend();
     if (block.type === "ranking") return { type: "bars", items: ranked.slice(0, block.limit).map(([label, minor]) => ({ label, minor, note: `${current.filter(item => rankBy(item) === label).length} 笔` })) };
     if (block.type === "calendar") return calendar();

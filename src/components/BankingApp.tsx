@@ -16,6 +16,10 @@ import { InvestmentView } from "./InvestmentView";
 import { AssistantMark } from "./AssistantMark";
 import { InvestmentReceiptDialog } from "./InvestmentReceiptDialog";
 import { AssetCard, FeedPanel, type FeedQuote } from "./FeedPanel";
+import { CustomPage } from "./CustomPage";
+import { PageIconMark } from "./page-icons";
+import { DEFAULT_LAYOUT, SYSTEM_PAGES, type Layout } from "@/lib/ui-schema";
+import type { PageMeta } from "@/lib/ui-store";
 import type { InvestmentReceipt } from "@/lib/investment-types";
 import type { BankStatement } from "@/lib/banking-report";
 import { bankRequest, BankRequestError, jsonPost } from "@/lib/client-request";
@@ -25,7 +29,7 @@ type Account = { id: string; name: string; account_no: string; masked_no: string
 type Transaction = { id: string; merchant_name: string; category: string; amount_minor: string; occurred_at: string; is_anomaly: boolean; investment_receipt?: InvestmentReceipt | null };
 type Card = { id: string; card_name: string; masked_no: string; card_type: string; status: string; daily_limit_minor: string };
 type Bootstrap = { customer: { display_name: string; phone: string; mfa_configured: boolean }; totalMinor: number; accounts: Account[]; transactions: Transaction[]; cards: Card[]; statement: BankStatement; investmentValueMinor?: number; ai: { configured: boolean; model: string | null }; features?: { voiceCalls?: boolean } };
-type BusinessTab = "home" | "activity" | "cards" | "wealth";
+type BusinessTab = "home" | "activity" | "cards" | "wealth" | `page:${string}`;
 type Tab = BusinessTab | "assistant";
 
 const money = (minor: number | string) => new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", minimumFractionDigits: 2 }).format(Number(minor) / 100);
@@ -55,10 +59,21 @@ export function BankingApp() {
   const showAssistant = useCallback(() => setTab("assistant"), []);
   const [quote, setQuote] = useState<FeedQuote | null>(null);
   const [driving, setDriving] = useState(false);
+  // 每位访客自己的首页排布和底部导航；没有自定义过就是默认布局。结构只会在用户确认提案后改变。
+  const [ui, setUi] = useState<{ layout: Layout; pages: PageMeta[] }>({ layout: DEFAULT_LAYOUT, pages: [] });
+  const [uiVersion, setUiVersion] = useState(0);
+  useEffect(() => { const changed = () => setUiVersion(version => version + 1); window.addEventListener("blank:ui-changed", changed); return () => window.removeEventListener("blank:ui-changed", changed); }, []);
   // 从 Blank回到银行页面时重新读取动态，刚在对话里创建的卡片马上能看到。
   const [feedVersion, setFeedVersion] = useState(0);
   const [wasAssistant, setWasAssistant] = useState(false);
   if (wasAssistant !== assistantVisible) { setWasAssistant(assistantVisible); if (!assistantVisible) setFeedVersion(version => version + 1); }
+  const hasData = Boolean(data);
+  useEffect(() => {
+    if (!hasData) return;
+    let alive = true;
+    fetch("/api/v1/ui", { cache: "no-store" }).then(async response => { const result = await response.json().catch(() => null); if (alive && response.ok && result?.layout) setUi({ layout: result.layout, pages: result.pages ?? [] }); }).catch(() => undefined);
+    return () => { alive = false; };
+  }, [hasData, feedVersion, uiVersion]);
   const discuss = useCallback((next: FeedQuote) => { setQuote(next); setTab("assistant"); }, []);
   const showBankPage = useCallback(() => setTab(lastBusinessTab.current), []);
   const appRoot = useRef<HTMLElement>(null);
@@ -103,6 +118,10 @@ export function BankingApp() {
     }).catch(reason => setError(reason instanceof Error ? reason.message : "无法读取待确认操作，请重新打开链接。"));
   }, [data]);
 
+  const pageGone = businessTab.startsWith("page:") && !ui.pages.some(page => `page:${page.id}` === businessTab);
+  // 当前所在的自定义页面被删掉时，显示上回到首页（不改 state，避免在渲染外同步 setState）。
+  const shownBusiness: BusinessTab = pageGone ? "home" : businessTab;
+  const shownTab: Tab = tab.startsWith("page:") && !ui.pages.some(page => `page:${page.id}` === tab) ? "home" : tab;
   const navigate = (next: BusinessTab) => { lastBusinessTab.current = next; setBusinessTab(next); setTab(next); };
   const closeTransfer = () => { setDialog(null); setPrepared(null); setMfaCode(""); if (location.search) history.replaceState(null, "", location.pathname); };
   const afterAction = async (message: string, next?: Tab) => {
@@ -128,7 +147,7 @@ export function BankingApp() {
   if (!data) return <main className={styles.stage}><section className={styles.unavailable}><ShieldCheck size={32} /><h1>账户数据暂不可用</h1><p role="alert">{error || "请重新读取账户信息。"}</p>{notice && <p className={styles.confirmedNotice} role="status">{notice} 请刷新查看最新账户状态。</p>}<button className={styles.primaryButton} disabled={loading} onClick={() => void load()}><RefreshCw size={17} />重新读取</button><small>读取失败不代表余额为零。操作结果请以回执和最新明细为准。</small></section></main>;
   const account = data.accounts[0];
 
-  return <main className={styles.stage} ref={appRoot} data-agent-driving={driving || undefined} data-agent-page={assistantVisible ? "Blank" : dialog ?? ({ home: "首页", activity: "账户明细", cards: "卡片管理", wealth: "理财", assistant: "Blank" }[tab])}>
+  return <main className={styles.stage} ref={appRoot} data-agent-driving={driving || undefined} data-agent-page={assistantVisible ? "Blank" : dialog ?? (shownTab.startsWith("page:") ? `页面：${ui.pages.find(page => `page:${page.id}` === shownTab)?.name ?? "自定义页面"}` : { home: "首页", activity: "账户明细", cards: "卡片管理", wealth: "理财", assistant: "Blank" }[shownTab as "home"])}>
     <ServiceWorkerRegister />
     <section className={styles.phone} aria-label="Blank 手机银行">
       <header className={styles.topbar}>
@@ -140,18 +159,25 @@ export function BankingApp() {
       {notice && <div className={styles.confirmedNotice} role="status">{notice}<button onClick={() => setNotice("")} aria-label="关闭操作提示">关闭</button></div>}
       {loading && <p className={styles.refreshStatus} role="note">正在更新账户信息，以下为上次读取的数据…</p>}
       <div className={styles.viewport} ref={viewportRef} data-agent-viewport hidden={assistantVisible}>
-        {businessTab === "home" && <HomeView data={data} loading={loading} visible={balanceVisible} toggleVisible={() => setBalanceVisible(!balanceVisible)} onDeposit={() => setDialog("deposit")} onTransfer={() => setDialog("transfer")} onDiscuss={discuss} feedVersion={feedVersion} />}
-        {businessTab === "activity" && <ActivityView data={data} />}
-        {businessTab === "cards" && <CardsView data={data} disabled={loading} onCreate={() => setDialog("card")} onSelect={id => { setSelectedCard(id); setDialog("card-details"); }} />}
-        {businessTab === "wealth" && <InvestmentView accounts={data.accounts} mfaConfigured={data.customer.mfa_configured} onChanged={async message => { if (message) setNotice(message); await load(); }} />}
+        {shownBusiness === "home" && <HomeView sections={ui.layout.home} data={data} loading={loading} visible={balanceVisible} toggleVisible={() => setBalanceVisible(!balanceVisible)} onDeposit={() => setDialog("deposit")} onTransfer={() => setDialog("transfer")} onDiscuss={discuss} feedVersion={feedVersion} />}
+        {shownBusiness === "activity" && <ActivityView data={data} />}
+        {shownBusiness === "cards" && <CardsView data={data} disabled={loading} onCreate={() => setDialog("card")} onSelect={id => { setSelectedCard(id); setDialog("card-details"); }} />}
+        {shownBusiness.startsWith("page:") && <CustomPage pageId={shownBusiness.slice(5)} refresh={feedVersion + uiVersion} />}
+        {shownBusiness === "wealth" && <InvestmentView accounts={data.accounts} mfaConfigured={data.customer.mfa_configured} onChanged={async message => { if (message) setNotice(message); await load(); }} />}
       </div>
       <div ref={setAssistantHost} className={styles.assistantPage} hidden={!assistantVisible} />
-      <nav className={styles.nav} aria-label="主导航">
-        <NavButton agentId="nav-home" active={tab === "home" && !assistantVisible} label="首页" icon={<House size={21} />} onClick={() => navigate("home")} />
-        <NavButton agentId="nav-wealth" active={tab === "wealth" && !assistantVisible} label="理财" icon={<TrendingUp size={21} />} onClick={() => navigate("wealth")} />
-        <NavButton active={assistantVisible} label="Blank" icon={<AssistantMark />} onClick={showAssistant} />
-        <NavButton agentId="nav-activity" active={tab === "activity" && !assistantVisible} label="明细" icon={<ChartNoAxesColumnIncreasing size={21} />} onClick={() => navigate("activity")} />
-        <NavButton agentId="nav-cards" active={tab === "cards" && !assistantVisible} label="卡片" icon={<CreditCard size={21} />} onClick={() => navigate("cards")} />
+      <nav className={styles.nav} aria-label="主导航" data-items={ui.layout.nav.length}>
+        {ui.layout.nav.map(item => {
+          if (item.type === "page") {
+            const page = ui.pages.find(entry => entry.id === item.pageId);
+            const key: BusinessTab = `page:${item.pageId}`;
+            return page ? <NavButton key={key} agentId={`nav-page-${item.pageId}`} active={shownTab === key && !assistantVisible} label={page.name} icon={<PageIconMark icon={page.icon} />} onClick={() => navigate(key)} /> : null;
+          }
+          if (item.id === "blank") return <NavButton key="blank" active={assistantVisible} label={SYSTEM_PAGES.blank} icon={<AssistantMark />} onClick={showAssistant} />;
+          const id = item.id as Exclude<typeof item.id, "blank">;
+          const system = { home: <House size={21} />, wealth: <TrendingUp size={21} />, activity: <ChartNoAxesColumnIncreasing size={21} />, cards: <CreditCard size={21} /> }[id];
+          return <NavButton key={id} agentId={`nav-${id}`} active={shownTab === id && !assistantVisible} label={SYSTEM_PAGES[id]} icon={system} onClick={() => navigate(id)} />;
+        })}
       </nav>
       <AppAssistant rootRef={appRoot} configured={data.ai.configured} voiceEnabled={data.features?.voiceCalls} openSignal={0} presentation="page" pageHost={assistantHost} pageActive={assistantVisible} onShowPage={showAssistant} onShowBankPage={showBankPage} quote={quote} onQuoteClear={() => setQuote(null)} onDrivingChange={setDriving} />
     </section>
@@ -169,12 +195,12 @@ function NavButton({ active, label, icon, onClick, agentId }: { active: boolean;
   return <button data-agent-id={agentId} data-agent-permission="navigate" aria-current={active ? "page" : undefined} className={active ? styles.navActive : ""} onClick={onClick}>{icon}<span>{label}</span></button>;
 }
 
-function HomeView({ data, loading, visible, toggleVisible, onDeposit, onTransfer, onDiscuss, feedVersion }: { data: Bootstrap; loading: boolean; visible: boolean; toggleVisible: () => void; onDeposit: () => void; onTransfer: () => void; onDiscuss: (quote: FeedQuote) => void; feedVersion: number }) {
+function HomeView({ sections, data, loading, visible, toggleVisible, onDeposit, onTransfer, onDiscuss, feedVersion }: { sections: Layout["home"]; data: Bootstrap; loading: boolean; visible: boolean; toggleVisible: () => void; onDeposit: () => void; onTransfer: () => void; onDiscuss: (quote: FeedQuote) => void; feedVersion: number }) {
   const cashMinor = data.accounts.reduce((sum, account) => sum + Number(account.available_balance_minor ?? 0), 0);
-  // 首页只有动态流，资产是默认置顶的一个组件。
+  // 首页由布局决定：资产只是其中一个区块，默认置顶。
   return <div className={styles.home}>
-    <FeedPanel key={data.customer.phone} owner={data.customer.phone} onDiscuss={onDiscuss} refresh={feedVersion}
-      pinned={<AssetCard totalMinor={data.totalMinor} cashMinor={cashMinor} investedMinor={data.investmentValueMinor ?? Math.max(0, data.totalMinor - cashMinor)}
+    <FeedPanel key={data.customer.phone} owner={data.customer.phone} onDiscuss={onDiscuss} refresh={feedVersion} sections={sections}
+      assets={<AssetCard totalMinor={data.totalMinor} cashMinor={cashMinor} investedMinor={data.investmentValueMinor ?? Math.max(0, data.totalMinor - cashMinor)}
         visible={visible} toggleVisible={toggleVisible} disabled={loading || !data.accounts[0]} onTransfer={onTransfer} onDeposit={onDeposit} onDiscuss={onDiscuss} />} />
   </div>;
 }
