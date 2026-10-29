@@ -29,8 +29,8 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: () => Promise
     } catch (err) { setError(err instanceof Error ? err.message : "请求未完成"); } finally { setBusy(false); }
   };
   return <main className={styles.authStage}><section className={styles.authPanel}>
-    <div className={styles.authBrand}><span>B</span><b>BankPilot</b></div>
-    <div className={`${styles.authCopy} ${styles.demoCopy}`}><h1>欢迎体验 BankPilot</h1><span>以小土豆的身份进入，看看 AI 怎样替你打理账户。</span></div>
+    <div className={styles.authBrand}><span>B</span><b>Blank</b></div>
+    <div className={`${styles.authCopy} ${styles.demoCopy}`}><h1>欢迎体验 Blank</h1><span>以小土豆的身份进入，看看 AI 怎样替你打理账户。</span></div>
     {profiles ? <div className={styles.demoProfiles} aria-label="选择用户" aria-busy={busy}>{profiles.map((profile) => <button key={profile.key} className={styles.demoProfile} aria-label={`以${profile.name}进入`} disabled={busy} onClick={() => choose(profile.key)}>
       <span className={styles.demoAvatar} style={{ background: profile.color }} aria-hidden="true">{profile.emoji}</span><b className={styles.demoPerson}>{profile.name}</b><span aria-hidden="true">→</span>
     </button>)}</div> : <p className={styles.demoHint}>{error ? "" : "正在加载用户…"}</p>}

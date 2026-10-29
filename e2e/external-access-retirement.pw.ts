@@ -46,7 +46,7 @@ test("a real bank session rejects external headers and untrusted write origins w
   test.skip(process.env.BANKPILOT_DEMO_E2E !== "1", "Requires the disposable database demo server");
   await page.goto("/");
   await page.getByRole("button", { name: "以小土豆进入" }).click();
-  await expect(page.getByRole("button", { name: "AI 助手", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Blank", exact: true })).toBeVisible();
   const bootstrap = await page.request.get("/api/bootstrap");
   expect(bootstrap.status()).toBe(200);
   const before = await bootstrap.json();

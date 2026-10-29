@@ -42,16 +42,16 @@ async function setup(page: Page, scenario: "card" | "pause" | "choices") {
     await route.fulfill({ json: run });
   });
   await page.goto("/");
-  await page.getByRole("button", { name: "AI 助手", exact: true }).click();
-  await page.getByRole("textbox", { name: "向 AI 助手描述需求或回答问题" }).fill("查看我的卡片");
-  await page.getByRole("button", { name: "发送给 AI 助手" }).click();
+  await page.getByRole("button", { name: "Blank", exact: true }).click();
+  await page.getByRole("textbox", { name: "向 Blank 描述需求或回答问题" }).fill("查看我的卡片");
+  await page.getByRole("button", { name: "发送给 Blank" }).click();
   return { calls, bankWrites: () => bankWrites };
 }
 
 test("visible clicks navigate real React pages, but bank confirmation remains human", async ({ page }) => {
   const state = await setup(page, "card");
   await expect(page.getByRole("button", { name: "开始页面操作" })).toBeVisible();
-  expect(state.calls[0].page).toMatchObject({ name: "AI 助手" });
+  expect(state.calls[0].page).toMatchObject({ name: "Blank" });
   await page.getByRole("button", { name: "开始页面操作" }).click();
   await expect(page.getByRole("heading", { name: "我的卡" })).toBeVisible();
   await expect(page.getByRole("button", { name: "确认锁定这张卡" })).toBeVisible();
@@ -67,7 +67,7 @@ test("a trusted user touch cancels the highlighted click; continue observes the 
   await page.getByRole("button", { name: "开始页面操作" }).click();
   await expect(page.locator('[data-agent-id="nav-cards"][data-agent-highlight]')).toBeVisible();
   await page.getByRole("navigation", { name: "主导航" }).getByRole("button", { name: "明细", exact: true }).click();
-  await expect(page.getByRole("button", { name: "查看 AI 助手会话" })).toContainText("已暂停");
+  await expect(page.getByRole("button", { name: "查看 Blank 会话" })).toContainText("已暂停");
   await page.waitForTimeout(650); // Longer than the visible action highlight; the queued click must not run.
   await expect(page.getByRole("heading", { name: "我的卡" })).toHaveCount(0);
   expect(state.calls.filter((call) => call.command === "advance")).toHaveLength(0);
@@ -81,8 +81,8 @@ test("choice buttons and free text clarify intent without granting page control"
   const state = await setup(page, "choices");
   await expect(page.getByRole("button", { name: "日常卡", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "旅行卡", exact: true })).toBeVisible();
-  await page.getByRole("textbox", { name: "向 AI 助手描述需求或回答问题" }).fill("都不是，是工资卡");
-  await page.getByRole("button", { name: "发送给 AI 助手" }).click();
+  await page.getByRole("textbox", { name: "向 Blank 描述需求或回答问题" }).fill("都不是，是工资卡");
+  await page.getByRole("button", { name: "发送给 Blank" }).click();
   await expect(page.getByRole("button", { name: "开始页面操作" })).toBeVisible();
   expect(state.calls.at(-1)?.result).toMatchObject({ status: "USER_ANSWERED", message: "都不是，是工资卡" });
   expect(state.calls.some((call) => call.command === "allow")).toBe(false);

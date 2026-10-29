@@ -37,14 +37,14 @@ export function ChannelOnboarding({ provider, bound, onRefresh, onClose }: { pro
       {step === 1 && <>
         <h3>在机器人私聊里发送</h3>
         <div className={styles.command}><code>绑定</code><button onClick={() => copy("绑定")} aria-label="复制绑定消息"><Copy size={18} />复制</button></div>
-        <p className={styles.guideCopy}>机器人会回复一条 BankPilot 绑定链接。打开它，登录并确认你的银行账户。链接 10 分钟内有效。</p>
+        <p className={styles.guideCopy}>机器人会回复一条 Blank 绑定链接。打开它，登录并确认你的银行账户。链接 10 分钟内有效。</p>
         {provider.entryUrl && <a className={styles.secondary} href={provider.entryUrl} target="_blank" rel="noopener noreferrer">打开机器人私聊 <ArrowUpRight size={16} /></a>}
         <button className={styles.primary} onClick={() => { setStep(2); void refresh(); }}>我已发送，继续</button>
         <button className={styles.textButton} onClick={() => setStep(0)}>返回添加步骤</button>
       </>}
       {step === 2 && <>
         <h3>打开机器人发来的绑定链接</h3>
-        <p className={styles.guideCopy}>在打开的 BankPilot 页面核对账户，再点“确认连接”。完成后，这里会自动更新。</p>
+        <p className={styles.guideCopy}>在打开的 Blank 页面核对账户，再点“确认连接”。完成后，这里会自动更新。</p>
         <p className={styles.waiting} role="status">尚未检测到绑定完成</p>
         <button className={styles.primary} disabled={checking} onClick={refresh}><RefreshCw size={17} className={checking ? styles.spin : undefined} />{checking ? "正在检查…" : "我已确认，检查连接"}</button>
         <button className={styles.textButton} onClick={() => setStep(1)}>没收到链接？回到上一步</button>

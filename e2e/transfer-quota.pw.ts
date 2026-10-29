@@ -58,7 +58,7 @@ test("real API pre-created 600 CNY drafts cannot cross the daily limit through t
   test.skip(process.env.BANKPILOT_DEMO_E2E !== "1", "Requires the disposable database demo server");
   await page.goto("/");
   await page.getByRole("button", { name: "以小土豆进入" }).click();
-  await expect(page.getByRole("button", { name: "AI 助手", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Blank", exact: true })).toBeVisible();
   const before = await (await page.request.get("/api/bootstrap")).json();
   const headers = { origin: baseURL! };
   const drafts: Array<{ operationId: string; riskLevel: string }> = [];

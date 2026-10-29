@@ -74,7 +74,7 @@ export function appPageTools() {
       return JSON.stringify({ deleted: await deleteRecipe(customerId, ownerId, input.cardId) });
     }, { name: "delete_feed_card", description: "删除用户自己创建的一张动态卡片及它发过的帖子。", schema: z.object({ cardId }) }),
     tool((_, runtime: ToolRuntime) => bridge({ type: "inspect", description: "正在查看当前页面" }, runtime), {
-      name: "inspect_page", description: "读取用户正在看的 BankPilot 页面、可见数据及可用控件。不会读取密码或验证码。", schema: z.object({}),
+      name: "inspect_page", description: "读取用户正在看的 Blank 页面、可见数据及可用控件。不会读取密码或验证码。", schema: z.object({}),
     }),
     tool((input, runtime: ToolRuntime) => bridge({ type: "click", ...input }, runtime), {
       name: "click_control", description: "点击已注册的页面控件。human 控件只可交给用户，不可代点。", schema: z.object({ target, pageVersion, description }),

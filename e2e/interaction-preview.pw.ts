@@ -1,16 +1,16 @@
 import { test, expect, type Page } from "@playwright/test";
 
 async function send(page: Page) {
-  const input = page.getByRole("textbox", { name: "向悬浮助手描述需求或回答问题" });
+  const input = page.getByRole("textbox", { name: "向 Blank 悬浮窗描述需求或回答问题" });
   await input.fill("开始当前交互演示");
-  await page.getByRole("button", { name: "发送给悬浮助手" }).click();
+  await page.getByRole("button", { name: "发送给 Blank 悬浮窗" }).click();
 }
 
 test("preview animates controlled React form fields and hands off final confirmation", async ({ page }) => {
   const bankRequests: string[] = [];
   page.on("request", (request) => { if (new URL(request.url()).pathname.startsWith("/api/")) bankRequests.push(request.url()); });
   await page.goto("/preview/agent");
-  await page.getByRole("button", { name: "AI 助手", exact: true }).click();
+  await page.getByRole("button", { name: "Blank", exact: true }).click();
   await send(page);
   await page.getByRole("button", { name: "刘敏 · 尾号 1234" }).click();
   await page.getByRole("button", { name: "开始页面操作", exact: true }).click();
@@ -23,7 +23,7 @@ test("preview animates controlled React form fields and hands off final confirma
   await page.getByRole("button", { name: "确认演示 · 不转账" }).click();
   await expect(page.getByRole("heading", { name: "演示完成", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "继续代操作" }).click();
-  await expect(page.getByRole("dialog", { name: "BankPilot 悬浮助手" })).toContainText("没有发生银行交易");
+  await expect(page.getByRole("dialog", { name: "Blank 悬浮窗" })).toContainText("没有发生银行交易");
   expect(bankRequests).toEqual([]);
 });
 
@@ -35,7 +35,7 @@ test("touching the input stops remaining characters; resume observes the user's 
   const input = page.getByRole("textbox", { name: "卡片名称", exact: true });
   await expect.poll(() => input.inputValue(), { intervals: [15], timeout: 15000 }).toMatch(/^旅(?:行|行备)?$/);
   await input.fill("我自己的卡名");
-  await expect(page.getByRole("button", { name: "打开悬浮助手" })).toContainText("已暂停");
+  await expect(page.getByRole("button", { name: "打开 Blank 悬浮窗" })).toContainText("已暂停");
   await page.waitForTimeout(300);
   await expect(input).toHaveValue("我自己的卡名");
   await expect(page.locator('[data-agent-overlay] [data-phase]')).toHaveCount(0);

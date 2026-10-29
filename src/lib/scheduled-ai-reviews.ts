@@ -67,7 +67,7 @@ async function finishReview(claim: Claim, result: { factIds: string[]; mainModel
       const identity = (await client.query<{ id: string; channel_type: string }>("SELECT id,channel_type FROM channel_identities WHERE id=$1 AND customer_id=$2 AND status='ACTIVE' FOR SHARE", [task.channel_identity_id, claim.customer_id])).rows[0];
       if (identity) await client.query(`INSERT INTO channel_outbox(channel_identity_id,customer_id,channel_type,dedupe_key,payload)
         VALUES($1,$2,$3,$4,$5::jsonb) ON CONFLICT(dedupe_key) DO NOTHING`, [identity.id, claim.customer_id, identity.channel_type, `schedule:${claim.run_id}`,
-        JSON.stringify({ message: "BankPilot：每日账户巡检有新的关注事项，请打开银行 APP 的「定时任务」查看。" })]);
+        JSON.stringify({ message: "Blank：每日账户巡检有新的关注事项，请打开银行 APP 的「定时任务」查看。" })]);
     }
     await writeAudit({ customerId: claim.customer_id, actorType: "SYSTEM", eventType: "DAILY_REVIEW_COMPLETED", summary: "每日巡检结果已保存",
       evidence: { scheduleId: claim.schedule_id, runId: claim.run_id, jevModel: result.gate.model, probability: result.gate.probability, decision: result.gate.decision, mainModel: result.mainModel, factIds: result.factIds } }, client);

@@ -66,7 +66,7 @@ describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("visible Agent database 
     await controlAppAgent(owner, started.id, "pause");
     const paused = await getAppAgentRun(owner, started.id);
     expect(paused).toMatchObject({ status: "PAUSED", controlGranted: true });
-    expect(paused.timeline?.at(-1)?.title).toBe("你已暂停助手");
+    expect(paused.timeline?.at(-1)?.title).toBe("你已暂停 Blank");
     await expect(controlAppAgent(owner, started.id, "advance", started.pending!.id, outcome)).rejects.toThrow("APP_AGENT_STATE_CHANGED");
     const question = await controlAppAgent(owner, started.id, "refresh", started.pending!.id, { ...outcome, status: "USER_CHANGED", page: { ...page, name: "卡片管理", version: "p2" } });
     expect(question.status).toBe("QUESTION");
@@ -74,7 +74,7 @@ describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("visible Agent database 
     const completed = await controlAppAgent(owner, started.id, "advance", question.pending!.id, { ...outcome, status: "USER_ANSWERED", message: "日常卡" });
     expect(completed.status).toBe("COMPLETED");
     expect((await getAppAgentRun(owner, started.id)).timeline).toEqual(completed.timeline);
-    expect(completed.timeline?.at(-1)?.title).toBe("助手本轮结束");
+    expect(completed.timeline?.at(-1)?.title).toBe("Blank 本轮结束");
     expect((await query("SELECT count(*)::int AS count FROM audit_events WHERE customer_id=$1 AND event_type NOT LIKE 'APP_AGENT_%'", [customerId])).rows[0].count).toBe(0);
     const observed = await query("SELECT evidence FROM audit_events WHERE customer_id=$1 AND event_type='APP_AGENT_OBSERVATION'", [customerId]);
     expect(observed.rows).toHaveLength(2);

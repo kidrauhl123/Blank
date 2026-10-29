@@ -38,7 +38,7 @@ function authorizationCard(reply) {
   const operation = reply.operation;
   return {
     card_type: "button_interaction",
-    main_title: { title: operation.title, desc: `${operation.riskLevel} · ${operation.requiredAuth === "MFA" ? "强验证" : "明确确认"}` },
+    main_title: { title: operation.title, desc: `${operation.riskLevel === "RED" ? "红色风险" : "黄色风险"} · ${operation.requiredAuth === "MFA" ? "强验证" : "明确确认"}` },
     button_list: [
       { text: "确认", key: "bankpilot_approve", style: 1 },
       { text: "取消", key: "bankpilot_reject", style: 2 },
@@ -49,18 +49,18 @@ function authorizationCard(reply) {
 
 function renderReply(result) {
   if (result.status === "BINDING_REQUIRED") {
-    return `${result.message}\n\n[打开 BankPilot 安全绑定](${result.bindUrl})`;
+    return `${result.message}\n\n[打开 Blank 安全绑定](${result.bindUrl})`;
   }
   if (result.status === "DUPLICATE") return "这条消息已经处理过了。";
   if (result.status === "AUTHORIZATION_REQUIRED" && result.authorizeUrl) {
-    return `${result.reply.message}\n\n[回到 BankPilot 完成强验证](${result.authorizeUrl})`;
+    return `${result.reply.message}\n\n[回到 Blank 完成强验证](${result.authorizeUrl})`;
   }
   return result.reply?.message ?? "请求没有完成，请稍后重试。";
 }
 
 async function handleMessage(frame, message) {
   const streamId = generateReqId("bankpilot");
-  await client.replyStream(frame, streamId, "正在由 BankPilot 安全处理…", false);
+  await client.replyStream(frame, streamId, "正在由 Blank 安全处理…", false);
   try {
     const body = frame.body;
     const result = await bankApi("/api/channels/wecom/message", {
@@ -89,7 +89,7 @@ client.on("message.voice", (frame) => {
 client.on("event.enter_chat", (frame) => {
   void client.replyWelcome(frame, {
     msgtype: "text",
-    text: { content: "你好，我是 BankPilot。绑定银行身份后，你可以用自然语言查账、分析账单、转账或管理卡片。" },
+    text: { content: "你好，我是 Blank。绑定银行身份后，你可以用自然语言查账、分析账单、转账或管理卡片。" },
   });
 });
 
@@ -118,14 +118,14 @@ client.on("event.template_card_event", async (frame) => {
     if (result.status === "MFA_REQUIRED") {
       await client.sendMessage(frame.body.from.userid, {
         msgtype: "markdown",
-        markdown: { content: `${result.message}\n\n[打开 BankPilot 强验证](${result.authorizeUrl})` },
+        markdown: { content: `${result.message}\n\n[打开 Blank 强验证](${result.authorizeUrl})` },
       });
     }
   } catch (error) {
     console.error("[wecom] action processing failed", error instanceof Error ? error.message : "UNKNOWN");
     await client.sendMessage(frame.body.from.userid, {
       msgtype: "markdown",
-      markdown: { content: "操作没有完成。请回到 BankPilot 核对状态后重试。" },
+      markdown: { content: "操作没有完成。请回到 Blank 核对状态后重试。" },
     });
   }
 });

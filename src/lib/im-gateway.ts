@@ -64,7 +64,7 @@ export async function handleChannelMessage(config: GatewayConfig, input: Channel
     });
     return {
       status: "BINDING_REQUIRED" as const,
-      message: "请打开下方链接，在 BankPilot 登录并核对账户，再点“确认连接”。链接 10 分钟内有效。完成后回到这里重新发送你的请求。",
+      message: "请打开下方链接，在 Blank 登录并核对账户，再点“确认连接”。链接 10 分钟内有效。完成后回到这里重新发送你的请求。",
       bindUrl,
       expiresAt: binding.expiresAt,
     };
@@ -76,7 +76,7 @@ export async function handleChannelMessage(config: GatewayConfig, input: Channel
     [input.eventId, identity.id, identity.customer_id, config.channelType],
   );
   if (["绑定", "/bind"].includes(input.message.trim())) {
-    return { status: "COMPLETED" as const, reply: { message: "当前聊天身份已经连接 BankPilot。发送“查余额”即可开始使用；如需解绑，请打开 BankPilot 的消息渠道页面。" } };
+    return { status: "COMPLETED" as const, reply: { message: "当前聊天身份已经连接 Blank。发送“查余额”即可开始使用；如需解绑，请打开 Blank 的消息渠道页面。" } };
   }
   const reply = await runAgentRuntime({
     customerId: identity.customer_id,
@@ -156,7 +156,7 @@ export async function handleChannelAction(config: GatewayConfig, input: ChannelA
   if (run.interrupt_kind === "MFA") {
     return {
       status: "MFA_REQUIRED" as const,
-      message: "这是高风险操作，必须回到 BankPilot 使用动态验证码完成强验证。",
+      message: "这是高风险操作，必须回到 Blank 使用动态验证码完成强验证。",
       authorizeUrl: operationLink(input.operationId, input.taskId),
     };
   }
@@ -172,7 +172,7 @@ export async function handleChannelAction(config: GatewayConfig, input: ChannelA
     const committed = await commitTransfer(identity.customer_id, input.operationId, { taskId: input.taskId });
     if ("authError" in committed && committed.authError === "AUTH_REQUIRED") return {
       status: "MFA_REQUIRED" as const,
-      message: "执行前风险已升级，资金未转出。请回到 BankPilot 使用动态验证码完成强验证。",
+      message: "执行前风险已升级，资金未转出。请回到 Blank 使用动态验证码完成强验证。",
       authorizeUrl: operationLink(input.operationId, input.taskId),
     };
     if ("authError" in committed) throw new Error(committed.authError);

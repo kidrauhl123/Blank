@@ -38,9 +38,9 @@ export function AppSettings() {
   };
   return <main className={styles.page}>
     <header className={styles.header}><Link href="/"><ArrowLeft size={18} />返回银行</Link><h1>设置</h1></header>
-    <section className={styles.section} aria-labelledby="assistant-settings"><h2 id="assistant-settings">AI 助手</h2>
+    <section className={styles.section} aria-labelledby="assistant-settings"><h2 id="assistant-settings">Blank</h2>
       <form className={styles.form} onSubmit={save}>
-        <label htmlFor="assistant-model">助手模型</label>
+        <label htmlFor="assistant-model">Blank 模型</label>
         <div className={styles.select}><select id="assistant-model" disabled={loading || saving || !catalog} value={model} onChange={(event) => { setModel(event.target.value); setNotice(""); }}>
           {!catalog && <option value="">{loading ? "正在读取…" : "暂不可用"}</option>}
           {catalog?.models.map((id) => <option key={id} value={id}>{({ "deepseek-v4.1-flash": "DeepSeek 4.1 Flash", "qwen3.8-flash": "Qwen 3.8 Flash", "gemini-3.8-flash-high": "Gemini 3.8 High" } as Record<string, string>)[id] ?? id}{id === catalog.defaultModel ? "（默认）" : ""}</option>)}

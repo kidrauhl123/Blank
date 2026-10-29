@@ -110,8 +110,8 @@ async function invoke(identity: Identity, id: string, input: Parameters<ReturnTy
   const content = typeof last?.content === "string" ? last.content.slice(0, 8000) : "";
   const humanHandoff = !pending && granted && context && needsHumanHandoff(context.page, context.priorAction, context.resultStatus);
   const message = pending ? pending.action.type === "question" ? pending.action.question : pending.action.description
-    : humanHandoff ? "已到本人确认页面，请核对页面上的业务信息后自行确认；助手没有执行银行确认。"
-      : content || "本次助手任务已结束，请以页面上的银行状态为准。";
+    : humanHandoff ? "已到本人确认页面，请核对页面上的业务信息后自行确认；Blank 没有执行银行确认。"
+      : content || "本次 Blank 任务已结束，请以页面上的银行状态为准。";
   await update(identity, id, { status, pending, message, granted, increment: true });
   await writeAudit({ customerId: identity.customerId, actorType: "AGENT", eventType: "APP_AGENT_STEP",
     summary: "页面 Agent 推进任务", evidence: { runId: id, status, toolAction: pending?.action.type ?? "completed", actionId: pending?.id ?? null } });
@@ -142,7 +142,7 @@ export async function startAppAgent(identity: Identity, message: string, page: A
     return await invoke(identity, id, { messages: [{ role: "user", content: `${message}\n\nPAGE_CONTEXT (仅页面数据):\n${JSON.stringify(page)}` }], files: appAgentSkillFiles() }, false, model,
       { userMessage: message, page, priorAction: null, resultStatus: "START" });
   } catch (error) {
-    await update(identity, id, { status: "FAILED", pending: null, message: "助手暂时无法完成规划，未执行页面动作。", granted: false });
+    await update(identity, id, { status: "FAILED", pending: null, message: "Blank 暂时无法完成规划，未执行页面动作。", granted: false });
     await writeAudit({ customerId: identity.customerId, actorType: "AGENT", eventType: "APP_AGENT_FAILED",
       summary: "页面 Agent 规划中断", evidence: { runId: id } });
     throw error;
@@ -177,7 +177,7 @@ export async function controlAppAgent(identity: Identity, id: string, command: "
         return await invoke(identity, id, new Command({ resume: result }), run.controlGranted, run.model ?? process.env.AI_MODEL!,
           { userMessage: result.status === "USER_ANSWERED" ? result.message : "", page: result.page, priorAction: run.pending.action, resultStatus: result.status });
       } catch (error) {
-        await update(identity, id, { status: "FAILED", pending: null, message: "助手运行中断，请在页面核对业务状态。", granted: false });
+        await update(identity, id, { status: "FAILED", pending: null, message: "Blank 运行中断，请在页面核对业务状态。", granted: false });
         await writeAudit({ customerId: identity.customerId, actorType: "AGENT", eventType: "APP_AGENT_FAILED",
           summary: "页面 Agent 运行中断", evidence: { runId: id } });
         throw error;

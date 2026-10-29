@@ -1,6 +1,6 @@
-# BankPilot product design system
+# Blank product design system
 
-BankPilot borrows product-design principles from Wise—clear hierarchy, direct actions,
+Blank borrows product-design principles from Wise—clear hierarchy, direct actions,
 transparent transaction details, high contrast, and accessible zoom—without copying
 Wise's proprietary font, logo, or exact brand palette.
 

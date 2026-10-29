@@ -14,7 +14,7 @@ vi.mock("@/features/realtime-voice/useRealtimeVoice", () => ({ useRealtimeVoice:
 let root: Root;
 let container: HTMLDivElement;
 const request = vi.fn(async (body: Record<string, unknown>): Promise<AppAgentView> => ({ id: "0e064f38-7258-44c5-bdd8-e256c10aa007", status: "COMPLETED", message: `请核对页面回执：${body.command}`, pending: null, controlGranted: false, steps: 1,
-  timeline: [{ id: "event-1", sequence: 1, at: "2026-10-17T00:00:00.000Z", title: "助手本轮结束", state: "done", detail: "请以页面回执为准。" }] }));
+  timeline: [{ id: "event-1", sequence: 1, at: "2026-10-17T00:00:00.000Z", title: "Blank 本轮结束", state: "done", detail: "请以页面回执为准。" }] }));
 const transport: AppAgentTransport = { request, restore: async () => { throw new Error("none"); }, storageKey: "test-floating-voice" };
 const render = (voiceEnabled: boolean) => act(async () => root.render(<FloatingAppAgent rootRef={{ current: container }} configured voiceEnabled={voiceEnabled} openSignal={1} transport={transport} />));
 

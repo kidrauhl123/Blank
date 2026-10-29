@@ -14,31 +14,31 @@ test("all assistant entry points preserve one conversation and reflect navigatio
   await page.route("**/api/agent/app", route => route.fulfill({ json: { id: cardId, status: "QUESTION", controlGranted: false, steps: 1, message: "请选择一张卡", pending: { id: "q1", action: { type: "question", question: "请选择一张卡", options: ["日常卡"] } } } }));
   await page.goto("/");
   const nav = page.getByRole("navigation", { name: "主导航" });
-  await nav.getByRole("button", { name: "AI 助手" }).click();
-  await expect(nav.getByRole("button", { name: "AI 助手" })).toHaveAttribute("aria-current", "page");
+  await nav.getByRole("button", { name: "Blank" }).click();
+  await expect(nav.getByRole("button", { name: "Blank" })).toHaveAttribute("aria-current", "page");
   // The assistant is a peer tab: it keeps the bank top bar and fills the canvas width below it, clear of the bottom nav.
-  const conversation = await page.getByRole("region", { name: "AI 助手会话" }).boundingBox();
+  const conversation = await page.getByRole("region", { name: "Blank 会话" }).boundingBox();
   const canvas = await page.locator('[data-pointer="canvas"]').boundingBox();
-  const topbar = await page.getByRole("region", { name: "BankPilot 手机银行" }).locator("header").first().boundingBox();
+  const topbar = await page.getByRole("region", { name: "Blank 手机银行" }).locator("header").first().boundingBox();
   const navigation = await nav.boundingBox();
   expect(conversation && canvas && topbar && navigation).toBeTruthy();
   expect(conversation!.x).toBeCloseTo(canvas!.x, 0);
   expect(conversation!.width).toBeCloseTo(canvas!.width, 0);
   expect(conversation!.y).toBeCloseTo(topbar!.y + topbar!.height, 0);
   expect(conversation!.y + conversation!.height).toBeLessThanOrEqual(navigation!.y + 0.5);
-  await page.getByRole("textbox", { name: "向 AI 助手描述需求或回答问题" }).fill("查看我的卡");
-  await page.getByRole("button", { name: "发送给 AI 助手" }).click();
-  await expect(page.getByRole("region", { name: "AI 助手会话" })).toContainText("请选择一张卡");
+  await page.getByRole("textbox", { name: "向 Blank 描述需求或回答问题" }).fill("查看我的卡");
+  await page.getByRole("button", { name: "发送给 Blank" }).click();
+  await expect(page.getByRole("region", { name: "Blank 会话" })).toContainText("请选择一张卡");
   await nav.getByRole("button", { name: "卡片", exact: true }).click();
-  await expect(page.getByRole("region", { name: "AI 助手会话" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Blank 会话" })).toHaveCount(0);
   await expect(nav.getByRole("button", { name: "卡片", exact: true })).toHaveAttribute("aria-current", "page");
-  await page.getByRole("button", { name: "查看 AI 助手会话" }).click();
-  await expect(page.getByRole("region", { name: "AI 助手会话" })).toContainText("查看我的卡");
-  await expect(nav.getByRole("button", { name: "AI 助手" })).toHaveAttribute("aria-current", "page");
+  await page.getByRole("button", { name: "查看 Blank 会话" }).click();
+  await expect(page.getByRole("region", { name: "Blank 会话" })).toContainText("查看我的卡");
+  await expect(nav.getByRole("button", { name: "Blank" })).toHaveAttribute("aria-current", "page");
   await nav.getByRole("button", { name: "明细", exact: true }).click();
-  await nav.getByRole("button", { name: "AI 助手", exact: true }).click();
-  await expect(page.getByRole("region", { name: "AI 助手会话" })).toHaveCount(1);
-  await expect(page.getByRole("region", { name: "AI 助手会话" })).toContainText("查看我的卡");
+  await nav.getByRole("button", { name: "Blank", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Blank 会话" })).toHaveCount(1);
+  await expect(page.getByRole("region", { name: "Blank 会话" })).toContainText("查看我的卡");
 });
 
 test("locking a card requires the bank dialog and submits once while confirmation is busy", async ({ page }) => {
@@ -143,7 +143,7 @@ test("audit view reflects failed nodes and unavailable service health", async ({
 test("channel removal can be cancelled and an ambiguous response is checked before retry", async ({ page }) => {
   let deletes = 0;
   let status = "ACTIVE";
-  await page.route("**/api/v1/channels/onboarding", route => route.fulfill({ json: { providers: [{ channelType: "QQ", name: "QQ", botName: "BankPilot", entryUrl: "https://qq.com", canStart: true, unavailableReason: null }] } }));
+  await page.route("**/api/v1/channels/onboarding", route => route.fulfill({ json: { providers: [{ channelType: "QQ", name: "QQ", botName: "Blank", entryUrl: "https://qq.com", canStart: true, unavailableReason: null }] } }));
   await page.route("**/api/v1/channels", route => {
     if (route.request().method() === "DELETE") { deletes++; status = "REVOKED"; return route.fulfill({ status: 503, json: { message: "回执暂时不可用" } }); }
     return route.fulfill({ json: { channels: [{ id: cardId, channel_type: "QQ", status, bound_at: new Date().toISOString(), last_seen_at: null }] } });

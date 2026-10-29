@@ -10,7 +10,7 @@
 
 对外 MCP、OpenAPI、开发者中心和客户 API 令牌已退役。银行 APP 接口只接受会话，任何 Authorization 头均拒绝；旧令牌不能读取或创建草稿。历史凭据全部撤销归档，旧调用审计保留，见 [外部接入退役](EXTERNAL_ACCESS_RETIREMENT.md)。
 
-QQ 与企业微信属于受控用户渠道而不是新的银行核心。黄色操作可在绑定身份的原生按钮内明确确认；红色操作只能跳转 BankPilot，并由现有银行会话 + TOTP 完成。不同渠道身份、任务 ID 与操作 ID 必须同时匹配。
+QQ 与企业微信属于受控用户渠道而不是新的银行核心。黄色操作可在绑定身份的原生按钮内明确确认；红色操作只能跳转 Blank，并由现有银行会话 + TOTP 完成。不同渠道身份、任务 ID 与操作 ID 必须同时匹配。
 
 ## 已实现控制
 
@@ -27,7 +27,7 @@ QQ 与企业微信属于受控用户渠道而不是新的银行核心。黄色�
 - 审计：模拟用户初始化、用户选择、入金、转账准备/成功、MFA、卡片和 Agent 任务均留痕；旧外部凭据/调用历史保留。
 - 代码沙箱：系统不向 LLM 暴露代码执行、Shell、SQL 或任意网络请求工具，因此当前没有模型生成代码的执行面。
 - 数据最小化：卡片只保存脱敏尾号；密码、TOTP 动态码和原始 API 令牌不写入日志。
-- 持久化 Agent：LangGraph checkpoint 独立 schema；业务租户关系由 BankPilot 表维护，不信任 checkpoint 内的 customer id。
+- 持久化 Agent：LangGraph checkpoint 独立 schema；业务租户关系由 Blank 表维护，不信任 checkpoint 内的 customer id。
 - 渠道隔离：QQ openid 与企业微信 userid 使用 AES-256-GCM 加密、HMAC 索引；Bot Secret 仅在对应 Worker，内部 API 使用互不通用的随机 Bearer。
 - QQ 隐私边界：群聊消息不调用模型、不查询账户、不创建操作；仅 C2C 私聊可以进入银行 Agent。
 - 防重与投递：入站 `msgid` 唯一；授权恢复以数据库状态原子抢占；最终消息使用 outbox，失败退避重试且最多 8 次。

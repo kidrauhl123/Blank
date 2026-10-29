@@ -54,7 +54,7 @@ export function BankingApp() {
   const assistantVisible = tab === "assistant";
   const showAssistant = useCallback(() => setTab("assistant"), []);
   const [quote, setQuote] = useState<FeedQuote | null>(null);
-  // 从 AI 助手回到银行页面时重新读取动态，刚在对话里创建的卡片马上能看到。
+  // 从 Blank回到银行页面时重新读取动态，刚在对话里创建的卡片马上能看到。
   const [feedVersion, setFeedVersion] = useState(0);
   const [wasAssistant, setWasAssistant] = useState(false);
   if (wasAssistant !== assistantVisible) { setWasAssistant(assistantVisible); if (!assistantVisible) setFeedVersion(version => version + 1); }
@@ -127,12 +127,12 @@ export function BankingApp() {
   if (!data) return <main className={styles.stage}><section className={styles.unavailable}><ShieldCheck size={32} /><h1>账户数据暂不可用</h1><p role="alert">{error || "请重新读取账户信息。"}</p>{notice && <p className={styles.confirmedNotice} role="status">{notice} 请刷新查看最新账户状态。</p>}<button className={styles.primaryButton} disabled={loading} onClick={() => void load()}><RefreshCw size={17} />重新读取</button><small>读取失败不代表余额为零。操作结果请以回执和最新明细为准。</small></section></main>;
   const account = data.accounts[0];
 
-  return <main className={styles.stage} ref={appRoot} data-agent-page={assistantVisible ? "AI 助手" : dialog ?? ({ home: "首页", activity: "账户明细", cards: "卡片管理", wealth: "理财", assistant: "AI 助手" }[tab])}>
+  return <main className={styles.stage} ref={appRoot} data-agent-page={assistantVisible ? "Blank" : dialog ?? ({ home: "首页", activity: "账户明细", cards: "卡片管理", wealth: "理财", assistant: "Blank" }[tab])}>
     <ServiceWorkerRegister />
-    <section className={styles.phone} aria-label="BankPilot 手机银行">
+    <section className={styles.phone} aria-label="Blank 手机银行">
       <header className={styles.topbar}>
         <button className={styles.avatar} aria-label="个人中心" onClick={() => { showBankPage(); setDialog("profile"); }}>{data.customer.display_name.slice(0, 2).toUpperCase()}</button>
-        <div className={styles.wordmark}><span>B</span> BankPilot</div>
+        <div className={styles.wordmark}><span>B</span> Blank</div>
         <a className={styles.iconButton} href="/security" aria-label="安全中心"><ShieldCheck size={21} strokeWidth={1.8} /></a>
       </header>
       {error && <div className={styles.connectionError} role="alert"><span>{error}</span><button disabled={loading} onClick={() => void load()}><RefreshCw size={15} />重新读取</button></div>}
@@ -148,7 +148,7 @@ export function BankingApp() {
       <nav className={styles.nav} aria-label="主导航">
         <NavButton agentId="nav-home" active={tab === "home" && !assistantVisible} label="首页" icon={<House size={21} />} onClick={() => navigate("home")} />
         <NavButton agentId="nav-wealth" active={tab === "wealth" && !assistantVisible} label="理财" icon={<TrendingUp size={21} />} onClick={() => navigate("wealth")} />
-        <NavButton active={assistantVisible} label="AI 助手" icon={<AssistantMark />} onClick={showAssistant} />
+        <NavButton active={assistantVisible} label="Blank" icon={<AssistantMark />} onClick={showAssistant} />
         <NavButton agentId="nav-activity" active={tab === "activity" && !assistantVisible} label="明细" icon={<ChartNoAxesColumnIncreasing size={21} />} onClick={() => navigate("activity")} />
         <NavButton agentId="nav-cards" active={tab === "cards" && !assistantVisible} label="卡片" icon={<CreditCard size={21} />} onClick={() => navigate("cards")} />
       </nav>
@@ -277,7 +277,7 @@ function CardModal({ account, busy, setBusy, close, done }: { account: Account; 
 }
 
 function ProfileModal({ data, busy, close, logout }: { data: Bootstrap; busy: boolean; close: () => void; logout: () => Promise<void> }) {
-  return <ModalShell eyebrow="账户" title={data.customer.display_name} close={close} busy={busy}><div className={styles.profileRows} data-agent-private><div><span>手机号</span><b>{data.customer.phone}</b></div><div><span>收款方式</span><b>姓名或手机号</b></div><div><span>账户号</span><b>{data.accounts[0]?.account_no ?? "—"}</b></div></div><a className={styles.developerLink} href="/security"><ShieldCheck size={17} /><span><b>安全中心</b><small>{data.customer.mfa_configured ? "强验证已开启" : "设置高风险操作验证"}</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/schedules"><Clock3 size={17} /><span><b>定时任务</b><small>提醒、账单报告与订阅检查</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/channels"><Link2 size={17} /><span><b>消息渠道</b><small>QQ 与企业微信</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/settings"><Settings size={17} /><span><b>设置</b><small>AI 助手模型</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/audit"><ShieldCheck size={17} /><span><b>操作记录</b><small>风险等级、执行链路与系统状态</small></span><ChevronRight size={17} /></a><button className={styles.logoutButton} disabled={busy} onClick={logout}><LogOut size={17} />{busy ? "正在退出…" : "退出体验"}</button></ModalShell>;
+  return <ModalShell eyebrow="账户" title={data.customer.display_name} close={close} busy={busy}><div className={styles.profileRows} data-agent-private><div><span>手机号</span><b>{data.customer.phone}</b></div><div><span>收款方式</span><b>姓名或手机号</b></div><div><span>账户号</span><b>{data.accounts[0]?.account_no ?? "—"}</b></div></div><a className={styles.developerLink} href="/security"><ShieldCheck size={17} /><span><b>安全中心</b><small>{data.customer.mfa_configured ? "强验证已开启" : "设置高风险操作验证"}</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/schedules"><Clock3 size={17} /><span><b>定时任务</b><small>提醒、账单报告与订阅检查</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/channels"><Link2 size={17} /><span><b>消息渠道</b><small>QQ 与企业微信</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/settings"><Settings size={17} /><span><b>设置</b><small>Blank模型</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/audit"><ShieldCheck size={17} /><span><b>操作记录</b><small>风险等级、执行链路与系统状态</small></span><ChevronRight size={17} /></a><button className={styles.logoutButton} disabled={busy} onClick={logout}><LogOut size={17} />{busy ? "正在退出…" : "退出体验"}</button></ModalShell>;
 }
 
 function CardDetailsModal({ card, close, done }: { card?: Card; close: () => void; done: () => Promise<void> }) {
@@ -382,7 +382,7 @@ function CardsView({ data, disabled, onCreate, onSelect }: { data: Bootstrap; di
       }}>
     {data.cards.map((card, index) => <article className={styles.cardItem} key={card.id} data-card-id={card.id} role="group" aria-roledescription="幻灯片" aria-label={`${index + 1} / ${data.cards.length}，${card.card_name}`}>
       <LiquidBankCard className={styles.bankCard} light={index % 2 === 1} locked={card.status !== "ACTIVE"}>
-        <div className={styles.cardBrand}><span className={styles.cardLogo}>B</span><b>BankPilot</b><small>{card.card_type === "VIRTUAL" ? "VIRTUAL" : "DEBIT"}</small></div>
+        <div className={styles.cardBrand}><span className={styles.cardLogo}>B</span><b>Blank</b><small>{card.card_type === "VIRTUAL" ? "VIRTUAL" : "DEBIT"}</small></div>
         <div className={styles.cardChip} aria-hidden="true"><i /><i /><i /></div>
         <p className={styles.cardNumber}>{card.masked_no}</p>
         <footer className={styles.cardFooter}><strong>{card.card_name}</strong><span className={styles.cardStatus} data-active={card.status === "ACTIVE"}>{card.status === "ACTIVE" ? "可用" : card.status === "LOCKED" ? "已锁定" : card.status}</span></footer>

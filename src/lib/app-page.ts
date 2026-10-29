@@ -101,7 +101,7 @@ export async function applyPageAction(root: HTMLElement, action: PageAction, sti
         }
         if (!stillInControl() || captureAppPage(root).version !== expectedVersion) return { status: "USER_CHANGED", message: "填写后用户已接管，请核对当前内容", page: captureAppPage(root) };
         element.setAttribute("data-agent-filled", "true");
-        element.title = "助手已填写，请核对";
+        element.title = "Blank 已填写，请核对";
       }
       await delay(reduced ? 0 : 200);
     } finally {

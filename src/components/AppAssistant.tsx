@@ -35,7 +35,7 @@ const stepLabels: Record<StepState, string> = { ready: "待执行", running: "�
 function StepList({ items, compact = false }: { items: Step[]; compact?: boolean }) {
   if (!items.length) return null;
   const visible = compact ? items.slice(-2) : items;
-  return <div className={compact ? styles.stepTray : styles.stepHistory} aria-label="助手操作步骤">
+  return <div className={compact ? styles.stepTray : styles.stepHistory} aria-label="Blank 操作步骤">
     <div className={styles.stepHeading}><span>操作进度</span><small>已完成 {items.filter((item) => item.state === "done").length} 步</small></div>
     <ol>{visible.map((item) => <li key={item.id} data-state={item.state}>
       <span className={styles.stepMark}>{item.state === "done" ? <Check size={12} /> : item.state === "paused" ? <Pause size={11} /> : items.indexOf(item) + 1}</span>
@@ -160,7 +160,7 @@ export function AppAssistant({ rootRef, configured, voiceEnabled = false, openSi
     setMotion(null);
     const current = viewRef.current;
     if (current) {
-      const next = { ...current, status: "PAUSED" as const, message: "你已接管页面，助手已暂停。" };
+      const next = { ...current, status: "PAUSED" as const, message: "你已接管页面，Blank 已暂停。" };
       viewRef.current = next; setRun(next);
       if (current.pending) markStep(current.pending.id, "paused");
       // The client stops immediately, even while the model is still responding.
@@ -236,7 +236,7 @@ export function AppAssistant({ rootRef, configured, voiceEnabled = false, openSi
   }, [run, busy, rootRef, receive, pause, ask, markStep, controlledPage, onShowBankPage]);
 
   const send = async (text = input) => {
-    // 讨论一条动态时，帖子原文作为上下文随消息发出；空输入也可以直接请助手展开。
+    // 讨论一条动态时，帖子原文作为上下文随消息发出；空输入也可以直接请 Blank 展开。
     const typed = text.trim() || (quote ? "展开说说这条动态" : "");
     const quoted = quote && typed ? quote : null;
     const message = quoted ? `【引用动态】${quoted.text}\n\n${typed}`.slice(0, 1000) : typed;
@@ -262,7 +262,7 @@ export function AppAssistant({ rootRef, configured, voiceEnabled = false, openSi
         setPageName(page.name);
         await receive(await ask({ command: "start", message, page }));
       }
-    } catch (reason) { setError(reason instanceof DOMException && reason.name === "AbortError" ? "已停止生成。" : reason instanceof Error ? reason.message : "助手未能启动"); }
+    } catch (reason) { setError(reason instanceof DOMException && reason.name === "AbortError" ? "已停止生成。" : reason instanceof Error ? reason.message : "Blank 未能启动"); }
     finally { setBusy(false); }
   };
   const continueRun = async () => {
@@ -316,8 +316,8 @@ export function AppAssistant({ rootRef, configured, voiceEnabled = false, openSi
     : busy ? run?.message ?? "正在理解需求" : run?.message ?? "";
 
   const conversation = open || (controlledPage && pageHost) ? (
-    <section className={`${styles.panel} ${presentation === "page" ? styles.pagePanel : ""}`} role={presentation === "page" ? "region" : "dialog"} aria-modal={presentation === "page" ? undefined : "false"} data-agent-overlay aria-label={presentation === "page" ? "AI 助手会话" : "BankPilot 悬浮助手"}>
-      <header><span><AssistantMark size={19} /><b>{presentation === "page" ? "AI 助手" : "BankPilot"}</b></span>{presentation === "floating" && <><button onClick={closeConversation} aria-label="收起助手"><ChevronDown size={21} /></button><button onClick={closeConversation} aria-label="关闭助手面板"><X size={19} /></button></>}</header>
+    <section className={`${styles.panel} ${presentation === "page" ? styles.pagePanel : ""}`} role={presentation === "page" ? "region" : "dialog"} aria-modal={presentation === "page" ? undefined : "false"} data-agent-overlay aria-label={presentation === "page" ? "Blank 会话" : "Blank 悬浮窗"}>
+      <header><span><AssistantMark size={19} /><b>Blank</b></span>{presentation === "floating" && <><button onClick={closeConversation} aria-label="收起 Blank"><ChevronDown size={21} /></button><button onClick={closeConversation} aria-label="关闭 Blank 面板"><X size={19} /></button></>}</header>
       {voiceOpen ? <VoiceCall voice={voice} close={() => { voice.stop(); setVoiceOpen(false); }} continueTask={message => { voice.stop(); setVoiceOpen(false); void send(message); }} /> : <>
       {presentation !== "page" && <p className={styles.context}>已共享：{pageName} · 密码和验证码不共享</p>}
       <div className={styles.messages} onScroll={event => { const node = event.currentTarget; followOutput.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80; }}>
@@ -331,20 +331,20 @@ export function AppAssistant({ rootRef, configured, voiceEnabled = false, openSi
         {(run?.status === "PAUSED" || run?.status === "HANDOFF") && !question && <div className={styles.controls}><button disabled={busy} onClick={continueRun}>{run.controlGranted ? "继续 · 重新读取页面" : run.status === "HANDOFF" ? "我已操作 · 查看页面" : "允许代操作"}</button><button disabled={busy} onClick={cancel}>结束</button></div>}
         {busy && !draft?.text && <p role="status" className={styles.progress}>正在处理…</p>}
         {error && <p role="alert" className={styles.error}>{error}</p>}
-        {!configured && <p className={styles.error}>助手模型暂不可用；仍可输入明确的偏好管理指令，或通过页面办理业务。</p>}
+        {!configured && <p className={styles.error}>Blank 模型暂不可用；仍可输入明确的偏好管理指令，或通过页面办理业务。</p>}
         <div ref={historyEnd} />
       </div>
       {quote && <div className={styles.quoteBar} aria-label="正在引用的动态"><span><small>引用动态</small>{quote.title}</span><button type="button" onClick={onQuoteClear} aria-label="取消引用"><X size={16} /></button></div>}
-      <form onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}><input ref={answerInput} aria-label={presentation === "page" ? "向 AI 助手描述需求或回答问题" : "向悬浮助手描述需求或回答问题"} placeholder={question ? "选择选项，或直接输入…" : quote ? "聊聊这条动态，或直接发送…" : "描述你想办理的业务…"} value={input} onChange={(event) => setInput(event.target.value)} maxLength={1000} />{voiceEnabled && <button type="button" className={styles.micButton} aria-label="开始语音通话" disabled={busy || active} onClick={() => { pause(); setVoiceOpen(true); void voice.start(); }}><Phone size={18} /></button>}{generating ? <button type="button" aria-label="停止生成" onClick={() => activeRequest.current?.abort()}><Square size={17} /></button> : <button aria-label={presentation === "page" ? "发送给 AI 助手" : "发送给悬浮助手"} disabled={(!configured && !parsePreferenceCommand(input)) || busy || (!input.trim() && !quote)}><Send size={18} /></button>}</form>
+      <form onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}><input ref={answerInput} aria-label={presentation === "page" ? "向 Blank 描述需求或回答问题" : "向 Blank 悬浮窗描述需求或回答问题"} placeholder={question ? "选择选项，或直接输入…" : quote ? "聊聊这条动态，或直接发送…" : "描述你想办理的业务…"} value={input} onChange={(event) => setInput(event.target.value)} maxLength={1000} />{voiceEnabled && <button type="button" className={styles.micButton} aria-label="开始语音通话" disabled={busy || active} onClick={() => { pause(); setVoiceOpen(true); void voice.start(); }}><Phone size={18} /></button>}{generating ? <button type="button" aria-label="停止生成" onClick={() => activeRequest.current?.abort()}><Square size={17} /></button> : <button aria-label={presentation === "page" ? "发送给 Blank" : "发送给 Blank 悬浮窗"} disabled={(!configured && !parsePreferenceCommand(input)) || busy || (!input.trim() && !quote)}><Send size={18} /></button>}</form>
       </>}
     </section>
   ) : null;
   return <><div className={`${styles.root} ${presentation === "page" ? styles.pageRoot : ""}`} data-agent-overlay>
-    {/* 助手的手和用户的手是同一种形状：画布上的一个圆形触点。 */}
-    {motion && <div className={styles.cursor} data-phase={motion.phase} style={{ left: motion.x, top: motion.y }} aria-hidden="true"><span>{motion.phase === "typing" ? "正在填写" : motion.phase === "clicking" ? "点击" : "BankPilot"}</span></div>}
+    {/* Blank 的手和用户的手是同一种形状：画布上的一个圆形触点。 */}
+    {motion && <div className={styles.cursor} data-phase={motion.phase} style={{ left: motion.x, top: motion.y }} aria-hidden="true"><span>{motion.phase === "typing" ? "正在填写" : motion.phase === "clicking" ? "点击" : "Blank"}</span></div>}
     {/* 只在 agent 真的有事要报告时出现；平时首页的 AI 入口是底部导航那一个 */}
     {!open && active && <div className={styles.floating}>
-      <button className={styles.trigger} onClick={expand} aria-label={presentation === "page" ? "查看 AI 助手会话" : "打开悬浮助手"}><AssistantMark size={18} /><span><b>{run?.status === "PAUSED" ? "已暂停" : run?.status === "HANDOFF" ? "请你确认" : "助手正在操作"}</b><small>{status}</small></span></button>
+      <button className={styles.trigger} onClick={expand} aria-label={presentation === "page" ? "查看 Blank 会话" : "打开 Blank 悬浮窗"}><AssistantMark size={18} /><span><b>{run?.status === "PAUSED" ? "已暂停" : run?.status === "HANDOFF" ? "请你确认" : "Blank 正在操作"}</b><small>{status}</small></span></button>
       {run?.status === "PAUSED" || run?.status === "HANDOFF" ? <button onClick={continueRun} disabled={busy} aria-label="继续代操作"><Play size={17} /></button> : run?.controlGranted && run.status === "ACTION" ? <button onClick={pause} aria-label="暂停代操作"><Pause size={17} /></button> : null}
       <button onClick={cancel} aria-label="结束代操作"><Square size={15} /></button>
     </div>}

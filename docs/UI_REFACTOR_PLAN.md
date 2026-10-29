@@ -1,4 +1,4 @@
-# BankPilot UI 重构：方案与实施结果
+# Blank UI 重构：方案与实施结果
 
 基线：`main / a220ee5`，2026-10-13。规范：JungUI 设计规范（本地技能库 `JungUI/skills/jungui/SKILL.md`，不在本仓库内）。
 

@@ -138,7 +138,7 @@ export async function tickScheduledTasks() {
           // Send a generic notice; financial details and custom reminder text stay in APP.
           await client.query(`INSERT INTO channel_outbox(channel_identity_id,customer_id,channel_type,dedupe_key,payload)
             VALUES($1,$2,$3,$4,$5::jsonb) ON CONFLICT(dedupe_key) DO NOTHING`,
-          [identity.id, task.customer_id, identity.channel_type, `schedule:${run.rows[0].id}`, JSON.stringify({ message: "BankPilot：你设置的定时任务已有新结果，请打开银行 APP 的「定时任务」查看。" })]);
+          [identity.id, task.customer_id, identity.channel_type, `schedule:${run.rows[0].id}`, JSON.stringify({ message: "Blank：你设置的定时任务已有新结果，请打开银行 APP 的「定时任务」查看。" })]);
         }
         const next = nextOccurrence(task.starts_at, task.frequency, now);
         const finished = !next || !!task.ends_at && next > task.ends_at;

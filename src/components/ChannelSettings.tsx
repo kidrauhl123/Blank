@@ -101,8 +101,8 @@ export function ChannelSettings() {
   };
 
   return <main className={styles.stage}><section className={styles.panel}>
-    <header><Link href="/"><ArrowLeft size={18} /> 返回</Link><div><span>B</span><b>BankPilot</b></div></header>
-    <div className={styles.heading}><h1>在聊天里办银行的事。</h1><span>添加 BankPilot 官方机器人，绑定你的银行账户后即可开始对话。</span></div>
+    <header><Link href="/"><ArrowLeft size={18} /> 返回</Link><div><span>B</span><b>Blank</b></div></header>
+    <div className={styles.heading}><h1>在聊天里办银行的事。</h1><span>添加 Blank 官方机器人，绑定你的银行账户后即可开始对话。</span></div>
     {error && <div className={styles.error} role="alert">{error}<button onClick={() => void load()} aria-label="刷新连接状态"><RefreshCw size={18} /></button></div>}
     {notice && <p className={styles.waiting} role="status">{notice}</p>}
     {loading ? <p className={styles.empty}>正在读取连接…</p> : signedOut ? <div className={styles.guide}>

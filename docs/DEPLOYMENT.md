@@ -36,7 +36,6 @@ AI 变量为空时，银行基础功能正常工作，内置助手明确显示�
 
 每日 AI 巡检还需要 `023_daily_ai_reviews.sql`、APP 私有环境中的 `TYPESAFE_API_KEY` 及现有主模型配置，迁移后重建 APP 并启动 scheduler。密钥不进入 Git 或源码同步；自动发布会在远端备份完成后，将本地私有配置中指定的 Jev 变量通过 SSH 标准输入安装到远端私有环境文件。2026-10-25 已发布，见 [每日巡检](DAILY_AI_REVIEWS.md)。
 
-首页主动关注及录制支持还需 `024_review_recording_support.sql`，发布检查已纳入，2026-10-25 已发布。录屏流程见 [视频录制](DEMO_VIDEO.md)；本次发布未录制视频。
 
 含授权补强的版本必须应用 `019_authorization_hardening.sql` 后启动新版。迁移会取消升级前未完成的转账草稿及对应挑战/任务，保留资金和历史回执；已有 TOTP 用户可能需等待最多约 60 秒使用新的动态码。先在隔离 PostgreSQL 上通过全部回归，细节见 [授权补强与验证范围](AUTHORIZATION_HARDENING.md)。
 

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { QqBinding } from "@/components/WecomBinding";
 
 export const metadata: Metadata = {
-  title: "绑定 QQ — BankPilot",
+  title: "绑定 QQ — Blank",
   robots: { index: false, follow: false },
   referrer: "no-referrer",
 };

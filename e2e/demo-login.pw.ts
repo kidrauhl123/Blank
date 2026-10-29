@@ -5,7 +5,7 @@ test.skip(process.env.BANKPILOT_DEMO_E2E !== "1", "Requires an opt-in demo serve
 
 test("one showcase entry enters the real account and re-entry never carries an Agent run", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "欢迎体验 BankPilot" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "欢迎体验 Blank" })).toBeVisible();
   // 只有一个体验入口；其他几位是小土豆的朋友，不再出现在登录页。
   await expect(page.getByRole("button", { name: /^以.*进入$/ })).toHaveCount(1);
   await expect(page.getByRole("textbox")).toHaveCount(0);
@@ -13,7 +13,7 @@ test("one showcase entry enters the real account and re-entry never carries an A
   const identities = new Set<string>();
   for (let round = 0; round < 2; round++) {
     await page.getByRole("button", { name: "以小土豆进入" }).click();
-    await expect(page.getByRole("button", { name: "AI 助手", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Blank", exact: true })).toBeVisible();
     const overview = await (await page.request.get("/api/bootstrap")).json();
     expect(overview.customer.display_name).toBe("小土豆");
     expect(overview.totalMinor).toBeGreaterThan(0);
@@ -25,7 +25,7 @@ test("one showcase entry enters the real account and re-entry never carries an A
     await page.getByRole("button", { name: "个人中心" }).click();
     await expect(page.getByRole("heading", { name: "小土豆", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "退出体验" }).click();
-    await expect(page.getByRole("heading", { name: "欢迎体验 BankPilot" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "欢迎体验 Blank" })).toBeVisible();
     expect(await page.evaluate(() => sessionStorage.getItem("bankpilot-app-agent-run"))).toBeNull();
   }
   expect(identities.size).toBe(1);

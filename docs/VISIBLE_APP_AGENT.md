@@ -10,10 +10,10 @@
 | --- | --- |
 | 工具调用循环、上下文整理、Skills 发现与按需读取 | Deep Agents 官方 SDK |
 | checkpoint、interrupt / resume | LangGraph / PostgresSaver |
-| 当前页面快照、脱敏和注册控件 | BankPilot 页面适配 |
-| 真实页面导航、逐字填表、助手光标、动作高亮和步骤条 | BankPilot React 页面与客户端执行器 |
-| 用户许可、干预暂停、恢复重新观察 | BankPilot 控制权协议 |
-| 会话归属、同源校验、步数与调用上限、审计 | BankPilot 服务端 |
+| 当前页面快照、脱敏和注册控件 | Blank 页面适配 |
+| 真实页面导航、逐字填表、助手光标、动作高亮和步骤条 | Blank React 页面与客户端执行器 |
+| 用户许可、干预暂停、恢复重新观察 | Blank 控制权协议 |
+| 会话归属、同源校验、步数与调用上限、审计 | Blank 服务端 |
 | 金额、权限等级、草稿、最终确认、强验证和记账 | 现有 Bank Core；已知缺陷见 ROADMAP |
 
 Codex 可以复用：官方提供开源 CLI、SDK、app-server，app-server 面向嵌入其他产品的会话、事件流、中断与工具接入。Claude Agent SDK 也提供 Claude Code 的运行循环、上下文、权限与会话能力；公开的 Claude Code 仓库不是完整运行时的开源许可声明，其 LICENSE 使用商业条款。

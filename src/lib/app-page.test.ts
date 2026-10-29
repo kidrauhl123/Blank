@@ -12,7 +12,7 @@ beforeEach(() => {
     <input type="password" data-agent-id="password" data-agent-permission="fill" value="secret-password">
     <input autocomplete="one-time-code" data-agent-id="otp" data-agent-permission="fill" value="654321">
     <p data-agent-private>private-account-number</p>
-    <section data-agent-overlay role="dialog"><p>助手回复，不能污染页面</p><button data-agent-id="agent-button" data-agent-permission="navigate">助手按钮</button></section>
+    <section data-agent-overlay role="dialog"><p>Blank 回复，不能污染页面</p><button data-agent-id="agent-button" data-agent-permission="navigate">Blank 按钮</button></section>
   </main>`;
 });
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
@@ -22,7 +22,7 @@ describe("visible page boundary", () => {
     const page = captureAppPage(document.querySelector("main")!);
     expect(page.name).toBe("首页");
     expect(page.controls.map((item) => item.id)).toEqual(["nav", "confirm", "note"]);
-    expect(JSON.stringify(page)).not.toMatch(/secret-password|654321|private-account-number|助手回复/);
+    expect(JSON.stringify(page)).not.toMatch(/secret-password|654321|private-account-number|Blank 回复/);
   });
   it("refuses to click a bank authorization button even if the model asks", async () => {
     const root = document.querySelector("main")!;

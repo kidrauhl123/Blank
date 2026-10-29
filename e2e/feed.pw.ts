@@ -55,10 +55,10 @@ test("feed posts take a reaction and open a quoted discussion without touching t
   await expect(feed.getByRole("article", { name: "下个月的订阅总账" })).toHaveCount(0);
 
   await anomaly.getByRole("button", { name: "讨论" }).click();
-  const conversation = page.getByRole("region", { name: "AI 助手会话" });
+  const conversation = page.getByRole("region", { name: "Blank 会话" });
   await expect(conversation.getByLabel("正在引用的动态")).toContainText("这笔 ¥3,999 和你平时不太一样");
-  await conversation.getByRole("textbox", { name: "向 AI 助手描述需求或回答问题" }).fill("这是哪里的消费？");
-  await conversation.getByRole("button", { name: "发送给 AI 助手" }).click();
+  await conversation.getByRole("textbox", { name: "向 Blank 描述需求或回答问题" }).fill("这是哪里的消费？");
+  await conversation.getByRole("button", { name: "发送给 Blank" }).click();
   await expect(conversation).toContainText("这笔消费发生在昨天。");
   expect(started).toMatchObject({ command: "start" });
   expect(String(started?.message)).toMatch(/^【引用动态】这笔 ¥3,999 和你平时不太一样。[\s\S]*这是哪里的消费？$/);
@@ -84,17 +84,17 @@ test("a card designed in chat renders as a live preview, then shows as added", a
     await route.fulfill({ json: { id: `00000000-0000-4000-8000-00000000000${replies.length + 4}`, status: "COMPLETED", pending: null, controlGranted: false, steps: 0, message } });
   });
   await page.goto("/");
-  await page.getByRole("navigation", { name: "主导航" }).getByRole("button", { name: "AI 助手" }).click();
-  const conversation = page.getByRole("region", { name: "AI 助手会话" });
-  const input = conversation.getByRole("textbox", { name: "向 AI 助手描述需求或回答问题" });
+  await page.getByRole("navigation", { name: "主导航" }).getByRole("button", { name: "Blank" }).click();
+  const conversation = page.getByRole("region", { name: "Blank 会话" });
+  const input = conversation.getByRole("textbox", { name: "向 Blank 描述需求或回答问题" });
   await input.fill("每周一帮我做张卡，看看咖啡花了多少");
-  await conversation.getByRole("button", { name: "发送给 AI 助手" }).click();
+  await conversation.getByRole("button", { name: "发送给 Blank" }).click();
   const card = conversation.getByRole("article", { name: `卡片预览：${preview.title}` });
   await expect(card).toContainText("3 笔");
   await expect(card).toContainText("漫拿咖啡");
   await expect(card).toContainText("说“好”就加入动态");
   await expect(conversation).not.toContainText("[[card:");
   await input.fill("好");
-  await conversation.getByRole("button", { name: "发送给 AI 助手" }).click();
+  await conversation.getByRole("button", { name: "发送给 Blank" }).click();
   await expect(conversation.getByText("已加入你的动态")).toBeVisible();
 });

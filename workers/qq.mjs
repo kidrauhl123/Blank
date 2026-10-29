@@ -77,14 +77,14 @@ function renderReply(result) {
   if (result.status === "BINDING_REQUIRED") return `${result.message}\n\n安全绑定：${result.bindUrl}`;
   if (result.status === "DUPLICATE") return "这条消息已经处理过了。";
   if (result.status === "AUTHORIZATION_REQUIRED" && result.authorizeUrl) {
-    return `${result.reply.message}\n\n回到 BankPilot 完成强验证：${result.authorizeUrl}`;
+    return `${result.reply.message}\n\n回到 Blank 完成强验证：${result.authorizeUrl}`;
   }
   return result.reply?.message ?? "请求没有完成，请稍后重试。";
 }
 
 bot.on("message", async (_ctx, message) => {
   if (message.kind !== "c2c") {
-    await bot.sendText(message.replyTarget, "为保护账户和交易隐私，银行业务仅支持与 BankPilot QQ 机器人私聊办理。");
+    await bot.sendText(message.replyTarget, "为保护账户和交易隐私，银行业务仅支持与 Blank QQ 机器人私聊办理。");
     return;
   }
   try {
@@ -129,14 +129,14 @@ bot.on("interaction", async (_ctx, event) => {
     if (result.status === "MFA_REQUIRED") {
       await bot.sendText(
         { scope: "c2c", targetId: subjectExternalId },
-        `${result.message}\n\n打开 BankPilot 强验证：${result.authorizeUrl}`,
+        `${result.message}\n\n打开 Blank 强验证：${result.authorizeUrl}`,
       );
     }
   } catch (error) {
     console.error("[qq] action processing failed", error instanceof Error ? error.message : "UNKNOWN");
     await bot.sendText(
       { scope: "c2c", targetId: subjectExternalId },
-      "操作没有完成。请回到 BankPilot 核对状态后重试。",
+      "操作没有完成。请回到 Blank 核对状态后重试。",
     );
   }
 });

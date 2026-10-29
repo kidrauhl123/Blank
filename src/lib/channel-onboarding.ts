@@ -27,7 +27,7 @@ export function channelSetups(env: Record<string, string | undefined> = process.
     return {
       channelType,
       name: channelType === "QQ" ? "QQ" : "企业微信",
-      botName: env[`${channelType}_BOT_NAME`]?.trim().slice(0, 60) || "BankPilot",
+      botName: env[`${channelType}_BOT_NAME`]?.trim().slice(0, 60) || "Blank",
       entryUrl: configured ? entryUrl : null,
       canStart: configured && !!entryUrl,
       unavailableReason: !configured ? "机器人服务尚未开通，请等待管理员开放。" : !entryUrl ? "管理员尚未提供机器人添加入口，暂时不能开始绑定。" : null,

@@ -64,7 +64,7 @@ export function FeedPanel({ owner, onDiscuss, pinned, refresh = 0 }: { owner: st
   };
 
   return <section className={styles.feed} aria-label="动态">
-    <div className={styles.head}><h1>动态</h1><span>BankPilot 根据你的账户整理</span></div>
+    <div className={styles.head}><h1>动态</h1><span>Blank 根据你的账户整理</span></div>
     {pinned}
     {failed ? <p className={styles.empty}>动态暂时无法读取，稍后再来看看。</p>
       : posts === null ? <p className={styles.empty} aria-busy="true">正在整理…</p>

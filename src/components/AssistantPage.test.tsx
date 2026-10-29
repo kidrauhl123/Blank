@@ -21,7 +21,7 @@ afterEach(async () => { await act(async () => root.unmount()); container.remove(
 describe("bottom navigation assistant page", () => {
   it("opens a conversation region without automatically starting a task", async () => {
     await render(1);
-    expect(container.querySelector('[role="region"][aria-label="AI 助手会话"]')).not.toBeNull();
+    expect(container.querySelector('[role="region"][aria-label="Blank 会话"]')).not.toBeNull();
     expect(container.querySelector('[role="dialog"]')).toBeNull();
     expect(container.querySelector('[aria-label="返回银行页面"]')).toBeNull();
     expect(request).not.toHaveBeenCalled();
@@ -33,7 +33,7 @@ describe("bottom navigation assistant page", () => {
     expect(request).toHaveBeenCalledOnce();
     expect(container.textContent).toContain("已读取银行页面，请核对回执。");
     await render(1, 1);
-    expect(container.querySelector('[aria-label="AI 助手会话"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Blank 会话"]')).toBeNull();
     await render(2, 1);
     expect(container.textContent).toContain("查一下我的余额");
     expect(container.textContent).toContain("已读取银行页面，请核对回执。");

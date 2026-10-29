@@ -225,8 +225,8 @@ export async function beginTotpSetup(customerId: string) {
     );
     if (!setup.rows.length) throw new AuthError("MFA_ALREADY_CONFIGURED", 409);
   });
-  const label = encodeURIComponent(`BankPilot:${identity.rows[0].phone}`);
-  const uri = `otpauth://totp/${label}?secret=${secret}&issuer=BankPilot&algorithm=SHA1&digits=6&period=30`;
+  const label = encodeURIComponent(`Blank:${identity.rows[0].phone}`);
+  const uri = `otpauth://totp/${label}?secret=${secret}&issuer=Blank&algorithm=SHA1&digits=6&period=30`;
   return { secret, uri };
 }
 

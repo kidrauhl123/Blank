@@ -70,7 +70,7 @@ export function ChannelBinding({ channelType }: { channelType: "WECOM" | "QQ" })
   if (state === "SIGNED_OUT") return <AuthScreen heading={`登录以连接${channelName}`} description="登录后会回到确认页面，核对账户再完成绑定。" onAuthenticated={() => checkSession()} />;
 
   return <main className={styles.stage}><section className={styles.panel} aria-live="polite">
-    <header className={styles.brand}><span>B</span> BankPilot</header>
+    <header className={styles.brand}><span>B</span> Blank</header>
     <div className={styles.identityBridge} aria-hidden="true">
       <div className={styles.identity}><span className={isQq ? styles.qqMark : undefined}><Image src={isQq ? "/brands/qq.svg" : "/brands/wecom.svg"} alt="" width={isQq ? 34 : 38} height={34} /></span><small>{channelName}</small></div>
       <div className={styles.bridge}><i /><Link2 size={17} /><i /></div>
@@ -78,7 +78,7 @@ export function ChannelBinding({ channelType }: { channelType: "WECOM" | "QQ" })
     </div>
     <p className={styles.eyebrow}>安全连接</p>
     <h1>{state === "DONE" ? "已经连接" : state === "ERROR" ? "还未完成连接" : "确认你的账户"}</h1>
-    <p className={styles.explanation}>{state === "LOADING" ? "正在读取当前银行账户…" : state === "BINDING" ? "正在连接，请稍候…" : state === "DONE" ? `回到${channelName}的机器人私聊，发送“查余额”即可开始使用。` : state === "ERROR" ? actionMessage || `请先在${channelName}机器人私聊中发送“绑定”，再打开它回复的链接。` : `将你当前的${channelName}身份连接到以下 BankPilot 账户。`}</p>
+    <p className={styles.explanation}>{state === "LOADING" ? "正在读取当前银行账户…" : state === "BINDING" ? "正在连接，请稍候…" : state === "DONE" ? `回到${channelName}的机器人私聊，发送“查余额”即可开始使用。` : state === "ERROR" ? actionMessage || `请先在${channelName}机器人私聊中发送“绑定”，再打开它回复的链接。` : `将你当前的${channelName}身份连接到以下 Blank 账户。`}</p>
     {state === "READY" && customer && <div className={styles.account}><b>{customer.display_name}</b><span>{customer.phone.slice(0, 3)}****{customer.phone.slice(-4)}</span></div>}
     {state !== "DONE" && <div className={styles.securityLine}><LockKeyhole size={15} /><span>仅确认本人发起的绑定 · 链接 10 分钟有效</span></div>}
     {state === "READY" && <button className={styles.primary} onClick={bind}>确认连接 <ArrowRight size={16} /></button>}

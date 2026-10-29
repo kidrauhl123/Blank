@@ -19,7 +19,7 @@ describe("visible app-agent timeline", () => {
 
   it("marks an assistant completion as a conversation end rather than a bank receipt", () => {
     const event = mapAppAgentTimeline([row("APP_AGENT_STEP", { status: "COMPLETED" })])[0];
-    expect(event.title).toBe("助手本轮结束");
+    expect(event.title).toBe("Blank 本轮结束");
     expect(event.detail).toContain("不代表银行业务已执行");
   });
 });

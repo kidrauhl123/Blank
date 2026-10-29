@@ -48,7 +48,7 @@ function productView(row: ProductRow, day: string): InvestmentProduct {
     kind: rules.kind, riskLevel: row.risk_level, minimumMinor: integer(row.minimum_purchase_minor),
     holdingDays: rules.holdingDays, purchaseFeeBps: rules.purchaseFeeBps, redemptionFeeBps: rules.redemptionFeeBps,
     status: row.status, navMicros, change30DaysPercent: (navMicros / history[0].navMicros - 1) * 100,
-    history, simulated: true, source: "BankPilot 产品及净值场景 v1" };
+    history, simulated: true, source: "Blank 产品及净值场景 v1" };
 }
 
 export async function listInvestmentProducts(customerId: string, filters: InvestmentFilters = {}, dayOverride?: string) {

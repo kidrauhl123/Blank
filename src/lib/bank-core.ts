@@ -155,7 +155,7 @@ export async function prepareTransfer(customerId: string, input: { fromAccountId
       recipientMasked: recipient.masked_no, amountMinor: input.amountMinor, currency: "CNY", note: input.note ?? null, expiresAt });
     const beneficiary = await client.query<{ id: string }>(
       `INSERT INTO beneficiaries (customer_id,name,phone,bank_name,masked_account,settlement_account_id,recipient_customer_id,trusted)
-       VALUES ($1,$2,$3,'BankPilot',$4,$5,$6,false)
+       VALUES ($1,$2,$3,'Blank',$4,$5,$6,false)
        ON CONFLICT (customer_id,settlement_account_id) DO UPDATE SET name=excluded.name,phone=excluded.phone,masked_account=excluded.masked_account,recipient_customer_id=excluded.recipient_customer_id
        RETURNING id`,
       [customerId, recipient.display_name, recipient.phone, recipient.masked_no, recipient.account_id, recipient.customer_id],
@@ -316,13 +316,13 @@ export async function commitTransfer(customerId: string, operationId: string, in
     await client.query(
       `INSERT INTO bank_transactions (account_id,merchant_name,category,amount_minor,occurred_at,metadata)
        VALUES ($1,$2,'转账',$3,$8,$4::jsonb),($5,$6,'转账',$7,$8,$4::jsonb)`,
-      [row.from_account_id, `转账给${row.beneficiary_name}`, -Number(row.amount_minor), JSON.stringify({ operationId, ledgerReference: ledger.rows[0].reference }), row.target_account_id, "来自 BankPilot 用户的转账", Number(row.amount_minor), postingAt],
+      [row.from_account_id, `转账给${row.beneficiary_name}`, -Number(row.amount_minor), JSON.stringify({ operationId, ledgerReference: ledger.rows[0].reference }), row.target_account_id, "来自 Blank 用户的转账", Number(row.amount_minor), postingAt],
     );
     await client.query("UPDATE transfers SET status='SUCCEEDED',executed_at=$2,version=version+1 WHERE id=$1", [row.id, postingAt]);
     if (input.taskId) await client.query("UPDATE agent_tasks SET status='SUCCEEDED',updated_at=now() WHERE id=$1 AND customer_id=$2", [input.taskId, customerId]);
     await writeAudit({ customerId, eventType: "TRANSFER_SUCCEEDED", actorType: "BANK_CORE", summary: "核心账本完成客户间双分录转账", operationId, evidence: { ledgerReference: ledger.rows[0].reference, authorizationFingerprint: row.authorization_fingerprint, balancedEntries: true } }, client);
     if (row.recipient_customer_id) {
-      await writeAudit({ customerId: row.recipient_customer_id, eventType: "TRANSFER_RECEIVED", actorType: "BANK_CORE", summary: "收到 BankPilot 客户转账", operationId, evidence: { ledgerReference: ledger.rows[0].reference, amountMinor: Number(row.amount_minor) } }, client);
+      await writeAudit({ customerId: row.recipient_customer_id, eventType: "TRANSFER_RECEIVED", actorType: "BANK_CORE", summary: "收到 Blank 客户转账", operationId, evidence: { ledgerReference: ledger.rows[0].reference, amountMinor: Number(row.amount_minor) } }, client);
     }
     return { operationId, status: "SUCCEEDED", receipt: ledger.rows[0], amountMinor: Number(row.amount_minor), beneficiary: row.beneficiary_name };
   });

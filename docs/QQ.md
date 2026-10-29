@@ -2,7 +2,7 @@
 
 ## 形态
 
-BankPilot 使用腾讯官方 `@tencent-connect/qqbot-nodejs` SDK 连接 QQ 开放平台 WebSocket Gateway。`workers/qq.mjs` 是无状态适配器：它只收发 QQ 消息并调用 BankPilot 内部 API，不连接数据库，也不能跳过 Bank Core。
+Blank 使用腾讯官方 `@tencent-connect/qqbot-nodejs` SDK 连接 QQ 开放平台 WebSocket Gateway。`workers/qq.mjs` 是无状态适配器：它只收发 QQ 消息并调用 Blank 内部 API，不连接数据库，也不能跳过 Bank Core。
 
 ```text
 QQ 私聊用户 ⇄ QQ Open Platform ⇄ qq worker ⇄ internal channel API ⇄ LangGraph / Bank Core
@@ -44,9 +44,9 @@ PWA 用户从 AI 助手中的“在 QQ / 企业微信中使用”或个人中心
 
 1. 群消息不进入 Agent，不查询账户，只提示用户私聊机器人。
 2. QQ 私聊首次消息生成 10 分钟一次性绑定链接；secret 位于 URL fragment，不进入服务器访问日志。
-3. 用户打开链接并登录 BankPilot，亲自确认绑定 QQ openid。
+3. 用户打开链接并登录 Blank，亲自确认绑定 QQ openid。
 4. 绿色查询直接回复；黄色操作显示 QQ 原生确认/取消按钮。
-5. 红色操作始终回 BankPilot 完成 TOTP，QQ 端不能代验。
+5. 红色操作始终回 Blank 完成 TOTP，QQ 端不能代验。
 6. 按钮点击者的 openid、task ID、operation ID 与原绑定身份必须全部匹配。
 7. 结果通过按渠道隔离的 outbox 投递，重启 Worker 后仍可补发。
 

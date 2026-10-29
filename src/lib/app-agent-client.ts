@@ -5,10 +5,10 @@ export async function requestAppAgent(body: Record<string, unknown>, onEvent?: (
   const response = await fetch("/api/agent/app", { method: "POST", headers: { "Content-Type": "application/json", Accept: onEvent ? "text/event-stream" : "application/json" }, body: JSON.stringify(body), signal });
   if (!response.ok || !response.headers.get("content-type")?.includes("text/event-stream")) {
     const result = await response.json();
-    if (!response.ok) throw new Error(result.message ?? "助手暂时不可用");
+    if (!response.ok) throw new Error(result.message ?? "Blank 暂时不可用");
     return result;
   }
-  if (!response.body) throw new Error("无法读取助手回复，请重试。");
+  if (!response.body) throw new Error("无法读取 Blank 回复，请重试。");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "", result: AppAgentView | undefined;

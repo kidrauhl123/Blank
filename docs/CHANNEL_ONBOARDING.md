@@ -31,9 +31,9 @@ platform profile into the deployment-only `deploy/.env.production`:
 
 ```env
 QQ_BOT_ENTRY_URL=
-QQ_BOT_NAME=BankPilot
+QQ_BOT_NAME=Blank
 WECOM_BOT_ENTRY_URL=
-WECOM_BOT_NAME=BankPilot
+WECOM_BOT_NAME=Blank
 ```
 
 Do not use the QQ developer login page as a bot link. The URL must lead to the
