@@ -24,3 +24,6 @@
 .warning { color: var(--warning-ink); }
 .page :disabled { opacity: .5; }
 .result { white-space: pre-line; }
+
+.examples { margin: var(--space-2) 0 var(--space-3); padding-left: var(--space-5); display: grid; gap: var(--space-1); font-size: var(--text-sm); line-height: 1.6; }
+a.primary { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; min-height: var(--control-height); border-radius: var(--radius-control); font-weight: 650; }

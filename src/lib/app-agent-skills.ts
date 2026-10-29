@@ -15,6 +15,18 @@ description: 查询余额、分析完整月度账单、分类支出、异常记�
 产品比较用 search_investment_products；不编造产品、收益或交易结果。建议引用实际分类金额和占比，不能声称已保存预算或执行交易。
 `,
   "bank-daily-review": DAILY_REVIEW_SKILL,
+  "bank-schedules": `---
+name: bank-schedules
+description: 在对话里创建、查看、暂停、恢复或取消定时任务：提醒、月度账单报告、订阅到期检查、每日巡检。
+---
+# 定时任务
+用户说“每月 5 号提醒我还信用卡”“下周五早上 9 点提醒我给妈妈买礼物”“每月初给我一份上个月的账单”“每天帮我看看账户有没有异常”时，用 preview_schedule 设计一个任务。系统会给出 CURRENT_TIME（北京时间），按它推算“明天”“下周五”“月底”，把第一次执行的日期写成 YYYY-MM-DD、钟点写成 HH:mm。用户没说钟点时提醒用 09:00。
+- kind：REMINDER 提醒（message 必填，写清要提醒什么）；MONTHLY_REPORT 上个月账单报告（固定每月）；SUBSCRIPTION_CHECK 检查未来 3 天的订阅扣费；DAILY_AI_REVIEW 每日巡检（固定每天，只有账户有变化才会发）。
+- frequency：ONCE 一次、DAILY 每天、WEEKLY 每周（沿用第一次的星期）、MONTHLY 每月（沿用第一次的日期，短月在月末）。lastDate 选填，写“做到什么时候为止”。
+- 如果缺少关键信息（提醒什么、哪一天），先用 ask_user 问，不要猜日期。
+每次请求只调用一次 preview_schedule；时间已过等错误会随工具结果返回，按提示改好再预览一次。预览成功后调用 ask_user：question 以工具返回的 marker（形如 [[schedule:…]]）开头并原样写出，用户会在对话里看到任务卡片；接着一句话说明做什么、何时执行，问题里不要写金额。options 用“创建任务”“再改改”“算了”。用户选创建后才调用 save_schedule；想改就按新要求重新预览。
+任务的结果会发到用户的动态里，不需要也不能设置聊天渠道通知。查看用 list_schedules；暂停或恢复用 change_schedule；取消不可恢复，先用 ask_user 确认。任务只做提醒、读账和提示，不会转账、申购或扣款。
+`,
   "bank-feed-cards": `---
 name: bank-feed-cards
 description: 和用户一起设计、预览、保存、修改或删除首页动态里的自定义卡片（卡片配方）。

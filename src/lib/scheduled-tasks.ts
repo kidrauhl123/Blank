@@ -1,24 +1,27 @@
 import type { PoolClient } from "pg";
-import { query, withTransaction } from "./db";
+import { db, query, withTransaction } from "./db";
 import { writeAudit } from "./audit";
 import { getBankStatement } from "./bank-statements";
 import { nextOccurrence, previousStatementMonth, scheduleInput, type ScheduleInput } from "./schedule-time";
 import { processDailyReview } from "./scheduled-ai-reviews";
 import { getJevStatus } from "./jev";
 import { getAIStatus } from "./ai";
-import { publishDueFeeds } from "./feed-store";
+import { publishDueFeeds, publishScheduleResult } from "./feed-store";
 import { advanceShowcaseLife } from "./demo-life";
 
 export type ScheduledTask = {
   id: string; customer_id: string; kind: ScheduleInput["kind"]; title: string; message: string;
   frequency: ScheduleInput["frequency"]; timezone: string; starts_at: Date; ends_at: Date | null;
   next_run_at: Date; retry_at: Date | null; attempts: number;
-  status: "ACTIVE" | "PAUSED" | "CANCELLED" | "COMPLETED" | "ERROR";
-  channel_identity_id: string | null; last_error: string | null;
+  status: "DRAFT" | "ACTIVE" | "PAUSED" | "CANCELLED" | "COMPLETED" | "ERROR";
+  channel_identity_id: string | null; last_error: string | null; visitor_owner_id: string | null;
 };
+const KIND_SOURCE: Record<ScheduleInput["kind"], string> = { REMINDER: "提醒", MONTHLY_REPORT: "月度账单", SUBSCRIPTION_CHECK: "订阅检查", DAILY_AI_REVIEW: "每日巡检" };
 
-export async function createScheduledTask(customerId: string, raw: unknown) {
+// ownerId：对话里创建时是当前访客，只有他看得到、管得了；draft：先存成草稿，用户确认后再 activateScheduledDraft。
+export async function createScheduledTask(customerId: string, raw: unknown, options: { ownerId?: string | null; draft?: boolean } = {}) {
   const input = scheduleInput.parse(raw);
+  const ownerId = options.ownerId ?? null;
   return withTransaction(async client => {
     // Bound the number of tasks and serialize duplicate create requests per customer.
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`schedule-create:${customerId}`]);
@@ -28,22 +31,57 @@ export async function createScheduledTask(customerId: string, raw: unknown) {
     if (start <= new Date() || start.getUTCFullYear() > 2099) throw new Error("SCHEDULE_START_INVALID");
     const count = await client.query<{ count: number }>("SELECT count(*)::int AS count FROM scheduled_tasks WHERE customer_id=$1 AND status IN ('ACTIVE','PAUSED','ERROR')", [customerId]);
     if (count.rows[0].count >= 50) throw new Error("SCHEDULE_LIMIT");
+    // 访客自己没确认过的旧草稿一天后清掉。
+    if (options.draft && ownerId) await client.query("DELETE FROM scheduled_tasks WHERE customer_id=$1 AND visitor_owner_id=$2 AND status='DRAFT' AND created_at < now() - interval '1 day'", [customerId, ownerId]);
     if (input.channelIdentityId) {
       const channel = await client.query("SELECT id FROM channel_identities WHERE id=$1 AND customer_id=$2 AND status='ACTIVE' FOR SHARE", [input.channelIdentityId, customerId]);
       if (!channel.rowCount) throw new Error("CHANNEL_IDENTITY_NOT_FOUND");
     }
     const result = await client.query<ScheduledTask>(`INSERT INTO scheduled_tasks
-      (customer_id,request_key,kind,title,message,frequency,starts_at,ends_at,next_run_at,channel_identity_id)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$7,$9) RETURNING *`,
-    [customerId, input.requestKey, input.kind, input.title, input.message, input.frequency, start, input.endsAt, input.channelIdentityId]);
-    await writeAudit({ customerId, actorType: "USER", eventType: "SCHEDULE_CREATED", summary: "客户确认创建定时任务", evidence: { scheduleId: result.rows[0].id, kind: input.kind, frequency: input.frequency } }, client);
+      (customer_id,request_key,kind,title,message,frequency,starts_at,ends_at,next_run_at,channel_identity_id,visitor_owner_id,status)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$7,$9,$10,$11) RETURNING *`,
+    [customerId, input.requestKey, input.kind, input.title, input.message, input.frequency, start, input.endsAt, input.channelIdentityId, ownerId, options.draft ? "DRAFT" : "ACTIVE"]);
+    if (!options.draft) await writeAudit({ customerId, actorType: "USER", eventType: "SCHEDULE_CREATED", summary: "客户确认创建定时任务", evidence: { scheduleId: result.rows[0].id, kind: input.kind, frequency: input.frequency } }, client);
     return result.rows[0];
   });
 }
 
-export async function listScheduledTasks(customerId: string) {
+// 用户在对话里确认之后，草稿才开始生效。id 省略时取这位访客 30 分钟内最近的草稿（确认发生在新的对话里时）。
+export async function activateScheduledDraft(customerId: string, ownerId: string, id?: string) {
+  return withTransaction(async client => {
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`schedule-create:${customerId}`]);
+    const found = id
+      ? await client.query<ScheduledTask>("SELECT * FROM scheduled_tasks WHERE id=$1 AND customer_id=$2 AND visitor_owner_id=$3 AND status='DRAFT' FOR UPDATE", [id, customerId, ownerId])
+      : await client.query<ScheduledTask>("SELECT * FROM scheduled_tasks WHERE customer_id=$1 AND visitor_owner_id=$2 AND status='DRAFT' AND created_at > now() - interval '30 minutes' ORDER BY created_at DESC LIMIT 1 FOR UPDATE", [customerId, ownerId]);
+    const draft = found.rows[0];
+    if (!draft) throw new Error("SCHEDULE_NOT_FOUND");
+    if (draft.starts_at <= new Date()) throw new Error("SCHEDULE_START_INVALID");
+    const count = await client.query<{ count: number }>("SELECT count(*)::int AS count FROM scheduled_tasks WHERE customer_id=$1 AND status IN ('ACTIVE','PAUSED','ERROR')", [customerId]);
+    if (count.rows[0].count >= 50) throw new Error("SCHEDULE_LIMIT");
+    const result = await client.query<ScheduledTask>("UPDATE scheduled_tasks SET status='ACTIVE',updated_at=now() WHERE id=$1 RETURNING *", [draft.id]);
+    await writeAudit({ customerId, actorType: "USER", eventType: "SCHEDULE_CREATED", summary: "客户在对话里确认创建定时任务", evidence: { scheduleId: draft.id, kind: draft.kind, frequency: draft.frequency, via: "BLANK_CHAT" } }, client);
+    return result.rows[0];
+  });
+}
+
+export async function getOwnedSchedule(customerId: string, ownerId: string, id: string) {
+  const row = await query<ScheduledTask>("SELECT * FROM scheduled_tasks WHERE id=$1 AND customer_id=$2 AND visitor_owner_id=$3 AND status IN ('DRAFT','ACTIVE','PAUSED','ERROR')", [id, customerId, ownerId]);
+  return row.rows[0] ?? null;
+}
+
+// 预览里的样例：用当前账本现算一次，让用户知道这个任务会发来什么。
+export async function sampleScheduleResult(customerId: string, task: Pick<ScheduledTask, "kind" | "title" | "message">) {
+  if (task.kind === "DAILY_AI_REVIEW") return "每天先由 Jev 判断账户有没有需要关注的变化；有才请主模型从账本事实里挑出重点告诉你，没有就保持安静。只读，不会替你转账或下单。";
+  const client = await db.connect();
+  try {
+    const now = new Date();
+    return (await executeReadOnlyTask(client, { ...task, customer_id: customerId, next_run_at: now } as ScheduledTask, now)).summary;
+  } finally { client.release(); }
+}
+
+export async function listScheduledTasks(customerId: string, ownerId: string | null = null) {
   const [tasks, runs, heartbeat] = await Promise.all([
-    query<ScheduledTask>("SELECT * FROM scheduled_tasks WHERE customer_id=$1 ORDER BY (status IN ('ACTIVE','PAUSED','ERROR')) DESC,created_at DESC LIMIT 200", [customerId]),
+    query<ScheduledTask>("SELECT * FROM scheduled_tasks WHERE customer_id=$1 AND status<>'DRAFT' AND (visitor_owner_id IS NULL OR visitor_owner_id=$2) ORDER BY (status IN ('ACTIVE','PAUSED','ERROR')) DESC,created_at DESC LIMIT 200", [customerId, ownerId]),
     query(`SELECT r.*,t.title,
       CASE WHEN j.run_id IS NOT NULL THEN jsonb_build_object('status',j.status,'gate',j.gate,'result',j.result,'mainRequestedAt',j.main_requested_at,'error',j.last_error,
         'capturedAt',j.snapshot->>'capturedAt','facts',j.snapshot->'facts') END AS ai,
@@ -51,7 +89,7 @@ export async function listScheduledTasks(customerId: string) {
        WHERE o.dedupe_key='schedule:'||r.id::text) AS delivery
       FROM scheduled_task_runs r JOIN scheduled_tasks t ON t.id=r.schedule_id
       LEFT JOIN scheduled_ai_reviews j ON j.run_id=r.id
-      WHERE t.customer_id=$1 ORDER BY r.completed_at DESC LIMIT 50`, [customerId]),
+      WHERE t.customer_id=$1 AND t.status<>'DRAFT' AND (t.visitor_owner_id IS NULL OR t.visitor_owner_id=$2) ORDER BY r.completed_at DESC LIMIT 50`, [customerId, ownerId]),
     query<{ last_tick_at: Date }>("SELECT last_tick_at FROM scheduler_heartbeat WHERE id=1"),
   ]);
   const lastTick = heartbeat.rows[0]?.last_tick_at ?? null;
@@ -59,9 +97,9 @@ export async function listScheduledTasks(customerId: string) {
     dailyReview: { jev: getJevStatus(), mainModel: getAIStatus() } };
 }
 
-export async function changeScheduledTask(customerId: string, id: string, action: "pause" | "resume" | "cancel") {
+export async function changeScheduledTask(customerId: string, id: string, action: "pause" | "resume" | "cancel", ownerId: string | null = null) {
   return withTransaction(async client => {
-    const result = await client.query<ScheduledTask>("SELECT * FROM scheduled_tasks WHERE id=$1 AND customer_id=$2 FOR UPDATE", [id, customerId]);
+    const result = await client.query<ScheduledTask>("SELECT * FROM scheduled_tasks WHERE id=$1 AND customer_id=$2 AND status<>'DRAFT' AND (visitor_owner_id IS NULL OR visitor_owner_id=$3) FOR UPDATE", [id, customerId, ownerId]);
     const task = result.rows[0];
     if (!task) throw new Error("SCHEDULE_NOT_FOUND");
     if (action === "cancel" && task.status === "CANCELLED") return task;
@@ -134,6 +172,7 @@ export async function tickScheduledTasks() {
           VALUES($1,$2,$5,$3,$4) ON CONFLICT(schedule_id,scheduled_for) DO UPDATE
           SET status=excluded.status,summary=excluded.summary,attempts=excluded.attempts,completed_at=now() RETURNING id`, [task.id, task.next_run_at, output.summary, task.attempts + 1, isAI ? "PENDING" : "SUCCEEDED"]);
         if (isAI) await client.query("INSERT INTO scheduled_ai_reviews(run_id) VALUES($1) ON CONFLICT DO NOTHING", [run.rows[0].id]);
+        else await publishScheduleResult(client, { customerId: task.customer_id, ownerId: task.visitor_owner_id, runId: run.rows[0].id, title: task.title, summary: output.summary, source: KIND_SOURCE[task.kind] });
         if (identity && output.notify) {
           // Send a generic notice; financial details and custom reminder text stay in APP.
           await client.query(`INSERT INTO channel_outbox(channel_identity_id,customer_id,channel_type,dedupe_key,payload)

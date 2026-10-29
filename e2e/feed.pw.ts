@@ -92,9 +92,45 @@ test("a card designed in chat renders as a live preview, then shows as added", a
   const card = conversation.getByRole("article", { name: `卡片预览：${preview.title}` });
   await expect(card).toContainText("3 笔");
   await expect(card).toContainText("漫拿咖啡");
-  await expect(card).toContainText("说“好”就加入动态");
+  await expect(card).toContainText("选“加入动态”后生效");
   await expect(conversation).not.toContainText("[[card:");
   await input.fill("好");
   await conversation.getByRole("button", { name: "发送给 Blank" }).click();
   await expect(conversation.getByText("已加入你的动态")).toBeVisible();
+});
+
+test("a scheduled task designed in chat renders as a preview, takes effect only after the answer, and stays out of the manual form", async ({ page }) => {
+  const taskId = "00000000-0000-4000-8000-0000000000d1";
+  let status: "DRAFT" | "ACTIVE" = "DRAFT";
+  const card = () => ({ id: taskId, status, title: "还信用卡", kind: "提醒", rhythm: "每月 5 号 09:00", nextRun: "11/5 周四 09:00", message: "记得还信用卡",
+    sample: "还信用卡：记得还信用卡", delivery: "结果发到你的动态里，也可以在「定时任务」页查看" });
+  const question = `[[schedule:${taskId}]] 每月 5 号早上 9 点提醒你还信用卡，要创建吗？`;
+  // 服务端会把提问文字放进 message，对话就是从它渲染出预览卡片的。
+  const run = { id: "00000000-0000-4000-8000-0000000000d2", status: "QUESTION", controlGranted: false, steps: 1, message: question, pending: { id: "q-task",
+    action: { type: "question", question, options: ["创建任务", "再改改", "算了"] } } };
+  const commands: string[] = [];
+  await page.route("**/api/bootstrap", route => route.fulfill({ json: overview }));
+  await page.route("**/api/v1/feed", route => route.fulfill({ json: { posts } }));
+  await page.route(`**/api/v1/schedules/drafts/${taskId}`, route => route.fulfill({ json: { card: card() } }));
+  await page.route("**/api/agent/app", async route => {
+    const body = route.request().postDataJSON();
+    commands.push(body.command);
+    if (body.command === "start") return route.fulfill({ json: run });
+    status = "ACTIVE";
+    await route.fulfill({ json: { id: run.id, status: "COMPLETED", pending: null, controlGranted: false, steps: 2, message: "已经创建了，每月 5 号 9 点提醒你。" } });
+  });
+  await page.goto("/");
+  await page.getByRole("navigation", { name: "主导航" }).getByRole("button", { name: "Blank" }).click();
+  const conversation = page.getByRole("region", { name: "Blank 会话" });
+  await conversation.getByRole("textbox", { name: "向 Blank 描述需求或回答问题" }).fill("每月 5 号早上 9 点提醒我还信用卡");
+  await conversation.getByRole("button", { name: "发送给 Blank" }).click();
+  const preview = conversation.getByRole("article", { name: "任务预览：还信用卡" });
+  await expect(preview).toContainText("每月 5 号 09:00");
+  await expect(preview).toContainText("11/5 周四 09:00");
+  await expect(preview).toContainText("预览 · 选“创建任务”后生效");
+  await expect(conversation).not.toContainText("[[schedule:");
+  expect(commands).toEqual(["start"]);
+  await conversation.getByRole("button", { name: "创建任务", exact: true }).click();
+  await expect(conversation.getByText("已经创建了，每月 5 号 9 点提醒你。")).toBeVisible();
+  expect(commands).toEqual(["start", "advance"]);
 });

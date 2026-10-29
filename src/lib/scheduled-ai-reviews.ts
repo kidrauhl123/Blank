@@ -6,6 +6,7 @@ import { loadDailyReviewSnapshot } from "./daily-review-data";
 import { dailyReviewSnapshotSchema, renderDailyReview, type DailyReviewSnapshot } from "./daily-review-policy";
 import { evaluateDailyReview, jevGateSchema, type JevGate } from "./jev";
 import { writeAudit } from "./audit";
+import { publishScheduleResult } from "./feed-store";
 
 type Claim = { run_id: string; schedule_id: string; customer_id: string; message: string; attempts: number;
   task_version: string; lease_token: string; snapshot: DailyReviewSnapshot | null; gate: JevGate | null; main_requested_at: Date | null };
@@ -51,7 +52,7 @@ async function saveStage(claim: Claim, column: "snapshot" | "gate", value: unkno
 
 async function finishReview(claim: Claim, result: { factIds: string[]; mainModel: string | null; summary: string; gate: JevGate; capturedAt: string }) {
   return withTransaction(async client => {
-    const task = (await client.query<{ status: string; version: string; channel_identity_id: string | null; expired: boolean; customer_status: string }>(`SELECT t.status,t.updated_at::text AS version,t.channel_identity_id,t.ends_at<now() AS expired,c.status AS customer_status
+    const task = (await client.query<{ status: string; version: string; channel_identity_id: string | null; expired: boolean; customer_status: string; title: string; visitor_owner_id: string | null }>(`SELECT t.status,t.updated_at::text AS version,t.channel_identity_id,t.ends_at<now() AS expired,c.status AS customer_status,t.title,t.visitor_owner_id
       FROM scheduled_tasks t JOIN customers c ON c.id=t.customer_id WHERE t.id=$1 FOR UPDATE OF t`, [claim.schedule_id])).rows[0];
     const lease = await client.query("SELECT run_id FROM scheduled_ai_reviews WHERE run_id=$1 AND lease_token=$2 AND status='RUNNING' AND locked_until>now() FOR UPDATE", [claim.run_id, claim.lease_token]);
     if (!lease.rowCount) return;
@@ -63,6 +64,8 @@ async function finishReview(claim: Claim, result: { factIds: string[]; mainModel
     }
     await client.query("UPDATE scheduled_ai_reviews SET status='DONE',result=$2::jsonb,lease_token=NULL,locked_until=NULL,last_error=NULL,updated_at=now() WHERE run_id=$1", [claim.run_id, JSON.stringify(result)]);
     await client.query("UPDATE scheduled_task_runs SET status=$2,summary=$3,completed_at=now() WHERE id=$1", [claim.run_id, result.gate.decision === "QUIET" ? "SKIPPED" : "SUCCEEDED", result.summary]);
+    // 安静的一轮不打扰；有关注事项才发成动态。
+    if (result.gate.decision !== "QUIET" && result.factIds.length) await publishScheduleResult(client, { customerId: claim.customer_id, ownerId: task.visitor_owner_id, runId: claim.run_id, title: task.title, summary: result.summary, source: "每日巡检" });
     if (result.factIds.length && task.channel_identity_id) {
       const identity = (await client.query<{ id: string; channel_type: string }>("SELECT id,channel_type FROM channel_identities WHERE id=$1 AND customer_id=$2 AND status='ACTIVE' FOR SHARE", [task.channel_identity_id, claim.customer_id])).rows[0];
       if (identity) await client.query(`INSERT INTO channel_outbox(channel_identity_id,customer_id,channel_type,dedupe_key,payload)

@@ -267,3 +267,10 @@
 
 .assistantPage { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-bottom: calc(var(--space-7) + var(--space-6) + env(safe-area-inset-bottom)); }
 .viewport[hidden], .assistantPage[hidden] { display: none; }
+
+/* Blank 持有页面控制权时，画布四边有一圈缓慢呼吸的内发光；用户一碰就熄灭。不用读字，就知道现在是谁在操作。 */
+.stage[data-agent-driving]::after { content: ""; position: absolute; inset: 0; z-index: 180; pointer-events: none; border-radius: inherit;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--action-fill) 85%, transparent), inset 0 0 26px 3px color-mix(in srgb, var(--action-fill) 55%, transparent);
+  animation: agentGlow 3.2s ease-in-out infinite; }
+@keyframes agentGlow { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .stage[data-agent-driving]::after { animation: none; opacity: .9; } }

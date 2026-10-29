@@ -99,7 +99,7 @@ export function PostContent({ post }: { post: Pick<FeedPost, "title" | "body" | 
 export function RecipePreviewCard({ post, status }: { post: FeedPost; status: "DRAFT" | "ACTIVE" }) {
   return <article className={`${styles.post} ${styles.previewCard}`} aria-label={`卡片预览：${post.title}`}>
     <PostContent post={post} />
-    <footer><span className={styles.byline}><AssistantMark size={14} />{status === "ACTIVE" ? "已加入你的动态" : "预览 · 说“好”就加入动态"}</span></footer>
+    <footer><span className={styles.byline}><AssistantMark size={14} />{status === "ACTIVE" ? "已加入你的动态" : "预览 · 选“加入动态”后生效"}</span></footer>
   </article>;
 }
 
@@ -119,6 +119,7 @@ export function RecipeCardById({ id }: { id: string }) {
 }
 
 function RecipeBlocks({ blocks }: { blocks: RecipeView[] }) {
+  if (!blocks.length) return null;
   return <div className={styles.recipe}>{blocks.map((block, index) => {
     if (block.type === "stat") return <div key={index} className={styles.stat}><small>{block.label}</small><b>{block.text}</b></div>;
     if (block.type === "note") return <p key={index} className={styles.note}>{block.text}</p>;

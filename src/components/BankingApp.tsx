@@ -54,6 +54,7 @@ export function BankingApp() {
   const assistantVisible = tab === "assistant";
   const showAssistant = useCallback(() => setTab("assistant"), []);
   const [quote, setQuote] = useState<FeedQuote | null>(null);
+  const [driving, setDriving] = useState(false);
   // 从 Blank回到银行页面时重新读取动态，刚在对话里创建的卡片马上能看到。
   const [feedVersion, setFeedVersion] = useState(0);
   const [wasAssistant, setWasAssistant] = useState(false);
@@ -127,7 +128,7 @@ export function BankingApp() {
   if (!data) return <main className={styles.stage}><section className={styles.unavailable}><ShieldCheck size={32} /><h1>账户数据暂不可用</h1><p role="alert">{error || "请重新读取账户信息。"}</p>{notice && <p className={styles.confirmedNotice} role="status">{notice} 请刷新查看最新账户状态。</p>}<button className={styles.primaryButton} disabled={loading} onClick={() => void load()}><RefreshCw size={17} />重新读取</button><small>读取失败不代表余额为零。操作结果请以回执和最新明细为准。</small></section></main>;
   const account = data.accounts[0];
 
-  return <main className={styles.stage} ref={appRoot} data-agent-page={assistantVisible ? "Blank" : dialog ?? ({ home: "首页", activity: "账户明细", cards: "卡片管理", wealth: "理财", assistant: "Blank" }[tab])}>
+  return <main className={styles.stage} ref={appRoot} data-agent-driving={driving || undefined} data-agent-page={assistantVisible ? "Blank" : dialog ?? ({ home: "首页", activity: "账户明细", cards: "卡片管理", wealth: "理财", assistant: "Blank" }[tab])}>
     <ServiceWorkerRegister />
     <section className={styles.phone} aria-label="Blank 手机银行">
       <header className={styles.topbar}>
@@ -152,7 +153,7 @@ export function BankingApp() {
         <NavButton agentId="nav-activity" active={tab === "activity" && !assistantVisible} label="明细" icon={<ChartNoAxesColumnIncreasing size={21} />} onClick={() => navigate("activity")} />
         <NavButton agentId="nav-cards" active={tab === "cards" && !assistantVisible} label="卡片" icon={<CreditCard size={21} />} onClick={() => navigate("cards")} />
       </nav>
-      <AppAssistant rootRef={appRoot} configured={data.ai.configured} voiceEnabled={data.features?.voiceCalls} openSignal={0} presentation="page" pageHost={assistantHost} pageActive={assistantVisible} onShowPage={showAssistant} onShowBankPage={showBankPage} quote={quote} onQuoteClear={() => setQuote(null)} />
+      <AppAssistant rootRef={appRoot} configured={data.ai.configured} voiceEnabled={data.features?.voiceCalls} openSignal={0} presentation="page" pageHost={assistantHost} pageActive={assistantVisible} onShowPage={showAssistant} onShowBankPage={showBankPage} quote={quote} onQuoteClear={() => setQuote(null)} onDrivingChange={setDriving} />
     </section>
     <div hidden={assistantVisible}>
     {dialog === "deposit" && account && <DepositModal account={account} busy={actionBusy} close={() => setDialog(null)} done={() => afterAction("入金已完成。")} setBusy={setActionBusy} />}

@@ -1,4 +1,5 @@
 import { query } from "./db";
+import type { PoolClient } from "pg";
 import { buildFeed, type FeedChart, type FeedDraft, type FeedPosition, type FeedPost, type FeedSubscription, type FeedTransaction } from "./feed";
 import { getInvestmentOverview } from "./investments";
 import { investmentValue } from "./investment-model";
@@ -79,6 +80,15 @@ export async function publishDueFeeds(limit = 5) {
     try { published += await publishFeed(id); } catch { /* 单个客户失败不影响其他客户，下一轮再试 */ }
   }
   return published;
+}
+
+// 对话里创建的定时任务每次执行后，结果作为一条只属于创建者的动态发出（和任务页里的结果是同一份）。
+export async function publishScheduleResult(client: PoolClient, input: { customerId: string; ownerId: string | null; runId: string; title: string; summary: string; source: string }) {
+  if (!input.ownerId) return;
+  const lines = input.summary.split("\n").map(line => line.trim()).filter(Boolean);
+  await client.query(`INSERT INTO feed_posts(customer_id,dedupe_key,kind,title,body,source,attention,chart,fact_ids,visitor_owner_id)
+    VALUES($1,$2,'schedule',$3,$4,$5,false,'{"type":"recipe","blocks":[]}'::jsonb,'{}',$6) ON CONFLICT(customer_id,dedupe_key) DO NOTHING`,
+  [input.customerId, `schedule-run:${input.runId}`, input.title.slice(0, 80), lines.join("\n").slice(0, 560), input.source, input.ownerId]);
 }
 
 // ownerId 是当前访客：系统帖子大家都能看到，配方帖子只给创建它的访客。

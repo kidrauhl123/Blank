@@ -140,6 +140,13 @@ BEGIN
      OR to_regclass('public.feed_recipes') IS NULL THEN
     RAISE EXCEPTION 'Feed recipes migration is missing';
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='030_brand_blank.sql') THEN
+    RAISE EXCEPTION 'Brand migration is missing';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='031_schedule_chat.sql')
+     OR NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='scheduled_tasks' AND column_name='visitor_owner_id') THEN
+    RAISE EXCEPTION 'Schedule chat migration is missing';
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='019_authorization_hardening.sql') THEN
     RAISE EXCEPTION 'Authorization hardening migration is missing';
   END IF;

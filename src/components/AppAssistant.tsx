@@ -9,7 +9,7 @@ import { parsePreferenceCommand } from "@/lib/preference-command";
 import { TaskTimeline } from "@/features/voice-trace/TaskTimeline";
 import { useRealtimeVoice } from "@/features/realtime-voice/useRealtimeVoice";
 import { VoiceCall } from "@/features/realtime-voice/VoiceCall";
-import { AssistantMarkdown } from "./AssistantMarkdown";
+import { AssistantMarkdown, stripMarkers } from "./AssistantMarkdown";
 import { requestAppAgent } from "@/lib/app-agent-client";
 import type { AppAgentStreamEvent } from "@/lib/app-agent-stream-protocol";
 import { AssistantMark } from "./AssistantMark";
@@ -44,7 +44,7 @@ function StepList({ items, compact = false }: { items: Step[]; compact?: boolean
   </div>;
 }
 
-export function AppAssistant({ rootRef, configured, voiceEnabled = false, openSignal, closeSignal = 0, onOpenChange, transport = bankTransport, presentation = "floating", pageHost, pageActive, onShowPage, onShowBankPage, quote = null, onQuoteClear }: { rootRef: RefObject<HTMLElement | null>; configured: boolean; voiceEnabled?: boolean; openSignal: number; closeSignal?: number; onOpenChange?: (open: boolean) => void; transport?: AppAgentTransport; presentation?: "page" | "floating"; pageHost?: HTMLElement | null; pageActive?: boolean; onShowPage?: () => void; onShowBankPage?: () => void; quote?: AssistantQuote | null; onQuoteClear?: () => void }) {
+export function AppAssistant({ rootRef, configured, voiceEnabled = false, openSignal, closeSignal = 0, onOpenChange, transport = bankTransport, presentation = "floating", pageHost, pageActive, onShowPage, onShowBankPage, quote = null, onQuoteClear, onDrivingChange }: { rootRef: RefObject<HTMLElement | null>; configured: boolean; voiceEnabled?: boolean; openSignal: number; closeSignal?: number; onOpenChange?: (open: boolean) => void; transport?: AppAgentTransport; presentation?: "page" | "floating"; pageHost?: HTMLElement | null; pageActive?: boolean; onShowPage?: () => void; onShowBankPage?: () => void; quote?: AssistantQuote | null; onQuoteClear?: () => void; onDrivingChange?: (driving: boolean) => void }) {
   const [floatingOpen, setFloatingOpen] = useState(false);
   const controlledPage = presentation === "page" && pageActive !== undefined;
   const open = controlledPage ? pageActive : floatingOpen;
@@ -124,7 +124,7 @@ export function AppAssistant({ rootRef, configured, voiceEnabled = false, openSi
     if (["QUESTION", "CONSENT", "HANDOFF", "PAUSED"].includes(next.status)) setMotion(null);
     if (next.pending) {
       const pending = next.pending;
-      const step: Step = { id: pending.id, label: pending.action.type === "question" ? pending.action.question : pending.action.description,
+      const step: Step = { id: pending.id, label: pending.action.type === "question" ? stripMarkers(pending.action.question) : pending.action.description,
         state: next.status === "PAUSED" ? "paused" : ["QUESTION", "HANDOFF", "CONSENT"].includes(next.status) ? "waiting" : "ready" };
       setSteps((items) => items.some((item) => item.id === step.id) ? items.map((item) => item.id === step.id && !["done", "blocked"].includes(item.state) ? step : item) : [...items, step]);
     }
@@ -306,6 +306,9 @@ export function AppAssistant({ rootRef, configured, voiceEnabled = false, openSi
     setOpen(true);
   }, [openSignal, pause, rootRef, setOpen]);
   useEffect(() => { if (!controlledPage) onOpenChange?.(open); }, [open, onOpenChange, controlledPage]);
+  // Blank 持有页面控制权时通知外层：画布四边亮起，用户一接管（暂停）、需要本人确认或结束就熄灭。
+  const driving = Boolean(run?.controlGranted && (run.status === "ACTION" || run.status === "RUNNING"));
+  useEffect(() => { onDrivingChange?.(driving); return () => onDrivingChange?.(false); }, [driving, onDrivingChange]);
   const closeConversation = () => {
     voice.stop(); setVoiceOpen(false);
     pause(); setOpen(false);
@@ -326,7 +329,7 @@ export function AppAssistant({ rootRef, configured, voiceEnabled = false, openSi
         {draft?.text && <div className={styles.assistant} aria-busy={generating} data-streaming={generating && !draft.finished}><AssistantMarkdown text={draft.text} /></div>}
         {run?.pending && !generating && <div className={styles.assistant}><AssistantMarkdown text={run.message} /></div>}
         {(run?.timeline?.length || steps.length > 0) ? <details className={styles.audit}><summary>查看操作记录</summary>{run?.timeline ? <TaskTimeline events={run.timeline} /> : <StepList items={steps} />}</details> : null}
-        {question && <div className={styles.choices} aria-label={question.question}>{question.options.map((option) => <button key={option} disabled={busy} onClick={() => option === "自行输入" ? answerInput.current?.focus() : void send(option)}>{option}</button>)}<small>也可以在下方直接输入，无默认选项。</small></div>}
+        {question && <div className={styles.choices} aria-label={stripMarkers(question.question)}>{question.options.map((option) => <button key={option} disabled={busy} onClick={() => option === "自行输入" ? answerInput.current?.focus() : void send(option)}>{option}</button>)}<small>也可以在下方直接输入，无默认选项。</small></div>}
         {run?.status === "CONSENT" && <div className={styles.consent}><p>我会回到银行页面，点击和填写给你看。你随时可以接手，最终确认由你完成。</p><button disabled={busy} onClick={continueRun}>开始页面操作</button><button disabled={busy} onClick={cancel}>暂不允许</button></div>}
         {(run?.status === "PAUSED" || run?.status === "HANDOFF") && !question && <div className={styles.controls}><button disabled={busy} onClick={continueRun}>{run.controlGranted ? "继续 · 重新读取页面" : run.status === "HANDOFF" ? "我已操作 · 查看页面" : "允许代操作"}</button><button disabled={busy} onClick={cancel}>结束</button></div>}
         {busy && !draft?.text && <p role="status" className={styles.progress}>正在处理…</p>}

@@ -1,9 +1,11 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db, query, withTransaction } from "./db";
 import { createSession } from "./auth";
 import { createScheduledTask, listScheduledTasks, changeScheduledTask, tickScheduledTasks } from "./scheduled-tasks";
-import { GET, POST, PATCH } from "../app/api/v1/schedules/route";
+import { GET, PATCH } from "../app/api/v1/schedules/route";
+import { changeMySchedule, listMySchedules, previewSchedule, saveSchedule } from "./schedule-chat";
+import { listFeed } from "./feed-store";
 
 describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("persistent scheduled tasks", () => {
   const owner = randomUUID(), stranger = randomUUID(), account = randomUUID(), identity = randomUUID();
@@ -18,7 +20,10 @@ describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("persistent scheduled ta
     await query("INSERT INTO channel_identities(id,customer_id,channel_type,tenant_hash,subject_hash,subject_ciphertext) VALUES($1,$2,'QQ',$3,$4,'fixture')", [identity, owner, randomUUID(), randomUUID()]);
     session = (await createSession(owner)).token;
   });
+  const visitors = [randomUUID(), randomUUID()];
+  beforeAll(async () => { for (const id of visitors) await query("INSERT INTO visitor_memory_owners(id,token_hash) VALUES($1,$2)", [id, randomBytes(32).toString("hex")]); });
   afterAll(async () => { await db.end(); });
+  const tomorrow = () => new Date(Date.now() + 86_400_000 + 8 * 3_600_000).toISOString().slice(0, 10);
 
   it("creates idempotently and isolates task ownership and channel bindings", async () => {
     const input = base();
@@ -128,16 +133,56 @@ describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("persistent scheduled ta
     await changeScheduledTask(owner, task.id, "resume"); await tickScheduledTasks();
     expect((await listScheduledTasks(owner)).tasks.find(item => item.id === task.id)?.status).toBe("COMPLETED");
   });
-  it("enforces session authentication, same origin and validation on HTTP routes", async () => {
+  it("enforces session authentication and same origin on the HTTP routes, and offers no manual creation", async () => {
     expect((await GET(new Request("http://localhost/api/v1/schedules"))).status).toBe(401);
     const headers = { cookie: `bankpilot_session=${session}`, "Content-Type": "application/json" };
-    expect((await POST(new Request("http://localhost/api/v1/schedules", { method: "POST", headers: { ...headers, origin: "http://evil.test" }, body: JSON.stringify(base()) }))).status).toBe(403);
-    const validHeaders = { ...headers, origin: "http://localhost" };
-    expect((await POST(new Request("http://localhost/api/v1/schedules", { method: "POST", headers: validHeaders, body: JSON.stringify({ ...base(), confirmed: false }) }))).status).toBe(400);
-    const created = await POST(new Request("http://localhost/api/v1/schedules", { method: "POST", headers: validHeaders, body: JSON.stringify(base()) }));
-    expect(created.status).toBe(200);
-    const { task } = await created.json();
-    const changed = await PATCH(new Request("http://localhost/api/v1/schedules", { method: "PATCH", headers: validHeaders, body: JSON.stringify({ id: task.id, action: "cancel" }) }));
-    expect(changed.status).toBe(200);
+    const task = await createScheduledTask(owner, base());
+    const change = (extra: Record<string, string>, body: unknown) => PATCH(new Request("http://localhost/api/v1/schedules", { method: "PATCH", headers: { ...headers, ...extra }, body: JSON.stringify(body) }));
+    expect((await change({ origin: "http://evil.test" }, { id: task.id, action: "cancel" })).status).toBe(403);
+    expect((await change({ origin: "http://localhost" }, { id: task.id, action: "explode" })).status).toBe(400);
+    expect((await change({ origin: "http://localhost" }, { id: task.id, action: "cancel" })).status).toBe(200);
+    expect(Object.keys(await import("../app/api/v1/schedules/route")).sort()).toEqual(["GET", "PATCH"]);
+  });
+
+  it("designs a task in chat as a draft, takes effect only after confirmation, and belongs to its visitor", async () => {
+    const draft = await previewSchedule(owner, visitors[0], { kind: "REMINDER", title: "还信用卡", message: "记得还信用卡", frequency: "MONTHLY", firstDate: tomorrow(), time: "09:30" }) as { scheduleId: string; marker: string; rhythm: string };
+    expect(draft.marker).toBe(`[[schedule:${draft.scheduleId}]]`);
+    expect(draft.rhythm).toMatch(/^每月 \d+ 号 09:30$/);
+    // 草稿不出现在任何列表里，也不会被调度器执行。
+    expect((await listScheduledTasks(owner, visitors[0])).tasks.some(task => task.id === draft.scheduleId)).toBe(false);
+    await query("UPDATE scheduled_tasks SET next_run_at=now()-interval '1 minute' WHERE id=$1", [draft.scheduleId]);
+    await tickScheduledTasks();
+    expect((await query("SELECT 1 FROM scheduled_task_runs WHERE schedule_id=$1", [draft.scheduleId])).rowCount).toBe(0);
+    await query("UPDATE scheduled_tasks SET next_run_at=starts_at WHERE id=$1", [draft.scheduleId]);
+    // 别的访客不能确认它。
+    expect(await saveSchedule(owner, visitors[1], draft.scheduleId)).toMatchObject({ saved: false });
+    expect(await saveSchedule(owner, visitors[0], draft.scheduleId)).toMatchObject({ saved: true, title: "还信用卡" });
+    expect((await listScheduledTasks(owner, visitors[0])).tasks.find(task => task.id === draft.scheduleId)?.status).toBe("ACTIVE");
+    expect((await listScheduledTasks(owner, visitors[1])).tasks.some(task => task.id === draft.scheduleId)).toBe(false);
+    expect((await listScheduledTasks(owner)).tasks.some(task => task.id === draft.scheduleId)).toBe(false);
+    expect(await listMySchedules(owner, visitors[0])).toEqual([expect.objectContaining({ scheduleId: draft.scheduleId, status: "ACTIVE" })]);
+    expect(await changeMySchedule(owner, visitors[1], draft.scheduleId, "cancel")).toMatchObject({ changed: false });
+    expect(await changeMySchedule(owner, visitors[0], draft.scheduleId, "pause")).toMatchObject({ changed: true, status: "PAUSED" });
+    await changeMySchedule(owner, visitors[0], draft.scheduleId, "cancel");
+  });
+
+  it("rejects bad times with a message the assistant can act on, and normalises report and review frequencies", async () => {
+    expect(await previewSchedule(owner, visitors[0], { kind: "REMINDER", title: "过去", message: "x", frequency: "ONCE", firstDate: "2020-01-01", time: "09:00" })).toMatchObject({ error: expect.stringContaining("晚于现在") });
+    expect(await previewSchedule(owner, visitors[0], { kind: "REMINDER", title: "空", message: "", frequency: "ONCE", firstDate: tomorrow(), time: "09:00" })).toMatchObject({ error: expect.stringContaining("提醒内容") });
+    const report = await previewSchedule(owner, visitors[0], { kind: "MONTHLY_REPORT", title: "月报", frequency: "WEEKLY", firstDate: tomorrow(), time: "08:00" }) as { rhythm: string };
+    expect(report.rhythm).toMatch(/^每月/);
+    const review = await previewSchedule(owner, visitors[0], { kind: "DAILY_AI_REVIEW", title: "巡检", frequency: "ONCE", firstDate: tomorrow(), time: "08:00" }) as { rhythm: string };
+    expect(review.rhythm).toBe("每天 08:00");
+  });
+
+  it("posts each run of a chat-made task to its visitor's feed, and only to that visitor", async () => {
+    const draft = await previewSchedule(owner, visitors[0], { kind: "REMINDER", title: "喝水", message: "起来喝杯水", frequency: "DAILY", firstDate: tomorrow(), time: "10:00" }) as { scheduleId: string };
+    await saveSchedule(owner, visitors[0], draft.scheduleId);
+    await due(draft.scheduleId);
+    await tickScheduledTasks();
+    const mine = (await listFeed(owner, visitors[0])).filter(post => post.kind === "schedule");
+    expect(mine).toEqual([expect.objectContaining({ title: "喝水", body: "喝水：起来喝杯水", source: "提醒" })]);
+    expect((await listFeed(owner, visitors[1])).some(post => post.kind === "schedule")).toBe(false);
+    await changeMySchedule(owner, visitors[0], draft.scheduleId, "cancel");
   });
 });

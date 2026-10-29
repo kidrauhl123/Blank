@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { authenticateRequest } from "@/lib/auth";
 import { assertSameOrigin, apiError } from "@/lib/http";
-import { createScheduledTask, changeScheduledTask, listScheduledTasks } from "@/lib/scheduled-tasks";
+import { changeScheduledTask, listScheduledTasks } from "@/lib/scheduled-tasks";
+import { resolveVisitorMemoryScope } from "@/lib/visitor-memory";
 
 const change = z.object({ id: z.string().uuid(), action: z.enum(["pause", "resume", "cancel"]) }).strict();
 function failure(error: unknown) {
@@ -19,21 +20,17 @@ function failure(error: unknown) {
 export async function GET(request: Request) {
   try {
     const principal = await authenticateRequest(request);
-    return Response.json(await listScheduledTasks(principal.customerId), { headers: { "Cache-Control": "private, no-store" } });
+    const scope = await resolveVisitorMemoryScope(request, principal.customerId);
+    return Response.json(await listScheduledTasks(principal.customerId, scope?.ownerId ?? null), { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) { return failure(error); }
 }
-export async function POST(request: Request) {
-  try {
-    assertSameOrigin(request);
-    const principal = await authenticateRequest(request);
-    return Response.json({ task: await createScheduledTask(principal.customerId, await request.json()) });
-  } catch (error) { return failure(error); }
-}
+// 创建只能在和 Blank 的对话里完成（先预览，用户同意才生效），这里不再提供手动创建。
 export async function PATCH(request: Request) {
   try {
     assertSameOrigin(request);
     const principal = await authenticateRequest(request);
     const input = change.parse(await request.json());
-    return Response.json({ task: await changeScheduledTask(principal.customerId, input.id, input.action) });
+    const scope = await resolveVisitorMemoryScope(request, principal.customerId);
+    return Response.json({ task: await changeScheduledTask(principal.customerId, input.id, input.action, scope?.ownerId ?? null) });
   } catch (error) { return failure(error); }
 }

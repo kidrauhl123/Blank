@@ -141,3 +141,4 @@
 .bars li[data-muted] .bar { background: var(--series-other); }
 .previewCard { margin: 0; box-shadow: inset 0 0 0 1px var(--line); }
 .previewCard footer { justify-content: flex-start; padding: var(--space-2) 0; }
+.stat b.statSmall { font-size: var(--text-md); letter-spacing: 0; text-align: right; }

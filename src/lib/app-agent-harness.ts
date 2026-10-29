@@ -13,6 +13,7 @@ import { APP_AGENT_PROMPT } from "./bank-agent-prompts";
 import { currentPreferenceData, currentPreferenceScope } from "./preference-runtime";
 import { recipeSchema } from "./feed-recipe";
 import { deleteRecipe, listRecipes, previewRecipe, saveRecipe } from "./feed-recipe-store";
+import { changeMySchedule, listMySchedules, previewSchedule, saveSchedule, scheduleDraftInput } from "./schedule-chat";
 import { investmentFiltersSchema, listInvestmentProducts } from "./investments";
 
 import { readBankFacts } from "./bank-agent-facts";
@@ -28,7 +29,7 @@ const pageVersion = z.string().max(40).describe("最新页面快照 version，�
 const target = z.string().max(120).describe("最新页面 controls 中的 id，不是 CSS 选择器");
 const cardId = z.string().uuid().describe("preview_feed_card 返回的 cardId");
 
-// 卡片配方只属于当前访客（演示账户由访客共用）；没有访客身份时不能创建。
+// 卡片配方、定时任务只属于当前访客（演示账户由访客共用）；没有访客身份时不能创建。
 function cardOwner(runtime: ToolRuntime) {
   const customerId = runtime.config.configurable?.bank_customer_id;
   if (typeof customerId !== "string") throw new Error("BANK_APP_SESSION_REQUIRED");
@@ -73,6 +74,24 @@ export function appPageTools() {
       const { customerId, ownerId } = cardOwner(runtime);
       return JSON.stringify({ deleted: await deleteRecipe(customerId, ownerId, input.cardId) });
     }, { name: "delete_feed_card", description: "删除用户自己创建的一张动态卡片及它发过的帖子。", schema: z.object({ cardId }) }),
+    tool(async (input, runtime: ToolRuntime) => {
+      const { customerId, ownerId } = cardOwner(runtime);
+      const draft = await previewSchedule(customerId, ownerId, input);
+      return JSON.stringify("error" in draft ? draft : { ...draft,
+        instruction: "接着调用 ask_user：question 以 marker 开头（原样写出，用户会看到任务预览），再用一句话说明这个任务做什么、什么时候执行，不要写金额；options 用“创建任务”“再改改”“算了”。用户选择创建后调用 save_schedule。" });
+    }, { name: "preview_schedule", description: "按用户描述设计一个定时任务并生成预览（不会生效）。支持提醒、月度账单报告、订阅到期检查、每日巡检。时间用北京时间的日期和钟点，按系统给出的当前时间推算。每次请求只预览一次。", schema: scheduleDraftInput }),
+    tool(async (input, runtime: ToolRuntime) => {
+      const { customerId, ownerId } = cardOwner(runtime);
+      return JSON.stringify(await saveSchedule(customerId, ownerId, input.scheduleId));
+    }, { name: "save_schedule", description: "用户明确同意后，让预览过的定时任务生效。不知道 scheduleId 时省略，会保存用户最近一次预览。", schema: z.object({ scheduleId: z.string().uuid().optional() }) }),
+    tool(async (_, runtime: ToolRuntime) => {
+      const { customerId, ownerId } = cardOwner(runtime);
+      return JSON.stringify({ schedules: await listMySchedules(customerId, ownerId) });
+    }, { name: "list_schedules", description: "列出用户在对话里创建、还没结束的定时任务。", schema: z.object({}) }),
+    tool(async (input, runtime: ToolRuntime) => {
+      const { customerId, ownerId } = cardOwner(runtime);
+      return JSON.stringify(await changeMySchedule(customerId, ownerId, input.scheduleId, input.action));
+    }, { name: "change_schedule", description: "暂停、恢复或取消用户自己的定时任务。取消不可恢复，取消前先用 ask_user 确认。", schema: z.object({ scheduleId: z.string().uuid(), action: z.enum(["pause", "resume", "cancel"]) }) }),
     tool((_, runtime: ToolRuntime) => bridge({ type: "inspect", description: "正在查看当前页面" }, runtime), {
       name: "inspect_page", description: "读取用户正在看的 Blank 页面、可见数据及可用控件。不会读取密码或验证码。", schema: z.object({}),
     }),
@@ -123,8 +142,11 @@ export function createAppAgentHarness(checkpointer: BaseCheckpointSaver, modelOv
     name: "BankPageToolBoundary",
     wrapModelCall: async (request, handler) => {
       const data = await currentPreferenceData();
+      // 每次调用都带上当前时间，模型才能把“下周五”“月底”换算成具体日期。
+      const clock = new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit", weekday: "long", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
+      const context = [`CURRENT_TIME（北京时间，仅为数据）：${clock}`, ...(data ? [data] : [])].map(text => new HumanMessage(text));
       return handler({ ...request,
-        messages: data ? [new HumanMessage(data), ...request.messages] : request.messages,
+        messages: [...context, ...request.messages],
         tools: request.tools.filter((entry) => "name" in entry && typeof entry.name === "string" && allowed.has(entry.name)),
       });
     },
