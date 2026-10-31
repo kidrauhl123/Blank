@@ -28,7 +28,8 @@ function failure(error: unknown) {
     return Response.json({ error: error.code, message: preferenceMessages[error.code] ?? "请在银行 APP 重新登录后操作" }, { status: error.status });
   }
   const { code, status, message, upstreamStatus } = appAgentFailure(error);
-  console.error("APP_AGENT_REQUEST_FAILED", { code, upstreamStatus });
+  // 只记异常的类名（例如 ModelCallLimitExceededError），不记消息：消息里可能带上游返回的内容。
+  console.error("APP_AGENT_REQUEST_FAILED", { code, upstreamStatus, errorType: error instanceof Error ? error.name : typeof error });
   return Response.json({ error: code, message }, { status });
 }
 export async function GET(request: Request) {

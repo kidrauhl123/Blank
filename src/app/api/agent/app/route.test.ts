@@ -25,7 +25,7 @@ describe("page agent failure response", () => {
     const body = await response.json();
     expect(body).toMatchObject({ error: code });
     expect(body.message).toContain("个人中心 → 设置");
-    expect(log).toHaveBeenCalledWith("APP_AGENT_REQUEST_FAILED", expect.objectContaining({ code }));
+    expect(log).toHaveBeenCalledWith("APP_AGENT_REQUEST_FAILED", expect.objectContaining({ code, errorType: "Error" }));
     expect(JSON.stringify([body, log.mock.calls])).not.toMatch(/sk-private|private upstream|test-session|test-customer/);
   });
 });
