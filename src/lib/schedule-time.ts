@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const scheduleInput = z.object({
   requestKey: z.string().uuid(),
-  kind: z.enum(["REMINDER", "MONTHLY_REPORT", "SUBSCRIPTION_CHECK", "DAILY_AI_REVIEW"]),
+  kind: z.enum(["REMINDER", "MONTHLY_REPORT", "SUBSCRIPTION_CHECK", "DAILY_AI_REVIEW", "BUDGET_CHECK"]),
   title: z.string().trim().min(1).max(80),
   message: z.string().trim().max(500).default(""),
   frequency: z.enum(["ONCE", "DAILY", "WEEKLY", "MONTHLY"]),
@@ -10,11 +10,17 @@ export const scheduleInput = z.object({
   startsAt: z.string().datetime({ offset: true }),
   endsAt: z.string().datetime({ offset: true }).nullable().default(null),
   channelIdentityId: z.string().uuid().nullable().default(null),
+  budgetCategory: z.string().trim().min(1).max(8).nullable().default(null),
+  budgetCapMinor: z.number().int().min(100).max(100_000_000).nullable().default(null),
   confirmed: z.literal(true),
 }).strict().superRefine((input, ctx) => {
   if (input.kind === "REMINDER" && !input.message) ctx.addIssue({ code: "custom", message: "请填写提醒内容" });
   if (input.kind === "MONTHLY_REPORT" && input.frequency !== "MONTHLY") ctx.addIssue({ code: "custom", message: "月度账单报告须按月执行" });
   if (input.kind === "DAILY_AI_REVIEW" && input.frequency !== "DAILY") ctx.addIssue({ code: "custom", message: "每日 AI 巡检须按天执行" });
+  if (input.kind === "BUDGET_CHECK") {
+    if (input.frequency !== "DAILY") ctx.addIssue({ code: "custom", message: "预算提醒须按天检查" });
+    if (!input.budgetCategory || input.budgetCapMinor === null) ctx.addIssue({ code: "custom", message: "预算提醒需要分类和上限" });
+  } else if (input.budgetCategory !== null || input.budgetCapMinor !== null) ctx.addIssue({ code: "custom", message: "只有预算提醒需要分类和上限" });
   if (input.endsAt && new Date(input.endsAt) < new Date(input.startsAt)) ctx.addIssue({ code: "custom", message: "截止时间不能早于开始时间" });
 });
 export type ScheduleInput = z.infer<typeof scheduleInput>;

@@ -79,7 +79,7 @@ description: 在对话里创建、查看、暂停、恢复或取消定时任务�
 ---
 # 定时任务
 用户说“每月 5 号提醒我还信用卡”“下周五早上 9 点提醒我给妈妈买礼物”“每月初给我一份上个月的账单”“每天帮我看看账户有没有异常”时，用 preview_schedule 设计一个任务。系统会给出 CURRENT_TIME（北京时间），按它推算“明天”“下周五”“月底”，把第一次执行的日期写成 YYYY-MM-DD、钟点写成 HH:mm。用户没说钟点时提醒用 09:00。
-- kind：REMINDER 提醒（message 必填，写清要提醒什么）；MONTHLY_REPORT 上个月账单报告（固定每月）；SUBSCRIPTION_CHECK 检查未来 3 天的订阅扣费；DAILY_AI_REVIEW 每日巡检（固定每天，只有账户有变化才会发）。
+- kind：REMINDER 提醒（message 必填，写清要提醒什么）；MONTHLY_REPORT 上个月账单报告（固定每月）；SUBSCRIPTION_CHECK 检查未来 3 天的订阅扣费；DAILY_AI_REVIEW 每日巡检（固定每天，只有账户有变化才会发）；BUDGET_CHECK 预算提醒（固定每天，需要 budgetCategory 和 budgetCapYuan，流程见 bank-budget）。
 - frequency：ONCE 一次、DAILY 每天、WEEKLY 每周（沿用第一次的星期）、MONTHLY 每月（沿用第一次的日期，短月在月末）。lastDate 选填，写“做到什么时候为止”。
 - 如果缺少关键信息（提醒什么、哪一天），先用 ask_user 问，不要猜日期。
 每次请求只调用一次 preview_schedule；时间已过等错误会随工具结果返回，按提示改好再预览一次。预览成功后调用 ask_user：question 以工具返回的 marker（形如 [[schedule:…]]）开头并原样写出，用户会在对话里看到任务卡片；接着一句话说明做什么、何时执行，问题里不要写金额。options 用“创建任务”“再改改”“算了”。用户选创建后才调用 save_schedule；想改就按新要求重新预览。
@@ -133,7 +133,11 @@ description: 预算规划：按近 3 个月的收支拆出分类上限，说明�
 - 没有数据或数据不足 3 个月（monthsWithData 小于 3）时如实说明，并提醒上限只是参考。
 - 口径：支出不含转账和理财；收入平均值只用于了解结余，不作为预算承诺。
 - 回答时逐类说明：近 3 个月平均、建议上限、本月已花占上限的比例。数字都来自工具结果，不能心算。
-- 不要把建议说成已经生效的预算；本轮只做分析与建议。
+- 不要把建议说成已经生效的预算。用户要“某类花到 80% 提醒”时，按下面做：
+  1. 用 ask_user 请用户选择要设提醒的分类，选项来自工具返回的分类（最多 4 个）；上限用用户确认的数字，没有确认就先问，不替用户定。
+  2. 用 preview_schedule：kind 填 BUDGET_CHECK，frequency 填 DAILY，budgetCategory 填分类名，budgetCapYuan 填用户确认的上限（元），firstDate 填明天，title 写“{分类}预算提醒”。
+  3. 原样写出 marker，用 ask_user 确认“创建任务”“再改改”“算了”；用户选创建后才 save_schedule。
+- 预算提醒每天检查一次，本月花到上限的 80% 时发一次动态提醒，同一个月只提醒一次。它只提醒，不会限制或阻止任何付款，也不会自动转账。修改或取消按 bank-schedules 处理。
 `,
   "bank-cross-border": `---
 name: bank-cross-border

@@ -1,10 +1,19 @@
+import type { PoolClient } from "pg";
 import { currentBankMonth, validBankMonth } from "./banking-report";
 import { query } from "./db";
 
 // 消费口径：只看支出，并排除转账和理财（它们是资金往来，不是消费）。
 // bank-statements 的“账面流出”口径包含转账，二者不要混用。金额一律用分。
 export const NON_SPENDING_CATEGORIES = ["转账", "理财"] as const;
+// 预算提醒可以选的分类（都是支出分类）。
+export const BUDGET_CATEGORIES = ["餐饮", "交通", "购物", "订阅", "生活缴费", "住房"] as const;
 const FEE_WORDS = /年费|手续费|服务费|月费|会员费|管理费|工本费/;
+
+// 预算提醒线：花到上限的 80%。用整数比较，避免浮点误差。
+export const BUDGET_ALERT_RATIO = { numerator: 4, denominator: 5 } as const;
+export function budgetReached(spentMinor: number, capMinor: number) {
+  return spentMinor * BUDGET_ALERT_RATIO.denominator >= capMinor * BUDGET_ALERT_RATIO.numerator;
+}
 
 export type SpendingRow = { month: string; category: string; merchant: string; direction: "OUT" | "IN"; count: number; totalMinor: number };
 export type LargeItem = { merchant: string; category: string; amountMinor: number; occurredAt: string };
@@ -77,8 +86,9 @@ export function budgetBaseline(rows: SpendingRow[], month: string) {
   };
 }
 
-export async function loadSpendingRows(customerId: string, fromMonth: string, toMonth: string): Promise<SpendingRow[]> {
-  const result = await query<{ month: string; category: string; merchant: string; direction: "OUT" | "IN"; count: number; total_minor: string }>(
+export async function loadSpendingRows(customerId: string, fromMonth: string, toMonth: string, client?: PoolClient): Promise<SpendingRow[]> {
+  const run = client ? client.query.bind(client) : query;
+  const result = await run<{ month: string; category: string; merchant: string; direction: "OUT" | "IN"; count: number; total_minor: string }>(
     `SELECT to_char(bt.occurred_at AT TIME ZONE 'Asia/Shanghai','YYYY-MM') AS month, bt.category, bt.merchant_name AS merchant,
             CASE WHEN bt.amount_minor<0 THEN 'OUT' ELSE 'IN' END AS direction,
             count(*)::int AS count, abs(sum(bt.amount_minor))::text AS total_minor

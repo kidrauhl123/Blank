@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { budgetBaseline, explainSpendingChange, shiftMonth, type SpendingRow } from "./spending-analysis";
+import { budgetBaseline, budgetReached, explainSpendingChange, shiftMonth, type SpendingRow } from "./spending-analysis";
 
 const row = (month: string, category: string, merchant: string, count: number, totalMinor: number, direction: "OUT" | "IN" = "OUT"): SpendingRow =>
   ({ month, category, merchant, count, totalMinor, direction });
@@ -53,6 +53,14 @@ describe("预算基线", () => {
 
   it("没有历史数据时返回空分类，而不是零上限", () => {
     expect(budgetBaseline([row("2026-10", "餐饮", "漫拿咖啡", 1, 3200)], "2026-10")).toMatchObject({ monthsWithData: 0, categories: [] });
+  });
+});
+
+describe("预算提醒线", () => {
+  it("花到上限的 80% 就提醒，差一分不提醒", () => {
+    expect(budgetReached(4000, 5000)).toBe(true);
+    expect(budgetReached(3999, 5000)).toBe(false);
+    expect(budgetReached(0, 5000)).toBe(false);
   });
 });
 

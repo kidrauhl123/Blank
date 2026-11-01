@@ -129,7 +129,7 @@ export function appPageTools() {
       const draft = await previewSchedule(customerId, ownerId, input);
       return JSON.stringify("error" in draft ? draft : { ...draft,
         instruction: "接着调用 ask_user：question 以 marker 开头（原样写出，用户会看到任务预览），再用一句话说明这个任务做什么、什么时候执行，不要写金额；options 用“创建任务”“再改改”“算了”。用户选择创建后调用 save_schedule。" });
-    }, { name: "preview_schedule", description: "按用户描述设计一个定时任务并生成预览（不会生效）。支持提醒、月度账单报告、订阅到期检查、每日巡检。时间用北京时间的日期和钟点，按系统给出的当前时间推算。每次请求只预览一次。", schema: scheduleDraftInput }),
+    }, { name: "preview_schedule", description: "按用户描述设计一个定时任务并生成预览（不会生效）。支持提醒、月度账单报告、订阅到期检查、每日巡检、预算提醒（每天检查某个分类是否花到用户确认的上限的 80%）。时间用北京时间的日期和钟点，按系统给出的当前时间推算。每次请求只预览一次。", schema: scheduleDraftInput }),
     tool(async (input, runtime: ToolRuntime) => {
       const { customerId, ownerId } = cardOwner(runtime);
       return JSON.stringify(await saveSchedule(customerId, ownerId, input.scheduleId));

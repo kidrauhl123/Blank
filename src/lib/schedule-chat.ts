@@ -1,21 +1,24 @@
 import { z } from "zod";
 import { activateScheduledDraft, createScheduledTask, changeScheduledTask, getOwnedSchedule, listScheduledTasks, sampleScheduleResult, type ScheduledTask } from "./scheduled-tasks";
+import { BUDGET_CATEGORIES } from "./spending-analysis";
 
 // 在对话里创建定时任务：Blank 先设计一份草稿并在对话里预览，用户同意后才生效。
 // 时间用"北京时间的日期 + 钟点"描述，由服务端换算，模型不用算时区和 ISO 格式。
-const KIND_LABEL = { REMINDER: "提醒", MONTHLY_REPORT: "月度账单报告", SUBSCRIPTION_CHECK: "订阅到期检查", DAILY_AI_REVIEW: "每日巡检" } as const;
+const KIND_LABEL = { REMINDER: "提醒", MONTHLY_REPORT: "月度账单报告", SUBSCRIPTION_CHECK: "订阅到期检查", DAILY_AI_REVIEW: "每日巡检", BUDGET_CHECK: "预算提醒" } as const;
 const WEEKDAYS = "日一二三四五六";
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 export const scheduleDraftInput = z.object({
-  kind: z.enum(["REMINDER", "MONTHLY_REPORT", "SUBSCRIPTION_CHECK", "DAILY_AI_REVIEW"])
-    .describe("REMINDER 一条提醒；MONTHLY_REPORT 上个月的账单报告（固定每月）；SUBSCRIPTION_CHECK 检查未来 3 天的订阅扣费；DAILY_AI_REVIEW 每天巡检账户（固定每天，只在有变化时才发）"),
-  title: z.string().trim().min(1).max(20).describe("任务名，例如“每月账单回顾”"),
+  kind: z.enum(["REMINDER", "MONTHLY_REPORT", "SUBSCRIPTION_CHECK", "DAILY_AI_REVIEW", "BUDGET_CHECK"])
+    .describe("REMINDER 一条提醒；MONTHLY_REPORT 上个月的账单报告（固定每月）；SUBSCRIPTION_CHECK 检查未来 3 天的订阅扣费；DAILY_AI_REVIEW 每天巡检账户（固定每天，只在有变化时才发）；BUDGET_CHECK 预算提醒（固定每天，需要 budgetCategory 和 budgetCapYuan）"),
+  title: z.string().trim().min(1).max(20).describe("任务名，例如“每月账单回顾”“餐饮预算提醒”"),
   message: z.string().trim().max(200).default("").describe("REMINDER 的提醒内容（必填）；DAILY_AI_REVIEW 可写想重点关注的事；其余类型留空"),
-  frequency: z.enum(["ONCE", "DAILY", "WEEKLY", "MONTHLY"]).describe("MONTHLY_REPORT 会按每月，DAILY_AI_REVIEW 会按每天"),
+  frequency: z.enum(["ONCE", "DAILY", "WEEKLY", "MONTHLY"]).describe("MONTHLY_REPORT 会按每月，DAILY_AI_REVIEW 和 BUDGET_CHECK 会按每天"),
   firstDate: date.describe("第一次执行的日期，北京时间，YYYY-MM-DD，必须晚于现在。按系统给出的“当前时间”推算"),
   time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).default("09:00").describe("几点执行，北京时间，HH:mm"),
   lastDate: date.optional().describe("最后一次执行的日期（选填），YYYY-MM-DD"),
+  budgetCategory: z.enum(BUDGET_CATEGORIES).optional().describe("BUDGET_CHECK 的分类，只能是这些：餐饮、交通、购物、订阅、生活缴费、住房"),
+  budgetCapYuan: z.number().min(1).max(1_000_000).optional().describe("BUDGET_CHECK 的月度上限（元），由用户确认过的数字"),
 });
 
 export function describeRhythm(task: Pick<ScheduledTask, "frequency" | "starts_at" | "ends_at">) {
@@ -40,17 +43,20 @@ export async function scheduleCard(customerId: string, task: ScheduledTask): Pro
 
 export async function previewSchedule(customerId: string, ownerId: string, raw: unknown) {
   const input = scheduleDraftInput.parse(raw);
-  const frequency = input.kind === "MONTHLY_REPORT" ? "MONTHLY" : input.kind === "DAILY_AI_REVIEW" ? "DAILY" : input.frequency;
+  const frequency = input.kind === "MONTHLY_REPORT" ? "MONTHLY" : input.kind === "DAILY_AI_REVIEW" || input.kind === "BUDGET_CHECK" ? "DAILY" : input.frequency;
   const startsAt = new Date(`${input.firstDate}T${input.time}:00+08:00`);
   if (Number.isNaN(startsAt.getTime())) return { error: "日期格式不对，请用 YYYY-MM-DD" };
   if (startsAt.getTime() <= Date.now() + 60_000) return { error: `第一次执行时间必须晚于现在（现在是${stamp(new Date())}），请改成未来的日期或钟点。` };
   if (input.kind === "REMINDER" && !input.message) return { error: "提醒需要写明提醒内容。" };
+  if (input.kind === "BUDGET_CHECK" && (!input.budgetCategory || !input.budgetCapYuan)) return { error: "预算提醒需要写明分类和用户确认过的月度上限（元）。" };
   const endsAt = input.lastDate && frequency !== "ONCE" ? new Date(`${input.lastDate}T23:59:00+08:00`) : null;
   if (endsAt && endsAt <= startsAt) return { error: "最后一次执行的日期不能早于第一次。" };
   try {
     const task = await createScheduledTask(customerId, {
       requestKey: crypto.randomUUID(), kind: input.kind, title: input.title, message: input.message, frequency, timezone: "Asia/Shanghai",
       startsAt: startsAt.toISOString(), endsAt: endsAt?.toISOString() ?? null, channelIdentityId: null, confirmed: true,
+      budgetCategory: input.kind === "BUDGET_CHECK" ? input.budgetCategory ?? null : null,
+      budgetCapMinor: input.kind === "BUDGET_CHECK" && input.budgetCapYuan ? Math.round(input.budgetCapYuan * 100) : null,
     }, { ownerId, draft: true });
     return { scheduleId: task.id, marker: `[[schedule:${task.id}]]`, rhythm: describeRhythm(task), firstRun: stamp(task.starts_at) };
   } catch (error) {

@@ -1,7 +1,9 @@
 import type { PoolClient } from "pg";
 import { db, query, withTransaction } from "./db";
 import { writeAudit } from "./audit";
+import { currentBankMonth } from "./banking-report";
 import { getBankStatement } from "./bank-statements";
+import { budgetReached, loadSpendingRows } from "./spending-analysis";
 import { nextOccurrence, previousStatementMonth, scheduleInput, type ScheduleInput } from "./schedule-time";
 import { processDailyReview } from "./scheduled-ai-reviews";
 import { getJevStatus } from "./jev";
@@ -15,8 +17,9 @@ export type ScheduledTask = {
   next_run_at: Date; retry_at: Date | null; attempts: number;
   status: "DRAFT" | "ACTIVE" | "PAUSED" | "CANCELLED" | "COMPLETED" | "ERROR";
   channel_identity_id: string | null; last_error: string | null; visitor_owner_id: string | null;
+  budget_category: string | null; budget_cap_minor: string | null; budget_alert_month: string | null;
 };
-const KIND_SOURCE: Record<ScheduleInput["kind"], string> = { REMINDER: "提醒", MONTHLY_REPORT: "月度账单", SUBSCRIPTION_CHECK: "订阅检查", DAILY_AI_REVIEW: "每日巡检" };
+const KIND_SOURCE: Record<ScheduleInput["kind"], string> = { REMINDER: "提醒", MONTHLY_REPORT: "月度账单", SUBSCRIPTION_CHECK: "订阅检查", DAILY_AI_REVIEW: "每日巡检", BUDGET_CHECK: "预算提醒" };
 
 // ownerId：对话里创建时是当前访客，只有他看得到、管得了；draft：先存成草稿，用户确认后再 activateScheduledDraft。
 export async function createScheduledTask(customerId: string, raw: unknown, options: { ownerId?: string | null; draft?: boolean } = {}) {
@@ -38,9 +41,10 @@ export async function createScheduledTask(customerId: string, raw: unknown, opti
       if (!channel.rowCount) throw new Error("CHANNEL_IDENTITY_NOT_FOUND");
     }
     const result = await client.query<ScheduledTask>(`INSERT INTO scheduled_tasks
-      (customer_id,request_key,kind,title,message,frequency,starts_at,ends_at,next_run_at,channel_identity_id,visitor_owner_id,status)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$7,$9,$10,$11) RETURNING *`,
-    [customerId, input.requestKey, input.kind, input.title, input.message, input.frequency, start, input.endsAt, input.channelIdentityId, ownerId, options.draft ? "DRAFT" : "ACTIVE"]);
+      (customer_id,request_key,kind,title,message,frequency,starts_at,ends_at,next_run_at,channel_identity_id,visitor_owner_id,status,budget_category,budget_cap_minor)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$7,$9,$10,$11,$12,$13) RETURNING *`,
+    [customerId, input.requestKey, input.kind, input.title, input.message, input.frequency, start, input.endsAt, input.channelIdentityId, ownerId, options.draft ? "DRAFT" : "ACTIVE",
+      input.budgetCategory, input.budgetCapMinor]);
     if (!options.draft) await writeAudit({ customerId, actorType: "USER", eventType: "SCHEDULE_CREATED", summary: "客户确认创建定时任务", evidence: { scheduleId: result.rows[0].id, kind: input.kind, frequency: input.frequency } }, client);
     return result.rows[0];
   });
@@ -72,6 +76,7 @@ export async function getOwnedSchedule(customerId: string, ownerId: string, id: 
 // 预览里的样例：用当前账本现算一次，让用户知道这个任务会发来什么。
 export async function sampleScheduleResult(customerId: string, task: Pick<ScheduledTask, "kind" | "title" | "message">) {
   if (task.kind === "DAILY_AI_REVIEW") return "每天先由 Jev 判断账户有没有需要关注的变化；有才请主模型从账本事实里挑出重点告诉你，没有就保持安静。只读，不会替你转账或下单。";
+  if (task.kind === "BUDGET_CHECK") return "每天检查一次本月这个分类的支出，花到上限的 80% 时发一次动态提醒。只读，不限制付款，也不会自动转账。";
   const client = await db.connect();
   try {
     const now = new Date();
@@ -124,8 +129,25 @@ export async function changeScheduledTask(customerId: string, id: string, action
 }
 
 function money(value: number) { return (value / 100).toFixed(2); }
+
+// 预算提醒：本月这个分类花到上限的 80% 时提醒一次（同一个月只提醒一次）。没到线或本月已提醒过，这一轮只留下运行记录。
+async function executeBudgetCheck(client: PoolClient, task: ScheduledTask, now: Date) {
+  const month = currentBankMonth(now);
+  const category = task.budget_category ?? "";
+  const cap = Number(task.budget_cap_minor ?? 0);
+  const rows = await loadSpendingRows(task.customer_id, month, month, client);
+  const spent = rows.filter(row => row.direction === "OUT" && row.category === category).reduce((total, row) => total + row.totalMinor, 0);
+  const status = `${category}本月已花 ¥${money(spent)}，上限 ¥${money(cap)}`;
+  if (!budgetReached(spent, cap)) return { summary: `${status}，还没到提醒线（上限的 80%）。`, notify: false };
+  const percent = Math.round((spent * 100) / cap);
+  if (task.budget_alert_month === month) return { summary: `${status}，占上限 ${percent}%，本月已经提醒过。`, notify: false };
+  await client.query("UPDATE scheduled_tasks SET budget_alert_month=$2 WHERE id=$1", [task.id, month]);
+  return { summary: `${status}，已超过上限的 80% 提醒线（占 ${percent}%）。`, notify: true };
+}
+
 async function executeReadOnlyTask(client: PoolClient, task: ScheduledTask, now: Date) {
   if (task.kind === "REMINDER") return { summary: `${task.title}：${task.message}`, notify: true };
+  if (task.kind === "BUDGET_CHECK") return executeBudgetCheck(client, task, now);
   if (task.kind === "MONTHLY_REPORT") {
     const month = previousStatementMonth(task.next_run_at);
     const statement = await getBankStatement(task.customer_id, month, client);
@@ -162,6 +184,8 @@ export async function tickScheduledTasks() {
       try {
         const isAI = task.kind === "DAILY_AI_REVIEW";
         const output = isAI ? { summary: "每日巡检已排队，等待 Jev 判断。", notify: false } : await executeReadOnlyTask(client, task, now);
+        // 预算提醒没到线、或本月已提醒过：只留下运行记录，不发动态，也不触发动态检查（不调 Jev）。
+        const quiet = task.kind === "BUDGET_CHECK" && !output.notify;
         let identity: { id: string; channel_type: string } | undefined;
         if (task.channel_identity_id) {
           const active = await client.query<{ id: string; channel_type: string }>("SELECT id,channel_type FROM channel_identities WHERE id=$1 AND customer_id=$2 AND status='ACTIVE' FOR SHARE", [task.channel_identity_id, task.customer_id]);
@@ -172,7 +196,7 @@ export async function tickScheduledTasks() {
           VALUES($1,$2,$5,$3,$4) ON CONFLICT(schedule_id,scheduled_for) DO UPDATE
           SET status=excluded.status,summary=excluded.summary,attempts=excluded.attempts,completed_at=now() RETURNING id`, [task.id, task.next_run_at, output.summary, task.attempts + 1, isAI ? "PENDING" : "SUCCEEDED"]);
         if (isAI) await client.query("INSERT INTO scheduled_ai_reviews(run_id) VALUES($1) ON CONFLICT DO NOTHING", [run.rows[0].id]);
-        else await publishScheduleResult(client, { customerId: task.customer_id, ownerId: task.visitor_owner_id, runId: run.rows[0].id, title: task.title, summary: output.summary, source: KIND_SOURCE[task.kind] });
+        else if (!quiet) await publishScheduleResult(client, { customerId: task.customer_id, ownerId: task.visitor_owner_id, runId: run.rows[0].id, title: task.title, summary: output.summary, source: KIND_SOURCE[task.kind] });
         if (identity && output.notify) {
           // Send a generic notice; financial details and custom reminder text stay in APP.
           await client.query(`INSERT INTO channel_outbox(channel_identity_id,customer_id,channel_type,dedupe_key,payload)
@@ -183,7 +207,7 @@ export async function tickScheduledTasks() {
         const finished = !next || !!task.ends_at && next > task.ends_at;
         await client.query(`UPDATE scheduled_tasks SET status=$2,next_run_at=$3,retry_at=NULL,attempts=0,last_error=NULL,updated_at=now() WHERE id=$1`, [task.id, finished ? "COMPLETED" : "ACTIVE", next ?? task.next_run_at]);
         // 提醒、扣费这类定时任务执行了，就是一个事件：打上检查标记，同一轮 tick 末尾的动态心跳会看到它。
-        await requestFeedCheck(task.customer_id, client);
+        if (!quiet) await requestFeedCheck(task.customer_id, client);
         await writeAudit({ customerId: task.customer_id, actorType: "SYSTEM", eventType: isAI ? "DAILY_REVIEW_QUEUED" : "SCHEDULE_EXECUTED", summary: isAI ? "每日巡检已排队" : "定时任务结果已保存", evidence: { scheduleId: task.id, runId: run.rows[0].id, notificationQueued: !!identity && output.notify } }, client);
       } catch {
         await client.query("ROLLBACK TO SAVEPOINT occurrence");
