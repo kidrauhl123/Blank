@@ -235,11 +235,11 @@ export function AppAssistant({ rootRef, configured, voiceEnabled = false, openSi
     })();
   }, [run, busy, rootRef, receive, pause, ask, markStep, controlledPage, onShowBankPage]);
 
-  const send = async (text = input) => {
+  const send = async (text = input, source: "typed" | "voice" = "typed") => {
     // 讨论一条动态时，帖子原文作为上下文随消息发出；空输入也可以直接请 Blank 展开。
     const typed = text.trim() || (quote ? "展开说说这条动态" : "");
     const quoted = quote && typed ? quote : null;
-    const message = quoted ? `【引用动态】${quoted.text}\n\n${typed}`.slice(0, 1000) : typed;
+    const message = typed;
     const preferenceCommand = quoted ? null : parsePreferenceCommand(message);
     if (!message || busy || !rootRef.current || (!configured && !preferenceCommand)) return;
     followOutput.current = true;
@@ -260,7 +260,7 @@ export function AppAssistant({ rootRef, configured, voiceEnabled = false, openSi
         if (current?.pending) await transport.request({ command: "cancel", id: current.id });
         const page = captureAppPage(rootRef.current);
         setPageName(page.name);
-        await receive(await ask({ command: "start", message, page }));
+        await receive(await ask({ command: "start", message, ...(quoted ? { quote: quoted.text } : {}), source, page }));
       }
     } catch (reason) { setError(reason instanceof DOMException && reason.name === "AbortError" ? "已停止生成。" : reason instanceof Error ? reason.message : "Blank 未能启动"); }
     finally { setBusy(false); }
@@ -321,7 +321,7 @@ export function AppAssistant({ rootRef, configured, voiceEnabled = false, openSi
   const conversation = open || (controlledPage && pageHost) ? (
     <section className={`${styles.panel} ${presentation === "page" ? styles.pagePanel : ""}`} role={presentation === "page" ? "region" : "dialog"} aria-modal={presentation === "page" ? undefined : "false"} data-agent-overlay aria-label={presentation === "page" ? "Blank 会话" : "Blank 悬浮窗"}>
       <header><span><AssistantMark size={19} /><b>Blank</b></span>{presentation === "floating" && <><button onClick={closeConversation} aria-label="收起 Blank"><ChevronDown size={21} /></button><button onClick={closeConversation} aria-label="关闭 Blank 面板"><X size={19} /></button></>}</header>
-      {voiceOpen ? <VoiceCall voice={voice} close={() => { voice.stop(); setVoiceOpen(false); }} continueTask={message => { voice.stop(); setVoiceOpen(false); void send(message); }} /> : <>
+      {voiceOpen ? <VoiceCall voice={voice} close={() => { voice.stop(); setVoiceOpen(false); }} continueTask={message => { voice.stop(); setVoiceOpen(false); void send(message, "voice"); }} /> : <>
       {presentation !== "page" && <p className={styles.context}>已共享：{pageName} · 密码和验证码不共享</p>}
       <div className={styles.messages} onScroll={event => { const node = event.currentTarget; followOutput.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80; }}>
         {!messages.length && !run && <><p className={styles.intro}>告诉我你想查询或办理什么。</p><div className={styles.choices}>{["查一下我的余额", "分析本月账单", "比较一下理财产品"].map(prompt => <button key={prompt} disabled={busy || !configured} onClick={() => send(prompt)}>{prompt}</button>)}</div></>}

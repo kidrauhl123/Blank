@@ -61,7 +61,8 @@ test("feed posts take a reaction and open a quoted discussion without touching t
   await conversation.getByRole("button", { name: "发送给 Blank" }).click();
   await expect(conversation).toContainText("这笔消费发生在昨天。");
   expect(started).toMatchObject({ command: "start" });
-  expect(String(started?.message)).toMatch(/^【引用动态】这笔 ¥3,999 和你平时不太一样。[\s\S]*这是哪里的消费？$/);
+  // 引用的动态和用户亲手输入的话分开发送：message 只有用户的字，quote 是动态内容（服务端拼进给模型的文本，见 route.test.ts）。
+  expect(started).toMatchObject({ message: "这是哪里的消费？", quote: expect.stringMatching(/^这笔 ¥3,999 和你平时不太一样。/) });
   await expect(conversation.getByLabel("正在引用的动态")).toHaveCount(0);
   await expect(conversation.locator("p", { hasText: "这笔 ¥3,999 和你平时不太一样" })).toBeVisible();
   expect(writes).toEqual([]);

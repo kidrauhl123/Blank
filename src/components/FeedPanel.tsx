@@ -6,6 +6,7 @@ import { publishedLabel, yuan, type FeedChart, type FeedKind, type FeedPost, typ
 import { DEFAULT_LAYOUT, type Section } from "@/lib/ui-schema";
 import { AssistantMark } from "./AssistantMark";
 import styles from "./FeedPanel.module.css";
+import { ToolCardById } from "./ToolCard";
 
 type Reaction = "up" | "down";
 // kinds 是每类帖子的口味分；mutedSince 记录某类被踩成负分的时间，此后新发的同类帖子不再显示。
@@ -40,7 +41,8 @@ function matches(section: Extract<Section, { type: "feed" }>, post: FeedPost) {
 export function arrange(posts: FeedPost[], sections: Section[]) {
   const taken = new Set<string>();
   return sections.map(section => {
-    if (section.type === "assets") return { section, posts: [] as FeedPost[] };
+    // 资产卡和小工具区块不承载帖子，它们只在下面的渲染里出现。
+    if (section.type !== "feed") return { section, posts: [] as FeedPost[] };
     let found = posts.filter(post => !taken.has(post.id) && matches(section, post));
     if (section.latestPerKind) { const seen = new Set<string>(); found = found.filter(post => { const key = post.recipeId ?? post.kind; if (seen.has(key)) return false; seen.add(key); return true; }); }
     found = found.slice(0, section.limit);
@@ -102,8 +104,12 @@ export function FeedPanel({ owner, onDiscuss, assets, sections = DEFAULT_LAYOUT.
       : <>
         {groups.map(({ section, posts: found }, index) => section.type === "assets"
           ? <div key={`assets-${index}`}>{assets}</div>
-          : <div key={`feed-${index}`}>{found.length > 0 && section.title && <h2 className={styles.groupTitle}>{section.title}</h2>}{found.map(renderPost)}</div>)}
-        {groups.every(group => group.section.type === "assets" || group.posts.length === 0) && <p className={styles.empty}>{posts!.length === 0 ? "今天一切正常，没有新动态。" : "这个首页上没有要显示的动态。"}</p>}
+          : section.type === "tool"
+            ? <div key={`tool-${index}`}><ToolCardById id={section.toolId} /></div>
+            : section.type === "feed"
+              ? <div key={`feed-${index}`}>{found.length > 0 && section.title && <h2 className={styles.groupTitle}>{section.title}</h2>}{found.map(renderPost)}</div>
+              : null)}
+        {groups.every(group => group.section.type !== "feed" || group.posts.length === 0) && <p className={styles.empty}>{posts!.length === 0 ? "今天一切正常，没有新动态。" : "这个首页上没有要显示的动态。"}</p>}
       </>}
   </section>;
 }

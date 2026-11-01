@@ -6,11 +6,13 @@ import styles from "./AssistantMarkdown.module.css";
 import { RecipeCardById } from "./FeedPanel";
 import { ScheduleCardById } from "./ScheduleCard";
 import { ProposalCardById } from "./ProposalCard";
+import { RuleCardById } from "./RuleCard";
+import { ToolCardById } from "./ToolCard";
 
-// 回复里的 [[card:编号]]（动态卡片）、[[schedule:编号]]（定时任务）渲染成真正的预览卡片；流式输出中尚未写完的标记先隐藏。
+// 回复里的 [[card:编号]]（动态卡片）、[[schedule:编号]]（定时任务）、[[rule:编号]]（规矩）、[[tool:编号]]（小工具）渲染成真正的预览卡片；流式输出中尚未写完的标记先隐藏。
 // 去掉标记，只留给人读的文字（步骤记录、无障碍标签等不需要卡片的地方用）。
-export const stripMarkers = (text: string) => text.replace(/\[\[(?:card|schedule|proposal):[0-9a-f-]{36}\]\]\s*/g, "").trim();
-const MARKER = /\[\[(card|schedule|proposal):([0-9a-f-]{36})\]\]/g;
+export const stripMarkers = (text: string) => text.replace(/\[\[(?:card|schedule|proposal|rule|tool):[0-9a-f-]{36}\]\]\s*/g, "").trim();
+const MARKER = /\[\[(card|schedule|proposal|rule|tool):([0-9a-f-]{36})\]\]/g;
 const UNFINISHED = /\[\[(?:[a-z]{0,8}(?::[0-9a-f-]{0,35})?)?$/;
 export function AssistantMarkdown({ text }: { text: string }) {
   const visible = text.replace(UNFINISHED, "");
@@ -20,7 +22,7 @@ export function AssistantMarkdown({ text }: { text: string }) {
   for (let index = 0; index < parts.length; index += 3) {
     if (parts[index].trim()) nodes.push(<MarkdownText key={`t${index}`} text={parts[index]} />);
     const type = parts[index + 1], id = parts[index + 2];
-    if (type && id) nodes.push(type === "card" ? <RecipeCardById key={`${type}${id}${index}`} id={id} /> : type === "schedule" ? <ScheduleCardById key={`${type}${id}${index}`} id={id} /> : <ProposalCardById key={`${type}${id}${index}`} id={id} />);
+    if (type && id) nodes.push(type === "card" ? <RecipeCardById key={`${type}${id}${index}`} id={id} /> : type === "schedule" ? <ScheduleCardById key={`${type}${id}${index}`} id={id} /> : type === "rule" ? <RuleCardById key={`${type}${id}${index}`} id={id} /> : type === "tool" ? <ToolCardById key={`${type}${id}${index}`} id={id} /> : <ProposalCardById key={`${type}${id}${index}`} id={id} />);
   }
   return <>{nodes}</>;
 }

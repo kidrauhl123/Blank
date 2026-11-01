@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { authenticateRequest } from "@/lib/auth";
-import { prepareTransfer } from "@/lib/bank-core";
+import { commitTransfer, prepareTransfer } from "@/lib/bank-core";
 import { apiError, assertSameOrigin } from "@/lib/http";
+import { resolveVisitorMemoryScope } from "@/lib/visitor-memory";
 
 const schema = z.object({
   fromAccountId: z.string().uuid(),
@@ -15,7 +16,19 @@ export async function POST(request: Request) {
     assertSameOrigin(request);
     const principal = await authenticateRequest(request);
     const input = schema.parse(await request.json());
-    return Response.json(await prepareTransfer(principal.customerId, input), { status: 201 });
+    // 没有访客 cookie 时没有任何规矩，走原来的确认流程。
+    const scope = await resolveVisitorMemoryScope(request, principal.customerId);
+    const prepared = await prepareTransfer(principal.customerId, input, { ownerId: scope?.ownerId ?? null });
+    if ("ruleId" in prepared) {
+      // 规矩内的转账直接过账；过账前会再判一次规矩，已经不覆盖就取消，资金不动。
+      const done = await commitTransfer(principal.customerId, prepared.operationId, { totpCode: null, taskId: null });
+      // 只有真正过账成功才能告诉用户“已转出”；取消或风险升高都按没有转出处理。
+      if (done.status !== "SUCCEEDED") {
+        return Response.json({ error: "RULE_NOT_EXECUTABLE", message: "规矩已变化（暂停、撤销、超出限额或当天转账较多），这笔没有转出，请照常确认。", reasons: "reasons" in done ? done.reasons : [] }, { status: 409 });
+      }
+      return Response.json({ ...done, viaRule: true, ruleId: prepared.ruleId, riskLevel: "GREEN", requiredAuth: "NONE" }, { status: 201 });
+    }
+    return Response.json(prepared, { status: 201 });
   } catch (error) {
     return apiError(error, "TRANSFER_PREPARE_FAILED");
   }

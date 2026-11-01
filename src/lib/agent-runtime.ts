@@ -33,7 +33,7 @@ type AuthorizationInterrupt = {
   taskId: string;
   operationId: string;
   riskLevel: "GREEN" | "YELLOW" | "RED";
-  requiredAuth: "CONFIRM" | "MFA";
+  requiredAuth: "NONE" | "CONFIRM" | "MFA";
   title: string;
   details: Array<{ label: string; value: string }>;
 };

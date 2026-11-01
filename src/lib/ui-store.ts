@@ -84,6 +84,7 @@ export async function createProposal(customerId: string, ownerId: string, kind: 
 
 function sectionLabel(section: Section, cards: Map<string, string>) {
   if (section.type === "assets") return { label: "资产", detail: "总资产和活期、理财构成" };
+  if (section.type === "tool") return { label: "小工具", detail: "你保存到首页的交互工具" };
   const what = section.kinds?.length || section.recipeIds?.length
     ? [...(section.kinds ?? []).map(kind => KIND_NAMES[kind]), ...(section.recipeIds ?? []).map(id => cards.get(id) ?? "已删除的卡片")].join("、") : "其余动态";
   const extra = [`最多 ${section.limit} 条`, section.latestPerKind ? "每类只放最新一条" : "", section.excludeKinds?.length ? `不含${section.excludeKinds.map(kind => KIND_NAMES[kind]).join("、")}` : ""].filter(Boolean).join("，");

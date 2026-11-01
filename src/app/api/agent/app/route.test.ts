@@ -29,3 +29,18 @@ describe("page agent failure response", () => {
     expect(JSON.stringify([body, log.mock.calls])).not.toMatch(/sk-private|private upstream|test-session|test-customer/);
   });
 });
+
+describe("quoted feed posts", () => {
+  it("gives the model the quote as data, while the turn text stays the user's own typed words", async () => {
+    mocks.session.mockResolvedValue({ customerId: "test-customer", sessionHash: "test-session" });
+    mocks.start.mockResolvedValue({ id: "00000000-0000-4000-8000-0000000000a1", status: "COMPLETED" });
+    const response = await POST(new Request("https://bank.example/api/agent/app", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ command: "start", message: "这是哪里的消费？", quote: "这笔 ¥3,999 和你平时不太一样。", source: "typed", page: { name: "测试页", version: "v1", text: "", controls: [] } }),
+    }));
+    expect(response.status).toBe(200);
+    // 引用的动态是外部内容：只放进给模型的文本里，立规矩等判断只认 turn.text（用户亲手输入的话）。
+    expect(mocks.start).toHaveBeenCalledWith({ customerId: "test-customer", sessionHash: "test-session" },
+      "【引用动态】这笔 ¥3,999 和你平时不太一样。\n\n这是哪里的消费？", expect.any(Object), "selected-test-model", { text: "这是哪里的消费？", source: "typed" });
+  });
+});

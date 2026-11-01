@@ -14,7 +14,8 @@ import type { AppAgentStreamEvent } from "@/lib/app-agent-stream-protocol";
 export const runtime = "nodejs";
 
 const schema = z.discriminatedUnion("command", [
-  z.object({ command: z.literal("start"), message: z.string().trim().min(1).max(1000), page: pageSchema, model: z.string().min(1).max(160).optional() }),
+  // quote 是用户在“讨论”里引用的动态原文，和用户亲手输入的 message 分开：立规矩只认 message，引用内容（可能含商户名等外部文字）不算。
+  z.object({ command: z.literal("start"), message: z.string().trim().min(1).max(1000), quote: z.string().trim().max(600).optional(), source: z.enum(["typed", "voice"]).default("typed"), page: pageSchema, model: z.string().min(1).max(160).optional() }),
   z.object({ command: z.enum(["allow", "pause", "cancel"]), id: z.string().uuid() }),
   z.object({ command: z.enum(["advance", "refresh"]), id: z.string().uuid(), actionId: z.string().min(1).max(200), result: actionResultSchema }),
 ]);
@@ -46,7 +47,10 @@ export async function POST(request: Request) {
     const scope = await resolveVisitorMemoryScope(request, who.customerId);
     const input = schema.parse(await request.json());
     const execute = () => withPreferenceScope(scope, async () => {
-      if (input.command === "start") return startAppAgent(who, input.message, input.page, input.model ?? await getSessionModel(who) ?? undefined);
+      if (input.command === "start") {
+        const forModel = input.quote ? `【引用动态】${input.quote}\n\n${input.message}`.slice(0, 1000) : input.message;
+        return startAppAgent(who, forModel, input.page, input.model ?? await getSessionModel(who) ?? undefined, { text: input.message, source: input.source });
+      }
       if (input.command === "advance" || input.command === "refresh") return controlAppAgent(who, input.id, input.command, input.actionId, input.result);
       return controlAppAgent(who, input.id, input.command);
     });

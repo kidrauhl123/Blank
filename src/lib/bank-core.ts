@@ -8,6 +8,7 @@ import { transferFingerprint } from "./transfer-binding";
 import { writeAudit } from "./audit";
 import { getBankStatement } from "./bank-statements";
 import { getInvestmentOverview } from "./investments";
+import { findCoveringRule, lockRuleOwnerForTransfer } from "./wallet-store";
 
 export async function getBankingOverview(customerId: string) {
   const [customer, accounts, transactions, cards, subscriptions, statement, investments] = await Promise.all([
@@ -128,7 +129,34 @@ async function resolveRecipient(customerId: string, recipient: string) {
   return result.rows[0];
 }
 
-export async function prepareTransfer(customerId: string, input: { fromAccountId: string; recipient: string; amountMinor: number; note?: string | null }) {
+// 普通草稿和规矩草稿共用：受益人、转账行、策略决定。两条分支只在参数上不同，共用一份 SQL，避免两边漂移。
+async function insertPreparedTransfer(client: PoolClient, draft: {
+  operationId: string; customerId: string; sourceAccountId: string; recipient: Recipient; amountMinor: number; note: string | null;
+  riskLevel: "GREEN" | "YELLOW" | "RED"; requiredAuth: "NONE" | "CONFIRM" | "MFA"; fingerprint: string; expiresAt: string; ruleId: string | null;
+  policy: { baseLevel: string; finalLevel: string; matchedRules: string[]; evidence: Record<string, unknown> };
+}) {
+  const beneficiary = await client.query<{ id: string }>(
+    `INSERT INTO beneficiaries (customer_id,name,phone,bank_name,masked_account,settlement_account_id,recipient_customer_id,trusted)
+     VALUES ($1,$2,$3,'Blank',$4,$5,$6,false)
+     ON CONFLICT (customer_id,settlement_account_id) DO UPDATE SET name=excluded.name,phone=excluded.phone,masked_account=excluded.masked_account,recipient_customer_id=excluded.recipient_customer_id
+     RETURNING id`,
+    [draft.customerId, draft.recipient.display_name, draft.recipient.phone, draft.recipient.masked_no, draft.recipient.account_id, draft.recipient.customer_id],
+  );
+  await client.query(
+    `INSERT INTO transfers
+     (operation_id,idempotency_key,customer_id,from_account_id,beneficiary_id,amount_minor,currency,note,risk_level,required_auth,status,authorization_fingerprint,authorization_expires_at,rule_id)
+     VALUES ($1,$2,$3,$4,$5,$6,'CNY',$7,$8,$9,'AWAITING_AUTH',$10,$11,$12)`,
+    [draft.operationId, randomUUID(), draft.customerId, draft.sourceAccountId, beneficiary.rows[0].id, draft.amountMinor, draft.note, draft.riskLevel, draft.requiredAuth, draft.fingerprint, draft.expiresAt, draft.ruleId],
+  );
+  await client.query(
+    `INSERT INTO policy_decisions (operation_id,base_level,final_level,matched_rules,evidence)
+     VALUES ($1,$2,$3,$4::jsonb,$5::jsonb)`,
+    [draft.operationId, draft.policy.baseLevel, draft.policy.finalLevel, JSON.stringify(draft.policy.matchedRules), JSON.stringify(draft.policy.evidence)],
+  );
+}
+
+// options.ownerId 是访客（规矩的拥有者）；没有访客就没有任何规矩，整个流程和以前一样。
+export async function prepareTransfer(customerId: string, input: { fromAccountId: string; recipient: string; amountMinor: number; note?: string | null }, options: { ownerId?: string | null } = {}) {
   if (!Number.isSafeInteger(input.amountMinor) || input.amountMinor <= 0 || input.amountMinor > 100_000_000) throw new Error("INVALID_TRANSFER_AMOUNT");
   const [sourceResult, recipient] = await Promise.all([
     query<{ id: string; name: string; masked_no: string; available_balance_minor: string }>(
@@ -140,37 +168,59 @@ export async function prepareTransfer(customerId: string, input: { fromAccountId
   ]);
   const source = sourceResult.rows[0];
   if (!source) throw new Error("ACCOUNT_NOT_FOUND");
-  if (Number(source.available_balance_minor) < input.amountMinor) throw new Error("INSUFFICIENT_FUNDS");
   const clock = await query<{ at: string }>("SELECT clock_timestamp()::text AS at");
   const dailyTotalMinor = await readDailyTransferTotal(customerId, clock.rows[0].at);
   const known = await query("SELECT trusted FROM beneficiaries WHERE customer_id=$1 AND settlement_account_id=$2", [customerId, recipient.account_id]);
   const risk = evaluateTransferRisk({ amountMinor: input.amountMinor, dailyTotalMinor, trustedBeneficiary: Boolean(known.rows[0]?.trusted) });
   const operationId = `TRF-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`;
 
-  return withTransaction(async (client) => {
+  const result = await withTransaction(async (client) => {
+    // 规矩判断用事务内的时刻：覆盖判断、暂停和日期口径都和本次草稿落库在同一个事务里。
+    const txClock = await client.query<{ at: string }>("SELECT clock_timestamp()::text AS at");
+    const now = new Date(txClock.rows[0].at);
+    const cover = options.ownerId ? await findCoveringRule(client, customerId, options.ownerId, recipient.customer_id, input.amountMinor, dailyTotalMinor, now) : null;
+    if (cover?.covered === true) {
+      // 规矩内：源账户换成付款人的钱包子账户，免确认的钱只从钱包出，主账户不动，损失封顶在钱包余额。
+      const wallet = (await client.query<{ id: string; name: string; masked_no: string; available_balance_minor: string; customer_id: string; status: string }>(
+        "SELECT id,name,masked_no,available_balance_minor,customer_id,status FROM accounts WHERE id=$1 FOR UPDATE", [cover.walletAccountId])).rows[0];
+      if (!wallet || wallet.customer_id !== customerId || wallet.status !== "ACTIVE") throw new Error("ACCOUNT_NOT_FOUND");
+      if (Number(wallet.available_balance_minor) < input.amountMinor) throw new Error("INSUFFICIENT_FUNDS");
+      const expiry = await client.query<{ expires_at: Date }>("SELECT clock_timestamp()+interval '10 minutes' AS expires_at");
+      const expiresAt = expiry.rows[0].expires_at.toISOString();
+      const fingerprint = transferFingerprint({ operationId, customerId, source: wallet.id, target: recipient.account_id,
+        recipientCustomerId: recipient.customer_id, recipientName: recipient.display_name, recipientPhone: recipient.phone,
+        recipientMasked: recipient.masked_no, amountMinor: input.amountMinor, currency: "CNY", note: input.note ?? null, expiresAt });
+      await insertPreparedTransfer(client, { operationId, customerId, sourceAccountId: wallet.id, recipient, amountMinor: input.amountMinor, note: input.note ?? null,
+        riskLevel: "GREEN", requiredAuth: "NONE", fingerprint, expiresAt, ruleId: cover.ruleId,
+        policy: { baseLevel: "GREEN", finalLevel: "GREEN", matchedRules: ["RULE_COVERED", cover.ruleId], evidence: { amountMinor: input.amountMinor, timeZone: "Asia/Shanghai" } } });
+      await writeAudit({ customerId, eventType: "TRANSFER_PREPARED", actorType: "USER", summary: "规矩覆盖的转账草稿已创建", operationId,
+        evidence: { fromAccountId: wallet.id, recipientCustomerId: recipient.customer_id, amountMinor: input.amountMinor, riskLevel: "GREEN", fingerprint, ruleId: cover.ruleId } }, client);
+      return {
+        operationId,
+        status: "AWAITING_AUTH" as const,
+        riskLevel: "GREEN" as const,
+        requiredAuth: "NONE" as const,
+        authorizationExpiresAt: expiresAt,
+        ruleId: cover.ruleId,
+        details: {
+          amountMinor: input.amountMinor,
+          currency: "CNY",
+          sourceAccount: { id: wallet.id, name: wallet.name, maskedNo: wallet.masked_no },
+          recipient: { name: recipient.display_name, phoneMasked: `${recipient.phone.slice(0, 3)}****${recipient.phone.slice(-4)}`, maskedAccount: recipient.masked_no },
+          note: input.note ?? null,
+        },
+      };
+    }
+    // 规矩之外走原来的流程。上面的 findCoveringRule 可能已在本事务里暂停了规矩，所以余额不够时不能抛错（抛错会把暂停回滚掉），改为返回标记，事务提交后再抛。
+    if (Number(source.available_balance_minor) < input.amountMinor) return { insufficient: true as const };
     const expiry = await client.query<{ expires_at: Date }>("SELECT clock_timestamp()+interval '10 minutes' AS expires_at");
     const expiresAt = expiry.rows[0].expires_at.toISOString();
     const fingerprint = transferFingerprint({ operationId, customerId, source: source.id, target: recipient.account_id,
       recipientCustomerId: recipient.customer_id, recipientName: recipient.display_name, recipientPhone: recipient.phone,
       recipientMasked: recipient.masked_no, amountMinor: input.amountMinor, currency: "CNY", note: input.note ?? null, expiresAt });
-    const beneficiary = await client.query<{ id: string }>(
-      `INSERT INTO beneficiaries (customer_id,name,phone,bank_name,masked_account,settlement_account_id,recipient_customer_id,trusted)
-       VALUES ($1,$2,$3,'Blank',$4,$5,$6,false)
-       ON CONFLICT (customer_id,settlement_account_id) DO UPDATE SET name=excluded.name,phone=excluded.phone,masked_account=excluded.masked_account,recipient_customer_id=excluded.recipient_customer_id
-       RETURNING id`,
-      [customerId, recipient.display_name, recipient.phone, recipient.masked_no, recipient.account_id, recipient.customer_id],
-    );
-    await client.query(
-      `INSERT INTO transfers
-       (operation_id,idempotency_key,customer_id,from_account_id,beneficiary_id,amount_minor,currency,note,risk_level,required_auth,status,authorization_fingerprint,authorization_expires_at)
-       VALUES ($1,$2,$3,$4,$5,$6,'CNY',$7,$8,$9,'AWAITING_AUTH',$10,$11)`,
-      [operationId, randomUUID(), customerId, source.id, beneficiary.rows[0].id, input.amountMinor, input.note ?? null, risk.finalLevel, risk.requiredAuth, fingerprint, expiresAt],
-    );
-    await client.query(
-      `INSERT INTO policy_decisions (operation_id,base_level,final_level,matched_rules,evidence)
-       VALUES ($1,$2,$3,$4::jsonb,$5::jsonb)`,
-      [operationId, risk.baseLevel, risk.finalLevel, JSON.stringify(risk.matchedRules), JSON.stringify({ amountMinor: input.amountMinor, dailyTotalMinor, knownBeneficiary: Boolean(known.rowCount), timeZone: "Asia/Shanghai" })],
-    );
+    await insertPreparedTransfer(client, { operationId, customerId, sourceAccountId: source.id, recipient, amountMinor: input.amountMinor, note: input.note ?? null,
+      riskLevel: risk.finalLevel, requiredAuth: risk.requiredAuth, fingerprint, expiresAt, ruleId: null,
+      policy: { baseLevel: risk.baseLevel, finalLevel: risk.finalLevel, matchedRules: risk.matchedRules, evidence: { amountMinor: input.amountMinor, dailyTotalMinor, knownBeneficiary: Boolean(known.rowCount), timeZone: "Asia/Shanghai" } } });
     if (risk.requiredAuth === "MFA") {
       await client.query(
         `INSERT INTO authorization_challenges (customer_id,operation_id,method,code_hash,expires_at)
@@ -194,15 +244,18 @@ export async function prepareTransfer(customerId: string, input: { fromAccountId
       },
     };
   });
+  if ("insufficient" in result) throw new Error("INSUFFICIENT_FUNDS");
+  return result;
 }
 
 type TransferRow = {
   id: string; operation_id: string; customer_id: string; from_account_id: string; beneficiary_id: string;
-  amount_minor: string; currency: string; risk_level: "YELLOW" | "RED"; required_auth: "CONFIRM" | "MFA";
+  amount_minor: string; currency: string; risk_level: "GREEN" | "YELLOW" | "RED"; required_auth: "NONE" | "CONFIRM" | "MFA";
   status: string; authorization_fingerprint: string; beneficiary_name: string; recipient_customer_id: string;
   target_account_id: string;
   trusted_beneficiary: boolean; prepared_at: Date;
   beneficiary_phone: string | null; masked_account: string; note: string | null; authorization_expires_at: Date;
+  rule_id: string | null;
 };
 
 export async function commitTransfer(customerId: string, operationId: string, input: { totpCode?: string | null; taskId?: string | null }) {
@@ -210,6 +263,8 @@ export async function commitTransfer(customerId: string, operationId: string, in
     // Re-read committed transfers after the customer lock is acquired. A
     // repeatable-read snapshot taken while waiting would miss the prior payer.
     await client.query("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
+    // 规矩转账先拿访客的锁，再锁任何账户行：草稿路径（findCoveringRule）也是先拿访客锁再锁钱包账户，两边顺序一致才不会互相等待。
+    await lockRuleOwnerForTransfer(client, customerId, operationId);
     // Serialize all outgoing accounts/channels for this customer. NO KEY UPDATE
     // remains compatible with recipient audit/transfer foreign-key KEY SHARE
     // locks, so opposite-direction transfers do not lock both customers.
@@ -225,7 +280,7 @@ export async function commitTransfer(customerId: string, operationId: string, in
     if (!row) throw new Error("OPERATION_NOT_FOUND");
     if (row.status === "SUCCEEDED") {
       const receipt = await client.query("SELECT id,reference,posted_at FROM ledger_transactions WHERE transfer_id=$1", [row.id]);
-      return { alreadyExecuted: true, operationId, status: "SUCCEEDED", receipt: receipt.rows[0] };
+      return { alreadyExecuted: true, operationId, status: "SUCCEEDED" as const, receipt: receipt.rows[0] };
     }
     if (row.status !== "AWAITING_AUTH") throw new Error("OPERATION_NOT_EXECUTABLE");
     const expectedFingerprint = transferFingerprint({ operationId, customerId, source: row.from_account_id, target: row.target_account_id,
@@ -257,6 +312,22 @@ export async function commitTransfer(customerId: string, operationId: string, in
       || new Date(row.prepared_at).getTime() + 10 * 60 * 1000 <= new Date(postingAt).getTime()) throw new Error("AUTH_EXPIRED");
     const dailyTotalMinor = await readDailyTransferTotal(customerId, postingAt, client);
     const risk = evaluateTransferRisk({ amountMinor: Number(row.amount_minor), dailyTotalMinor, trustedBeneficiary: row.trusted_beneficiary });
+    if (row.rule_id) {
+      // 规矩内的转账过账前按当下的规矩重判：暂停、撤销、超限或收款人已不在名单里，就取消而不是硬过账。
+      // 这里不能抛异常：findCoveringRule 可能已在本事务里暂停了规矩，回滚会把暂停撤掉。
+      const ruleOwner = await client.query<{ owner_id: string }>("SELECT owner_id FROM wallet_rules WHERE id=$1 AND customer_id=$2", [row.rule_id, customerId]);
+      const verdict = ruleOwner.rows[0] ? await findCoveringRule(client, customerId, ruleOwner.rows[0].owner_id, row.recipient_customer_id, Number(row.amount_minor), dailyTotalMinor, new Date(postingAt)) : null;
+      // 规矩内的转账绝不升级成强验证：风险升高（当天转账较多）就取消，让用户重新发起。
+      if (!verdict || !verdict.covered || verdict.ruleId !== row.rule_id || risk.requiredAuth === "MFA") {
+        // 规矩不属于本客户时查不到 owner，按不覆盖处理。
+        // 复核给出的具体原因优先；规矩仍覆盖、只是风险升高时，才用“需要本人确认”兜底。
+        const reasons = verdict && !verdict.covered && verdict.reasons.length > 0 ? verdict.reasons
+          : risk.requiredAuth === "MFA" ? ["当天转账较多，这笔需要你本人确认"] : ["规矩已不再覆盖这笔转账"];
+        await client.query("UPDATE transfers SET status='CANCELLED', version=version+1 WHERE id=$1", [row.id]);
+        await writeAudit({ customerId, eventType: "TRANSFER_CANCELLED_BY_RULE", actorType: "POLICY_ENGINE", summary: "规矩复核未通过，转账已取消，资金未转出", operationId, evidence: { ruleId: row.rule_id, reasons } }, client);
+        return { operationId, status: "CANCELLED" as const, reasons };
+      }
+    }
     if (row.required_auth !== "MFA" && risk.requiredAuth === "MFA") {
       await client.query("UPDATE transfers SET risk_level='RED',required_auth='MFA',version=version+1 WHERE id=$1", [row.id]);
       const upgraded = await client.query<{ expires_at: Date }>(
@@ -316,7 +387,7 @@ export async function commitTransfer(customerId: string, operationId: string, in
     await client.query(
       `INSERT INTO bank_transactions (account_id,merchant_name,category,amount_minor,occurred_at,metadata)
        VALUES ($1,$2,'转账',$3,$8,$4::jsonb),($5,$6,'转账',$7,$8,$4::jsonb)`,
-      [row.from_account_id, `转账给${row.beneficiary_name}`, -Number(row.amount_minor), JSON.stringify({ operationId, ledgerReference: ledger.rows[0].reference }), row.target_account_id, "来自 Blank 用户的转账", Number(row.amount_minor), postingAt],
+      [row.from_account_id, `转账给${row.beneficiary_name}`, -Number(row.amount_minor), JSON.stringify({ operationId, ledgerReference: ledger.rows[0].reference, ...(row.rule_id ? { ruleId: row.rule_id } : {}) }), row.target_account_id, "来自 Blank 用户的转账", Number(row.amount_minor), postingAt],
     );
     await client.query("UPDATE transfers SET status='SUCCEEDED',executed_at=$2,version=version+1 WHERE id=$1", [row.id, postingAt]);
     if (input.taskId) await client.query("UPDATE agent_tasks SET status='SUCCEEDED',updated_at=now() WHERE id=$1 AND customer_id=$2", [input.taskId, customerId]);
@@ -324,17 +395,17 @@ export async function commitTransfer(customerId: string, operationId: string, in
     if (row.recipient_customer_id) {
       await writeAudit({ customerId: row.recipient_customer_id, eventType: "TRANSFER_RECEIVED", actorType: "BANK_CORE", summary: "收到 Blank 客户转账", operationId, evidence: { ledgerReference: ledger.rows[0].reference, amountMinor: Number(row.amount_minor) } }, client);
     }
-    return { operationId, status: "SUCCEEDED", receipt: ledger.rows[0], amountMinor: Number(row.amount_minor), beneficiary: row.beneficiary_name };
+    return { operationId, status: "SUCCEEDED" as const, receipt: ledger.rows[0], amountMinor: Number(row.amount_minor), beneficiary: row.beneficiary_name };
   });
 }
 
 export async function getOperation(customerId: string, operationId: string) {
   const transfer = await query<{
-    operation_id: string; amount_minor: string; currency: string; risk_level: "YELLOW" | "RED"; required_auth: "CONFIRM" | "MFA";
+    operation_id: string; amount_minor: string; currency: string; risk_level: "GREEN" | "YELLOW" | "RED"; required_auth: "NONE" | "CONFIRM" | "MFA";
     status: string; prepared_at: string; executed_at: string | null; beneficiary_name: string; beneficiary_phone: string; authorization_expires_at: Date;
-    masked_account: string; source_name: string; source_masked_no: string; note: string | null;
+    masked_account: string; source_name: string; source_masked_no: string; note: string | null; rule_id: string | null;
   }>(
-    `SELECT t.operation_id,t.amount_minor,t.currency,t.risk_level,t.required_auth,t.status,t.prepared_at::text,t.executed_at::text,t.note,t.authorization_expires_at,
+    `SELECT t.operation_id,t.amount_minor,t.currency,t.risk_level,t.required_auth,t.status,t.prepared_at::text,t.executed_at::text,t.note,t.authorization_expires_at,t.rule_id,
             b.name AS beneficiary_name,b.phone AS beneficiary_phone,b.masked_account,a.name AS source_name,a.masked_no AS source_masked_no
      FROM transfers t JOIN beneficiaries b ON b.id=t.beneficiary_id JOIN accounts a ON a.id=t.from_account_id
      WHERE t.customer_id=$1 AND t.operation_id=$2`,
@@ -346,6 +417,7 @@ export async function getOperation(customerId: string, operationId: string) {
     operationId: row.operation_id, status: row.status, riskLevel: row.risk_level, requiredAuth: row.required_auth,
     preparedAt: row.prepared_at, executedAt: row.executed_at,
     authorizationExpiresAt: row.authorization_expires_at.toISOString(),
+    ruleId: row.rule_id, authorizedByRule: row.rule_id !== null,
     details: {
       amountMinor: Number(row.amount_minor), currency: row.currency,
       sourceAccount: { name: row.source_name, maskedNo: row.source_masked_no },

@@ -3,7 +3,7 @@
 import {
   ChartNoAxesColumnIncreasing,
   ChevronRight, Clock3, CreditCard, House, Link2,
-  LogOut, Plus, RefreshCw, Settings, ShieldCheck, TrendingUp,
+  LogOut, Plus, RefreshCw, Settings, ShieldCheck, TrendingUp, Wallet,
 } from "lucide-react";
 import { FormEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
 import { ServiceWorkerRegister } from "./ServiceWorkerRegister";
@@ -26,7 +26,7 @@ import { bankRequest, BankRequestError, jsonPost } from "@/lib/client-request";
 import styles from "./BankingApp.module.css";
 
 type Account = { id: string; name: string; account_no: string; masked_no: string; account_type: string; available_balance_minor: string; currency: string; status: string };
-type Transaction = { id: string; merchant_name: string; category: string; amount_minor: string; occurred_at: string; is_anomaly: boolean; investment_receipt?: InvestmentReceipt | null };
+type Transaction = { id: string; merchant_name: string; category: string; amount_minor: string; occurred_at: string; is_anomaly: boolean; investment_receipt?: InvestmentReceipt | null; metadata?: { ruleId?: string } | null };
 type Card = { id: string; card_name: string; masked_no: string; card_type: string; status: string; daily_limit_minor: string };
 type Bootstrap = { customer: { display_name: string; phone: string; mfa_configured: boolean }; totalMinor: number; accounts: Account[]; transactions: Transaction[]; cards: Card[]; statement: BankStatement; investmentValueMinor?: number; ai: { configured: boolean; model: string | null }; features?: { voiceCalls?: boolean } };
 type BusinessTab = "home" | "activity" | "cards" | "wealth" | `page:${string}`;
@@ -38,6 +38,8 @@ type PreparedTransfer = {
   operationId: string; riskLevel: "YELLOW" | "RED"; requiredAuth: "CONFIRM" | "MFA";
   taskId?: string;
   status?: string;
+  // 规矩内已直接转出，不需要本人核对。
+  viaRule?: boolean;
   details: { amountMinor: number; sourceAccount: { name: string; maskedNo: string }; recipient: { name: string; phoneMasked: string; maskedAccount: string }; note?: string | null };
 };
 
@@ -78,6 +80,8 @@ export function BankingApp() {
   const showBankPage = useCallback(() => setTab(lastBusinessTab.current), []);
   const appRoot = useRef<HTMLElement>(null);
   const [prepared, setPrepared] = useState<PreparedTransfer | null>(null);
+  const [prefill, setPrefill] = useState<{ recipient: string; amountMinor: number } | null>(null);
+  const [prefillKey, setPrefillKey] = useState(0);
   const [actionBusy, setActionBusy] = useState(false);
   const [logoutBusy, setLogoutBusy] = useState(false);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -118,12 +122,28 @@ export function BankingApp() {
     }).catch(reason => setError(reason instanceof Error ? reason.message : "无法读取待确认操作，请重新打开链接。"));
   }, [data]);
 
+  // 小工具的“去转账”只派发事件，由这里预填并打开转账弹窗。弹窗挂在业务页下面，从 Blank 页来时要先切回业务页。
+  useEffect(() => {
+    const openTransfer = (event: Event) => {
+      // 事件可能来自页面上的任何脚本：形状不对就什么都不做，不替用户填任何东西。
+      const detail = (event as CustomEvent<Partial<{ recipient: unknown; amountMinor: unknown }> | undefined>).detail;
+      const recipient = detail?.recipient;
+      const amountMinor = detail?.amountMinor;
+      if (typeof recipient !== "string" || typeof amountMinor !== "number" || !Number.isSafeInteger(amountMinor) || amountMinor <= 0) return;
+      setPrefill({ recipient, amountMinor }); setPrefillKey(key => key + 1); setDialog("transfer"); setPrepared(null);
+      if (tab === "assistant") showBankPage();
+    };
+    window.addEventListener("blank:open-transfer", openTransfer);
+    return () => window.removeEventListener("blank:open-transfer", openTransfer);
+  }, [tab, showBankPage]);
+
   const pageGone = businessTab.startsWith("page:") && !ui.pages.some(page => `page:${page.id}` === businessTab);
   // 当前所在的自定义页面被删掉时，显示上回到首页（不改 state，避免在渲染外同步 setState）。
   const shownBusiness: BusinessTab = pageGone ? "home" : businessTab;
   const shownTab: Tab = tab.startsWith("page:") && !ui.pages.some(page => `page:${page.id}` === tab) ? "home" : tab;
   const navigate = (next: BusinessTab) => { lastBusinessTab.current = next; setBusinessTab(next); setTab(next); };
-  const closeTransfer = () => { setDialog(null); setPrepared(null); setMfaCode(""); if (location.search) history.replaceState(null, "", location.pathname); };
+  // 预填只属于这一次打开，关掉就清掉，否则下次手动打开转账会带着上一位收款人。
+  const closeTransfer = () => { setDialog(null); setPrepared(null); setPrefill(null); setMfaCode(""); if (location.search) history.replaceState(null, "", location.pathname); };
   const afterAction = async (message: string, next?: Tab) => {
     closeTransfer(); setNotice(message); if (next && next !== "assistant") navigate(next); await load();
   };
@@ -183,7 +203,7 @@ export function BankingApp() {
     </section>
     <div hidden={assistantVisible}>
     {dialog === "deposit" && account && <DepositModal account={account} busy={actionBusy} close={() => setDialog(null)} done={() => afterAction("入金已完成。")} setBusy={setActionBusy} />}
-    {dialog === "transfer" && account && <TransferModal account={account} mfaConfigured={data.customer.mfa_configured} prepared={prepared} setPrepared={setPrepared} busy={actionBusy} setBusy={setActionBusy} close={closeTransfer} code={mfaCode} setCode={setMfaCode} done={() => afterAction("转账已完成，请在明细中查看回执。")} />}
+    {dialog === "transfer" && account && <TransferModal key={prefillKey} prefill={prefill} account={account} mfaConfigured={data.customer.mfa_configured} prepared={prepared} setPrepared={setPrepared} busy={actionBusy} setBusy={setActionBusy} close={closeTransfer} code={mfaCode} setCode={setMfaCode} done={() => afterAction("转账已完成，请在明细中查看回执。")} />}
     {dialog === "card" && account && <CardModal account={account} busy={actionBusy} setBusy={setActionBusy} close={() => setDialog(null)} done={() => afterAction("虚拟卡已申请成功。", "cards")} />}
     {dialog === "profile" && <ProfileModal data={data} busy={logoutBusy} close={() => setDialog(null)} logout={logout} />}
     {dialog === "card-details" && <CardDetailsModal card={data.cards.find(card => card.id === selectedCard)} close={() => setDialog(null)} done={() => afterAction("卡片已锁定。")} />}
@@ -211,7 +231,7 @@ function TransactionList({ items }: { items: Transaction[] }) {
   return <><div className={styles.transactionList}>{items.map((item) => {
     const content = <>
     <span className={Number(item.amount_minor) >= 0 ? styles.txIconIn : styles.txIcon}><TransactionCategoryIcon category={item.category} merchant={item.merchant_name} incoming={Number(item.amount_minor) >= 0} /></span>
-    <span className={styles.txCopy}><b>{item.merchant_name}</b><small>{item.category} · {shortDate(item.occurred_at)}{item.investment_receipt && " · 查看回执"}{item.is_anomaly && <em>需核实</em>}</small></span>
+    <span className={styles.txCopy}><b>{item.merchant_name}</b><small>{item.category} · {shortDate(item.occurred_at)}{item.investment_receipt && " · 查看回执"}{item.is_anomaly && <em>需核实</em>}{item.metadata?.ruleId && " · 按你的规矩 · 无需确认"}</small></span>
     <strong className={Number(item.amount_minor) >= 0 ? styles.positive : ""}>{Number(item.amount_minor) >= 0 ? "+" : "−"}{money(Math.abs(Number(item.amount_minor)))}</strong>
     </>;
     return item.investment_receipt
@@ -257,11 +277,16 @@ function DepositModal({ account, busy, setBusy, close, done }: { account: Accoun
   </form>{uncertain && <button type="button" className={styles.textAction} onClick={() => window.location.reload()}>重新读取账户状态</button>}</ModalShell>;
 }
 
-function TransferModal({ account, mfaConfigured, prepared, setPrepared, busy, setBusy, close, code, setCode, done }: { account: Account; mfaConfigured: boolean; prepared: PreparedTransfer | null; setPrepared: (value: PreparedTransfer | null) => void; busy: boolean; setBusy: (value: boolean) => void; close: () => void; code: string; setCode: (value: string) => void; done: () => Promise<void> }) {
+function TransferModal({ account, mfaConfigured, prepared, setPrepared, busy, setBusy, close, code, setCode, done, prefill }: { account: Account; mfaConfigured: boolean; prepared: PreparedTransfer | null; setPrepared: (value: PreparedTransfer | null) => void; busy: boolean; setBusy: (value: boolean) => void; close: () => void; code: string; setCode: (value: string) => void; done: () => Promise<void>; prefill?: { recipient: string; amountMinor: number } | null }) {
   const { error, uncertain, run } = useWriteFeedback(setBusy);
   const prepare = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); const values = new FormData(event.currentTarget);
-    await run(async () => { setPrepared(await bankRequest<PreparedTransfer>("/api/v1/transfers/prepare", jsonPost({ fromAccountId: account.id, recipient: values.get("recipient"), amountMinor: Math.round(Number(values.get("amount")) * 100), note: values.get("note") }))); });
+    await run(async () => {
+      const result = await bankRequest<PreparedTransfer>("/api/v1/transfers/prepare", jsonPost({ fromAccountId: account.id, recipient: values.get("recipient"), amountMinor: Math.round(Number(values.get("amount")) * 100), note: values.get("note") }));
+      // 规矩内已直接转出，没有需要本人核对的步骤，直接当作完成。
+      if (result.viaRule === true) { await done(); return; }
+      setPrepared(result);
+    });
   };
   const authorize = async () => {
     if (!prepared) return;
@@ -293,7 +318,7 @@ function TransferModal({ account, mfaConfigured, prepared, setPrepared, busy, se
     });
   };
   return <ModalShell eyebrow={prepared ? `${prepared.riskLevel === "RED" ? "红色风险" : "黄色风险"} · ${prepared.requiredAuth === "MFA" ? "强验证" : "用户确认"}` : "先核对，再执行"} title={prepared ? "核对转账" : "发起转账"} close={close} busy={busy}>{!prepared ? <><p>输入收款人的姓名或完整手机号。</p><form className={styles.actionForm} onSubmit={prepare}>
-    <label>收款人<input disabled={busy || uncertain} data-agent-id="field-recipient" data-agent-permission="fill" name="recipient" required minLength={2} placeholder="姓名或完整手机号" autoFocus /></label><label>金额（元）<input disabled={busy || uncertain} data-agent-id="field-amount" data-agent-permission="fill" name="amount" type="number" inputMode="decimal" min="0.01" max="1000000" step="0.01" required /></label><label>备注（选填）<input disabled={busy || uncertain} data-agent-id="field-note" data-agent-permission="fill" name="note" maxLength={80} /></label>{error && <div role="alert" className={styles.formError}>{error}</div>}<button data-agent-id="prepare-transfer" data-agent-permission="prepare" className={styles.primaryButton} disabled={busy || uncertain}>{busy ? "正在核验…" : "继续核对"}</button>
+    <label>收款人<input disabled={busy || uncertain} data-agent-id="field-recipient" data-agent-permission="fill" name="recipient" required minLength={2} placeholder="姓名或完整手机号" defaultValue={prefill?.recipient ?? undefined} autoFocus /></label><label>金额（元）<input disabled={busy || uncertain} data-agent-id="field-amount" data-agent-permission="fill" name="amount" type="number" inputMode="decimal" min="0.01" max="1000000" step="0.01" required defaultValue={prefill ? String(prefill.amountMinor / 100) : undefined} /></label><label>备注（选填）<input disabled={busy || uncertain} data-agent-id="field-note" data-agent-permission="fill" name="note" maxLength={80} /></label>{error && <div role="alert" className={styles.formError}>{error}</div>}<button data-agent-id="prepare-transfer" data-agent-permission="prepare" className={styles.primaryButton} disabled={busy || uncertain}>{busy ? "正在核验…" : "继续核对"}</button>
   </form></> : <><div className={styles.transferReceipt}><strong>{money(prepared.details.amountMinor)}</strong><dl><div><dt>收款人</dt><dd>{prepared.details.recipient.name}</dd></div><div><dt>手机号</dt><dd>{prepared.details.recipient.phoneMasked}</dd></div><div><dt>付款账户</dt><dd>{prepared.details.sourceAccount.maskedNo}</dd></div><div><dt>操作编号</dt><dd>{prepared.operationId}</dd></div></dl></div>{prepared.requiredAuth === "MFA" && (mfaConfigured ? <label className={styles.reauthField}>验证器动态码<input disabled={busy || uncertain} data-agent-private inputMode="numeric" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} placeholder="6 位动态验证码" autoComplete="one-time-code" autoFocus /></label> : <div className={styles.mfaRequired}><b>需要先启用多因素认证</b><span>为保护账户，请使用身份验证器生成的动态码。</span><a href="/security">前往安全中心设置</a></div>)}{error && <div role="alert" className={styles.formError}>{error}</div>}<button data-agent-id="confirm-transfer" data-agent-permission="human" className={styles.primaryButton} disabled={busy || uncertain || (prepared.requiredAuth === "MFA" && (!mfaConfigured || code.length !== 6))} onClick={authorize}>{busy ? "正在转账…" : "确认转账"}</button><small>核对收款人和金额后再确认，完成后可在明细中查看结果。</small></>}{uncertain && <button type="button" className={styles.textAction} onClick={() => window.location.reload()}>重新读取账户状态</button>}</ModalShell>;
 }
 
@@ -304,7 +329,7 @@ function CardModal({ account, busy, setBusy, close, done }: { account: Account; 
 }
 
 function ProfileModal({ data, busy, close, logout }: { data: Bootstrap; busy: boolean; close: () => void; logout: () => Promise<void> }) {
-  return <ModalShell eyebrow="账户" title={data.customer.display_name} close={close} busy={busy}><div className={styles.profileRows} data-agent-private><div><span>手机号</span><b>{data.customer.phone}</b></div><div><span>收款方式</span><b>姓名或手机号</b></div><div><span>账户号</span><b>{data.accounts[0]?.account_no ?? "—"}</b></div></div><a className={styles.developerLink} href="/security"><ShieldCheck size={17} /><span><b>安全中心</b><small>{data.customer.mfa_configured ? "强验证已开启" : "设置高风险操作验证"}</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/schedules"><Clock3 size={17} /><span><b>定时任务</b><small>提醒、账单报告与订阅检查</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/channels"><Link2 size={17} /><span><b>消息渠道</b><small>QQ 与企业微信</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/settings"><Settings size={17} /><span><b>设置</b><small>Blank模型</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/audit"><ShieldCheck size={17} /><span><b>操作记录</b><small>风险等级、执行链路与系统状态</small></span><ChevronRight size={17} /></a><button className={styles.logoutButton} disabled={busy} onClick={logout}><LogOut size={17} />{busy ? "正在退出…" : "退出体验"}</button></ModalShell>;
+  return <ModalShell eyebrow="账户" title={data.customer.display_name} close={close} busy={busy}><div className={styles.profileRows} data-agent-private><div><span>手机号</span><b>{data.customer.phone}</b></div><div><span>收款方式</span><b>姓名或手机号</b></div><div><span>账户号</span><b>{data.accounts[0]?.account_no ?? "—"}</b></div></div><a className={styles.developerLink} href="/security"><ShieldCheck size={17} /><span><b>安全中心</b><small>{data.customer.mfa_configured ? "强验证已开启" : "设置高风险操作验证"}</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/schedules"><Clock3 size={17} /><span><b>定时任务</b><small>提醒、账单报告与订阅检查</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/rules"><Wallet size={17} /><span><b>规矩与钱包</b><small>免确认的小额付款与钱包</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/channels"><Link2 size={17} /><span><b>消息渠道</b><small>QQ 与企业微信</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/settings"><Settings size={17} /><span><b>设置</b><small>Blank模型</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/audit"><ShieldCheck size={17} /><span><b>操作记录</b><small>风险等级、执行链路与系统状态</small></span><ChevronRight size={17} /></a><button className={styles.logoutButton} disabled={busy} onClick={logout}><LogOut size={17} />{busy ? "正在退出…" : "退出体验"}</button></ModalShell>;
 }
 
 function CardDetailsModal({ card, close, done }: { card?: Card; close: () => void; done: () => Promise<void> }) {

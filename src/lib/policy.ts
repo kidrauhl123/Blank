@@ -8,6 +8,9 @@ export type TransferRiskInput = {
   failedAuthAttempts?: number;
 };
 
+// 当天转账累计超过这个数就进入红色风险；规矩里“当天转账较多”的判断也用它，两处必须一致。
+export const DAILY_TRANSFER_RED_THRESHOLD_MINOR = 100_000;
+
 const rank: Record<RiskLevel, number> = { GREEN: 0, YELLOW: 1, RED: 2 };
 
 export function maxRisk(...levels: RiskLevel[]): RiskLevel {
@@ -20,7 +23,7 @@ export function evaluateTransferRisk(input: TransferRiskInput) {
   const matchedRules: string[] = ["TRANSFER_IS_WRITE_OPERATION"];
   const levels: RiskLevel[] = ["YELLOW"];
 
-  if (input.dailyTotalMinor + input.amountMinor > 100_000) {
+  if (input.dailyTotalMinor + input.amountMinor > DAILY_TRANSFER_RED_THRESHOLD_MINOR) {
     levels.push("RED");
     matchedRules.push("DAILY_TRANSFER_TOTAL_OVER_1000_CNY");
   }

@@ -1,0 +1,27 @@
+.card { margin: var(--space-3) 0; padding: var(--space-5) var(--space-5) var(--space-2); border-radius: var(--radius-container); background: var(--white); box-shadow: inset 0 0 0 1px var(--line); }
+.card[data-stage="ACTIVE"] { box-shadow: inset 0 0 0 2px var(--action-fill); }
+.card[data-stage="REVOKED"], .card[data-stage="DISMISSED"] { opacity: .6; }
+.card header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.kind { padding: 2px var(--space-2); border-radius: var(--radius-container); background: var(--surface-strong); font-size: var(--text-xs); font-weight: 650; }
+.status { font-size: var(--text-xs); color: var(--muted); }
+.card h3 { margin-top: var(--space-2); font-size: var(--text-md); line-height: 1.5; font-weight: 680; }
+.lines { display: grid; gap: var(--space-2); margin-top: var(--space-3); }
+.lines div { display: flex; gap: var(--space-3); font-size: var(--text-sm); line-height: 1.5; }
+.lines dt { flex: 0 0 4.5em; color: var(--muted); }
+.lines dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.note { margin-top: var(--space-3); font-size: var(--text-sm); line-height: 1.6; color: var(--muted); }
+.note a { color: var(--action-fill); margin-left: var(--space-1); }
+.primary { width: 100%; min-height: var(--target-touch); margin-top: var(--space-3); border: 0; border-radius: var(--radius-control); background: var(--action-fill); color: var(--action-ink); font-size: var(--text-sm); font-weight: 650; }
+.totp { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
+.totp input { flex: 1 1 auto; min-width: 0; min-height: var(--target-touch); padding: 0 var(--space-3); border: 1px solid var(--line-control); border-radius: var(--radius-control); background: transparent; color: var(--ink); font-size: var(--text-sm); letter-spacing: .2em; }
+.totp button { flex-shrink: 0; min-height: var(--target-touch); padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control); background: var(--surface-strong); color: var(--ink); font-size: var(--text-sm); }
+.passkey { display: grid; gap: var(--space-2); margin-top: var(--space-3); }
+.passkey input { min-height: var(--target-touch); padding: 0 var(--space-3); border: 1px solid var(--line-control); border-radius: var(--radius-control); background: transparent; color: var(--ink); font-size: var(--text-sm); letter-spacing: .2em; }
+.passkey button { min-height: var(--target-touch); border: 0; border-radius: var(--radius-control); background: var(--action-fill); color: var(--action-ink); font-size: var(--text-sm); font-weight: 650; }
+.error { margin-top: var(--space-2); font-size: var(--text-xs); color: var(--danger-ink); }
+.footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-top: var(--space-3); border-top: 1px solid var(--line-quiet); padding: var(--space-1) 0; }
+.byline { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--text-xs); color: var(--muted); }
+.actions { display: inline-flex; gap: var(--space-1); flex-shrink: 0; }
+.actions button { min-height: var(--target-touch); padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control); background: none; color: var(--muted); font-size: var(--text-sm); }
+.footer button:disabled, .primary:disabled, .totp button:disabled, .totp input:disabled, .passkey button:disabled, .passkey input:disabled { opacity: .5; }
+.empty { font-size: var(--text-xs); color: var(--muted); padding: var(--space-3) 0; }

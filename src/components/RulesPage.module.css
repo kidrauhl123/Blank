@@ -1,0 +1,42 @@
+/* 手机画布内的全屏“规矩与钱包”页：页头粘顶，钱包、规矩、付款、Passkey 四块单列堆叠。 */
+.page { height: 100%; overflow-y: auto; overscroll-behavior-y: none; padding: 0 var(--space-4) max(var(--space-6), env(safe-area-inset-bottom)); background: var(--paper); }
+.page header { position: sticky; top: 0; z-index: 5; margin: 0 calc(var(--space-4) * -1); padding: max(var(--space-3), env(safe-area-inset-top)) var(--space-4) var(--space-2); background: var(--paper); }
+.page header a { min-height: var(--target-touch); padding: var(--space-2) var(--space-3); display: inline-flex; align-items: center; color: var(--accent); font-size: var(--text-sm); text-decoration: none; border-radius: var(--radius-control); }
+.page header a:active { background: var(--accent-soft); }
+.page h1 { font-size: var(--text-xl); margin-top: var(--space-3); }
+.page h2 { font-size: var(--text-lg); margin-bottom: var(--space-3); }
+.page section { margin-top: var(--space-6); padding-top: var(--space-5); border-top: 1px solid var(--line); }
+.page p { margin: var(--space-2) 0; overflow-wrap: anywhere; }
+.page a { color: var(--accent); }
+.muted { color: var(--muted); font-size: var(--text-sm); line-height: 1.6; }
+.error { color: var(--danger-ink); font-size: var(--text-sm); }
+.notice { color: var(--accent); font-size: var(--text-sm); }
+
+.balance { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
+.balance b { font-size: var(--text-xl); font-variant-numeric: tabular-nums; }
+.transfer { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-3); }
+.transfer input { flex: 1 1 100%; min-width: 0; min-height: var(--target-touch); border: 1px solid var(--line-control); border-radius: var(--radius-control); background: transparent; color: var(--ink); padding: var(--space-3); font-size: var(--text-sm); }
+.transfer button { flex: 1 1 0; min-height: var(--target-touch); border: 0; border-radius: var(--radius-control); background: var(--surface-strong); color: var(--ink); font-size: var(--text-sm); }
+.transfer button:first-of-type { background: var(--action-fill); color: var(--action-ink); font-weight: 650; }
+
+.list { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--space-3); }
+.list li { padding: var(--space-4); border-radius: var(--radius-container); background: var(--white); box-shadow: inset 0 0 0 1px var(--line); }
+.list li[data-stage="REVOKED"], .list li[data-stage="DISMISSED"] { opacity: .6; }
+.list header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.list header b { overflow-wrap: anywhere; font-size: var(--text-sm); }
+.list header span { font-size: var(--text-sm); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.list dl { display: grid; gap: var(--space-1); margin: var(--space-2) 0; }
+.list dl div { display: flex; gap: var(--space-3); font-size: var(--text-sm); line-height: 1.5; }
+.list dt { flex: 0 0 4.5em; color: var(--muted); }
+.list dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.list small { display: block; font-size: var(--text-xs); color: var(--muted); }
+.tag { padding: 2px var(--space-2); border-radius: var(--radius-container); background: var(--surface-strong); font-size: var(--text-xs) !important; font-weight: 650; }
+.actions { display: flex; gap: var(--space-1); margin-top: var(--space-2); }
+.actions button { min-height: var(--target-touch); padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control); background: none; font-size: var(--text-sm); }
+.pause { color: var(--ink); }
+.revoke { color: var(--danger-ink); }
+
+.passkeyForm { display: grid; gap: var(--space-2); margin-top: var(--space-3); }
+.passkeyForm input { min-height: var(--target-touch); padding: 0 var(--space-3); border: 1px solid var(--line-control); border-radius: var(--radius-control); background: transparent; color: var(--ink); font-size: var(--text-sm); letter-spacing: .2em; }
+.primary { min-height: var(--target-touch); padding: 0 var(--space-4); border: 0; border-radius: var(--radius-control); background: var(--action-fill); color: var(--action-ink); font-size: var(--text-sm); font-weight: 650; }
+.page button:disabled, .page input:disabled { opacity: .5; }

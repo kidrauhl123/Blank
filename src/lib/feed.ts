@@ -29,7 +29,7 @@ export type RecipeView =
   | { type: "compare"; current: number; previous: number; currentLabel: string; previousLabel: string }
   | { type: "note"; text: string };
 
-export const FEED_KINDS = ["spending-calendar", "money-flow", "subscriptions", "subscription-due", "anomaly", "friends", "position", "unlock", "custom", "schedule"] as const;
+export const FEED_KINDS = ["spending-calendar", "money-flow", "subscriptions", "subscription-due", "anomaly", "friends", "position", "unlock", "custom", "schedule", "rule"] as const;
 export type FeedKind = (typeof FEED_KINDS)[number];
 // key 是去重键：同一个 key 只会发布一次，它决定了每类帖子的发帖节奏。
 export type FeedDraft = {

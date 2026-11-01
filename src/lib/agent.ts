@@ -17,7 +17,7 @@ export type AgentOperation = {
   operationId: string;
   title: string;
   riskLevel: RiskLevel;
-  requiredAuth: "CONFIRM" | "MFA";
+  requiredAuth: "NONE" | "CONFIRM" | "MFA";
   details: Array<{ label: string; value: string }>;
   resourceId?: string;
   actionLabel: string;

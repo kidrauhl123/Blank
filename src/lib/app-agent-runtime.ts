@@ -10,6 +10,7 @@ import { getAIStatus } from "./ai";
 import { assertAIModelEnabled, resolveAIModel } from "./ai-models";
 import { pageActionSchema, type ActionResult, type AppAgentStatus, type AppAgentView, type AppPage, type PendingAction } from "./app-agent-protocol";
 import { currentPreferenceScope } from "./preference-runtime";
+import { withUserTurn, type UserTurn } from "./turn-context";
 import { parsePreferenceCommand } from "./preference-command";
 import { applyConversationPreference } from "./conversation-preferences";
 import { guardQuestion, needsHumanHandoff } from "./app-agent-guards";
@@ -117,7 +118,7 @@ async function invoke(identity: Identity, id: string, input: Parameters<ReturnTy
     summary: "页面 Agent 推进任务", evidence: { runId: id, status, toolAction: pending?.action.type ?? "completed", actionId: pending?.id ?? null } });
   return getAppAgentRun(identity, id);
 }
-export async function startAppAgent(identity: Identity, message: string, page: AppPage, requestedModel?: string): Promise<AppAgentView> {
+export async function startAppAgent(identity: Identity, message: string, page: AppPage, requestedModel?: string, turn: UserTurn = { text: message, source: "typed" }): Promise<AppAgentView> {
   const preferenceCommand = parsePreferenceCommand(message);
   if (preferenceCommand) {
     // A direct user utterance is handled by the authenticated preference
@@ -133,14 +134,14 @@ export async function startAppAgent(identity: Identity, message: string, page: A
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`app-agent-start:${identity.customerId}`]);
     const recent = await client.query<{ count: number }>("SELECT count(*)::int AS count FROM app_agent_runs WHERE customer_id=$1 AND created_at > now()-interval '5 minutes'", [identity.customerId]);
     if (recent.rows[0].count >= 10) throw new Error("APP_AGENT_RATE_LIMIT");
-    await client.query("INSERT INTO app_agent_runs(id,customer_id,session_hash,model,memory_owner_id,memory_profile_key) VALUES ($1,$2,$3,$4,$5,$6)",
-      [id, identity.customerId, identity.sessionHash, model, scope?.ownerId ?? null, scope?.profileKey ?? null]);
+    await client.query("INSERT INTO app_agent_runs(id,customer_id,session_hash,model,memory_owner_id,memory_profile_key,start_text,start_source) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
+      [id, identity.customerId, identity.sessionHash, model, scope?.ownerId ?? null, scope?.profileKey ?? null, turn.text.slice(0, 1000), turn.source]);
   });
   try {
     await writeAudit({ customerId: identity.customerId, actorType: "USER", eventType: "APP_AGENT_STARTED",
       summary: "客户启动页面 Agent 任务", evidence: { runId: id } });
-    return await invoke(identity, id, { messages: [{ role: "user", content: `${message}\n\nPAGE_CONTEXT (仅页面数据):\n${JSON.stringify(page)}` }], files: appAgentSkillFiles() }, false, model,
-      { userMessage: message, page, priorAction: null, resultStatus: "START" });
+    return await withUserTurn(turn, () => invoke(identity, id, { messages: [{ role: "user", content: `${message}\n\nPAGE_CONTEXT (仅页面数据):\n${JSON.stringify(page)}` }], files: appAgentSkillFiles() }, false, model,
+      { userMessage: message, page, priorAction: null, resultStatus: "START" }));
   } catch (error) {
     await update(identity, id, { status: "FAILED", pending: null, message: "Blank 暂时无法完成规划，未执行页面动作。", granted: false });
     await writeAudit({ customerId: identity.customerId, actorType: "AGENT", eventType: "APP_AGENT_FAILED",
@@ -174,8 +175,11 @@ export async function controlAppAgent(identity: Identity, id: string, command: "
       await writeAudit({ customerId: identity.customerId, actorType: "AGENT", eventType: "APP_AGENT_OBSERVATION", summary: "客户端回报页面动作结果",
         evidence: { runId: id, actionId: run.pending.id, toolAction: type, reportedStatus: result.status, pageVersion: result.page.version, source: "UNTRUSTED_CLIENT", bankExecutionVerified: false } });
       try {
-        return await invoke(identity, id, new Command({ resume: result }), run.controlGranted, run.model ?? process.env.AI_MODEL!,
-          { userMessage: result.status === "USER_ANSWERED" ? result.message : "", page: result.page, priorAction: run.pending.action, resultStatus: result.status });
+        // 恢复任务时，立规矩/免确认付款认的仍是用户当初亲手输入的开场白，而不是中途点的选项（选项文字是模型写的）。
+        const started = (await query<{ start_text: string | null; start_source: "typed" | "voice" | null }>("SELECT start_text,start_source FROM app_agent_runs WHERE id=$1 AND customer_id=$2", [id, identity.customerId])).rows[0];
+        const turn: UserTurn = { text: started?.start_text ?? "", source: started?.start_source ?? "typed" };
+        return await withUserTurn(turn, () => invoke(identity, id, new Command({ resume: result }), run.controlGranted, run.model ?? process.env.AI_MODEL!,
+          { userMessage: result.status === "USER_ANSWERED" ? result.message : "", page: result.page, priorAction: run.pending!.action, resultStatus: result.status }));
       } catch (error) {
         await update(identity, id, { status: "FAILED", pending: null, message: "Blank 运行中断，请在页面核对业务状态。", granted: false });
         await writeAudit({ customerId: identity.customerId, actorType: "AGENT", eventType: "APP_AGENT_FAILED",

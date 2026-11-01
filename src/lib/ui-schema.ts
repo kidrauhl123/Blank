@@ -15,7 +15,7 @@ export type PageIcon = (typeof PAGE_ICONS)[number];
 
 export const KIND_NAMES: Record<(typeof FEED_KINDS)[number], string> = {
   anomaly: "交易核查", "spending-calendar": "消费日历", "money-flow": "资金去向", friends: "朋友往来", "subscription-due": "订阅扣费",
-  subscriptions: "订阅总账", position: "理财走势", unlock: "理财解封", custom: "我的卡片", schedule: "定时任务结果",
+  subscriptions: "订阅总账", position: "理财走势", unlock: "理财解封", custom: "我的卡片", schedule: "定时任务结果", rule: "规矩提醒",
 };
 
 export const navItemSchema = z.discriminatedUnion("type", [
@@ -24,6 +24,7 @@ export const navItemSchema = z.discriminatedUnion("type", [
 ]);
 export const sectionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("assets") }).strict().describe("资产卡"),
+  z.object({ type: z.literal("tool"), toolId: uuid.describe("build_tool 返回的 toolId，也可从 list_ui 的 tools 里取") }).strict().describe("一个交互小工具（滑块模拟器、分账表）。用户在小工具卡片上点“保存到首页”也会加上这一项"),
   z.object({
     type: z.literal("feed"),
     title: z.string().trim().min(1).max(12).regex(NO_DIGITS).optional().describe("这一组的小标题（选填）"),
