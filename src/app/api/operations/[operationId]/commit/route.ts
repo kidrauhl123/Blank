@@ -3,6 +3,7 @@ import { AuthError, authenticateRequest } from "@/lib/auth";
 import { commitPreparedCardLock, commitTransfer } from "@/lib/bank-core";
 import { writeAudit } from "@/lib/audit";
 import { FraudHoldError } from "@/lib/fraud-store";
+import { requestFeedCheck } from "@/lib/feed-store";
 import { inspectAgentRun, resumeAgentRuntime } from "@/lib/agent-runtime";
 import { apiError, assertSameOrigin } from "@/lib/http";
 import { withPreferenceScope } from "@/lib/preference-runtime";
@@ -87,6 +88,8 @@ export async function POST(request: Request, context: RouteContext<"/api/operati
         });
       }
     }
+    // 转账成功是事件：打上检查标记，下一次调度 tick 就看看首页动态要不要更新（不在这里调模型）。
+    if (input.type === "TRANSFER") await requestFeedCheck(principal.customerId).catch(() => undefined);
     return Response.json({ ...result, agent, agentRuntime });
   } catch (error) {
     // 反诈暂缓期内：资金未转出，告诉用户什么时候可以再办。

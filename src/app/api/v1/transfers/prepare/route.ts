@@ -3,6 +3,7 @@ import { authenticateRequest } from "@/lib/auth";
 import { commitTransfer, prepareTransfer } from "@/lib/bank-core";
 import { apiError, assertSameOrigin } from "@/lib/http";
 import { resolveVisitorMemoryScope } from "@/lib/visitor-memory";
+import { requestFeedCheck } from "@/lib/feed-store";
 
 const schema = z.object({
   fromAccountId: z.string().uuid(),
@@ -26,6 +27,8 @@ export async function POST(request: Request) {
       if (done.status !== "SUCCEEDED") {
         return Response.json({ error: "RULE_NOT_EXECUTABLE", message: "规矩已变化（暂停、撤销、超出限额或当天转账较多），这笔没有转出，请照常确认。", reasons: "reasons" in done ? done.reasons : [] }, { status: 409 });
       }
+      // 规矩内的转账成功也是事件：打上检查标记，由下一次调度 tick 判断首页动态。
+      await requestFeedCheck(principal.customerId).catch(() => undefined);
       return Response.json({ ...done, viaRule: true, ruleId: prepared.ruleId, riskLevel: "GREEN", requiredAuth: "NONE" }, { status: 201 });
     }
     return Response.json(prepared, { status: 201 });

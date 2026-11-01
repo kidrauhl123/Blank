@@ -6,7 +6,7 @@ import { nextOccurrence, previousStatementMonth, scheduleInput, type ScheduleInp
 import { processDailyReview } from "./scheduled-ai-reviews";
 import { getJevStatus } from "./jev";
 import { getAIStatus } from "./ai";
-import { publishDueFeeds, publishScheduleResult } from "./feed-store";
+import { publishScheduleResult, requestFeedCheck, runFeedHeartbeat } from "./feed-store";
 import { advanceShowcaseLife } from "./demo-life";
 
 export type ScheduledTask = {
@@ -182,6 +182,8 @@ export async function tickScheduledTasks() {
         const next = nextOccurrence(task.starts_at, task.frequency, now);
         const finished = !next || !!task.ends_at && next > task.ends_at;
         await client.query(`UPDATE scheduled_tasks SET status=$2,next_run_at=$3,retry_at=NULL,attempts=0,last_error=NULL,updated_at=now() WHERE id=$1`, [task.id, finished ? "COMPLETED" : "ACTIVE", next ?? task.next_run_at]);
+        // 提醒、扣费这类定时任务执行了，就是一个事件：打上检查标记，同一轮 tick 末尾的动态心跳会看到它。
+        await requestFeedCheck(task.customer_id, client);
         await writeAudit({ customerId: task.customer_id, actorType: "SYSTEM", eventType: isAI ? "DAILY_REVIEW_QUEUED" : "SCHEDULE_EXECUTED", summary: isAI ? "每日巡检已排队" : "定时任务结果已保存", evidence: { scheduleId: task.id, runId: run.rows[0].id, notificationQueued: !!identity && output.notify } }, client);
       } catch {
         await client.query("ROLLBACK TO SAVEPOINT occurrence");
@@ -202,7 +204,7 @@ export async function tickScheduledTasks() {
   const reviews = await processDailyReview();
   // 展示账户的生活模拟和动态发帖失败都不影响定时任务和巡检的心跳。
   await advanceShowcaseLife().catch(() => null);
-  const posts = await publishDueFeeds().catch(() => 0);
+  const posts = await runFeedHeartbeat().catch(() => 0);
   await query("UPDATE scheduler_heartbeat SET last_tick_at=now() WHERE id=1");
   return { processed, reviews, posts };
 }
