@@ -48,7 +48,23 @@ sequenceDiagram
 
 页面接管许可只授权导航、普通字段填写和准备草稿。不会代点最终确认，也不等于黄色确认或红色强验证。选择题有 2～4 个选项、无默认选择，并支持自由输入；回答只补充任务信息。
 
-工具仅有 `inspect_page`、`click_control`、`fill_control`、`scroll_page`、`ask_user`、`handoff_to_user`，以及读取三个固定 Skill 文件的 `read_file`。没有 Shell、SQL、任意网络、任意 JS、动态选择器或记账工具。官方 SDK 的默认文件写入、执行、搜索与子 Agent 工具同时在 profile 和独立 middleware 白名单中限制。
+工具按用途分为四类（`src/lib/app-agent-harness.ts` 的注册和白名单是唯一依据）：
+
+- **页面动作**：`inspect_page`、`click_control`、`fill_control`、`scroll_page`、`ask_user`、`handoff_to_user`，以及读取 Skill 文件的 `read_file`。
+- **只读查询**：`read_bank_facts`、`list_rules`、`list_schedules`、`list_reservations`、`list_feed_cards`、`list_custom_skills`、`list_ui`、`list_blank_inbox`、`search_bank_knowledge`、`find_branches`、`get_fx_rates`、`explain_spending`、`budget_baseline`、`search_investment_products`、`card_action`（只做服务端检查）。
+- **准备草稿，等用户确认**：`preview_schedule`、`preview_feed_card`、`preview_custom_skill`、`preview_reservation`、`propose_rule`、`propose_page`、`propose_layout`、`propose_remove_page`；`build_tool` 只做一个小工具，不执行银行操作。
+- **保存或改变**：`save_schedule`、`change_schedule`、`save_feed_card`、`delete_feed_card`、`save_custom_skill`、`save_reservation`、`cancel_reservation`、`remember_fact`、`invite_blank_link`、`accept_blank_link`、`send_blank_message`、`note_unmet_need`。
+
+没有 Shell、SQL、任意网络、任意 JS、动态选择器或资金工具。官方 SDK 的默认文件写入、执行、搜索与子 Agent 工具同时在 profile 和独立 middleware 白名单中限制。
+
+输入防护：
+
+- **查询轮不能办理**：用户这一轮只是在问（例如“我的余额多少”），`classifyTurn` 判为查询，`intentMismatch` 会拦下上表“准备草稿”和“保存或改变”中的工具调用（它们在 `INTENT_BOUND_TOOLS` 里），返回错误，不执行。
+- **外部内容标为数据**：账户数据、备注、商户名、页面文字、对方的消息、做法正文和记忆进入模型时标为 `UNTRUSTED_DATA`，并用分隔符包起来；`EXTERNAL_RESULT_TOOLS` 里的工具结果同样标注。
+- **只认用户本人打字**：立规矩、做法、互联和保存生活记忆的写操作只认用户在 App 里亲手打的字。语音、页面文字、备注、资讯和对方消息都不算。
+- 页面接管仍需用户明确允许；模型不能代点最终确认，也不能索取验证码。
+
+详细的验证和剩余风险见 [安全设计与自评](SECURITY.md) 的 2026-11-01 一节和 [提示词注入回归](security-reports/2026-11-01/prompt-injection-regression.md)。
 
 快照剔除密码、验证码、标记为私密的数据及助手自身对话。点击使用当前页面注册的控件 ID；执行前检查页面版本与控制权，550ms 可见高亮期间用户干预会撤销这次点击。助手光标指向真实控件，普通文本字段逐字更新；每个字符写入前校验控制权和页面版本。暂停保留已填内容，不再写入剩余字符。下拉选择一次更新，减少运动模式跳过逐字动画。
 
@@ -103,7 +119,7 @@ npm run build
 ## 已知限制
 
 - 已通过 SSH 在不导出生产密钥的情况下，用线上 deepseek-v4-flash 验证真实 SDK 的 Skill 读取、页面动作中断及继续后交回用户。该冒烟检查不代表任务完成率、注入鲁棒性、延迟与成本的系统评测。
-- 真正卡片挂失/解挂、理财申赎等缺失业务没有因为页面接管而自动获得。本版明确区分普通锁卡与挂失。
+- 卡片挂失/解挂没有实现，页面接管不会自动获得这项能力；本版明确区分普通锁卡与挂失。理财申赎只限六只模拟产品，申购和赎回仍由用户本人在页面上确认。
 - 日累计提交校验已在先前版本修复；TOTP 时间步消费、客户级失败冷却、转账授权绑定和草稿期限已随 `2a56ca3` 上线，数据库与浏览器回归在 CI 中通过。换绑/恢复未实现。见 [授权补强](AUTHORIZATION_HARDENING.md)。
 - 业务工作流已使用确定性服务端事实回执；页面助手结束语统一引导查看银行回执，但追问和动作描述仍由模型生成。客户端页面和回传快照均不可信，不能把页面动作或模型描述当作银行业务成功。
 - 只有注册到页面适配器的控件可操作，不具备任意 APP 功能。异步银行请求可能超过快照等待时间，模型必须重新观察，不能推测成功。

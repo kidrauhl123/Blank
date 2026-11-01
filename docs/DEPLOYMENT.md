@@ -26,7 +26,7 @@ openssl rand -hex 32   # 写入 POSTGRES_PASSWORD
 openssl rand -hex 32   # 写入 PASSWORD_PEPPER；部署后不得随意更换
 ```
 
-AI 变量为空时，银行基础功能正常工作，内置助手明确显示未配置且不会输出替代回复。
+AI 变量为空时，银行基础功能正常工作，内置助手明确显示未配置且不会输出替代回复。模型名单可用 `AI_ALLOWED_MODELS` 限定，模板里默认填入示例名单；设置页只显示这份名单与上游目录的交集。见 [模型设置](MODEL_SETTINGS.md)。
 
 必须设置 `BANKPILOT_PUBLIC_URL` 为用户实际访问的 HTTPS 域名。机器人变量在取得平台凭据前可留空，此时不要启用对应 profile。
 
@@ -39,6 +39,12 @@ AI 变量为空时，银行基础功能正常工作，内置助手明确显示�
 
 含授权补强的版本必须应用 `019_authorization_hardening.sql` 后启动新版。迁移会取消升级前未完成的转账草稿及对应挑战/任务，保留资金和历史回执；已有 TOTP 用户可能需等待最多约 60 秒使用新的动态码。先在隔离 PostgreSQL 上通过全部回归，细节见 [授权补强与验证范围](AUTHORIZATION_HARDENING.md)。
 
+2026-11-01 的各次发布应用了迁移 033 至 044（立规矩、当场造工具、反诈守护、首页动态检查、生活记忆、网点与换汇预约、预算提醒、自定义做法、新设备、赞踩记录、Blank 互联）。每个迁移对应的提交见下方发布记录。`scripts/deploy.sh` 的发布后核对目前只检查到 `032_ui_layout.sql`，但 `migrate.sh` 会执行所有尚未应用的迁移。发布后请核对，应看到最后 12 条是 033 至 044：
+
+```bash
+ssh CONTABO-jp 'docker exec bankpilot-postgres psql -U bankpilot -d bankpilot -Atc "SELECT version FROM schema_migrations ORDER BY version" | tail -n 12'
+```
+
 已配置服务器上的私有环境文件后，推荐在可访问部署服务器的本机执行：
 
 ```bash
@@ -46,6 +52,10 @@ bash scripts/deploy.sh CONTABO-jp
 ```
 
 脚本要求本地改动已提交，只同步当前提交的源码；先备份远端数据库、环境和代码，再构建、停用旧运行时、应用迁移、启动并核对账本不变量、LangGraph 健康与旧接口删除。失败时停止并输出备份路径，不自动恢复数据库。成功后将发布提交写入远端 `DEPLOYED_COMMIT`。首次配置环境及真实机器人平台联调仍按本文步骤完成。
+
+上面的 `CONTABO-jp` 是示例别名。请在本机 `~/.ssh/config` 里配置实际主机，脚本参数就是这个别名。
+
+部署脚本的 SSH 超时会返回 255，即使远端已经部署。判定是否成功，要看脚本输出的 `Deployed <提交>`，并核对远端 `/opt/bankpilot/DEPLOYED_COMMIT` 等于要发布的提交；只看退出码不够。
 
 本地 `.env.local` 中有 `TYPESAFE_API_KEY` 时，`configure-jev-remote.mjs` 在备份后仅同步 `TYPESAFE_API_KEY`、可选的 `TYPESAFE_MODEL`、`JEV_TIMEOUT_MS` 和 `JEV_QUIET_THRESHOLD`；不覆盖服务器数据库、主模型或渠道配置，密钥不出现在命令参数或日志中，远端环境文件权限为 600。没有本地 Key 时保留服务器现有设置。手动发布不执行此辅助步骤，需自行配置远端私有变量。
 
@@ -128,12 +138,23 @@ docker volume rm bankpilot_nanobot
 | 2026-10-19 | `f3f0690`（手机画布 UI、文档状态校正、付款人锁用例修复） | 无新增迁移，全部为 `skip` | 发布标记 `20261019T170551Z`；备份 `/opt/bankpilot/backups/release-20261019T170551Z/`；账本不变量通过，`/api/health` 为 `{"status":"ok","database":"connected","agentRuntime":"ready","ai":{"configured":true}}`，应用与调度容器健康；线上八个产品路由均 200、三个退役路由 404；`.env` 模板文件已随源码同步（校验和一致）。此前 `0e3e705` 已同流程发布，仅源码与文档不同 |
 | 2026-10-20 | `e28c1ad`（画布内圆形触点，去掉系统指针与其余桌面形态） | 无新增迁移，全部为 `skip` | 发布标记 `20261020T044113Z`；备份 `/opt/bankpilot/backups/release-20261020T044113Z/`；`DEPLOYED_COMMIT` 为 `e28c1ad`，`bankpilot-app`、`bankpilot-scheduler`、`bankpilot-postgres` 均健康，账本不变量通过；`/api/health` 为 `{"status":"ok","database":"connected","ai":{"configured":true,"model":"deepseek-v4.1-flash-free"},"agentRuntime":"ready","channels":{"wecomInternalApi":true,"qqInternalApi":false}}`；线上八个产品路由 200、三个退役路由 404；线上画布已确认 `cursor: none`、圆形触点 30px、按下收缩到 20.4px 且圆心不动 |
 | 2026-10-25 | `3b46529`（模拟理财、整页助手、Jev 每日巡检及录制支持） | 确认 `021`–`024` 已应用，本次迁移命令均为 `skip` | 发布标记 `20261025T042257Z`；备份 `/opt/bankpilot/backups/release-20261025T042257Z/`（dump、env、source 均为 600）；`DEPLOYED_COMMIT` 与运行时提交一致；APP 与 PostgreSQL 健康，scheduler 运行且心跳新鲜，账本不变量通过。公开首页及健康接口 200；逐一登录五位用户，均读取到六只产品、两笔当前持仓、四笔预置理财回执及四笔关联账户明细，退出会话成功。首页巡检功能已启用，Jev 和主模型配置存在；从 APP 容器对 Jev 作无客户数据的真实请求，HTTP 200，响应 `jev-1.13.0`、概率 0.1、耗时 498ms。未运行申赎、完整巡检任务、外部通知或视频录制；后续文档提交不改变此运行时版本。 |
+| 2026-11-01 | `fbadd07` | `033_wallet_rules.sql` | 立规矩（P0-1）。发布标记 `20261101T023420Z`；备份 `/opt/bankpilot/backups/release-20261101T023420Z/`；DEPLOY_EXIT=0；已核对健康检查与 `DEPLOYED_COMMIT` |
+| 2026-11-01 | `7e41975` | `034_interactive_tools.sql` | 当场造工具（P0-2）。部署日志在 SSH 超时后返回 255，发布后经远端 `DEPLOYED_COMMIT` 核对（见上文“SSH 超时”） |
+| 2026-11-01 | `79671d9` | `035_fraud_guard.sql` | 反诈守护（P0-3）。发布标记 `20261101T035425Z`；DEPLOY_EXIT=0；已核对健康检查与 `DEPLOYED_COMMIT` |
+| 2026-11-01 | `9667985` | `036_feed_check_requests.sql` | 首页动态：事件检查与每小时心跳（P0-4）。发布标记 `20261101T042803Z`；DEPLOY_EXIT=0；已核对健康检查与 `DEPLOYED_COMMIT` |
+| 2026-11-01 | `f93898a` | `037_life_memories.sql` | 生活记忆（P0-5）。发布标记 `20261101T050122Z`；DEPLOY_EXIT=0；已核对健康检查与 `DEPLOYED_COMMIT` |
+| 2026-11-01 | `7f7eaa9` | `038_bank_reservations.sql`、`039_budget_alerts.sql`、`040_custom_skills.sql` | Skills 库、网点与换汇预约、预算提醒、自定义做法（P0-6）。发布标记 `20261101T072404Z`；DEPLOY_EXIT=0；已核对健康检查与 `DEPLOYED_COMMIT` |
+| 2026-11-01 | `0130050` | `041_feed_immediate_checks.sql`、`042_new_device_guard.sql`、`043_feed_reactions.sql` | P0 遗留补全：动态即时检查、新设备判断、赞踩记录。发布标记 `20261101T080623Z`；DEPLOY_EXIT=0；已核对健康检查与 `DEPLOYED_COMMIT` |
+| 2026-11-01 | `4ac390c` | `044_blank_link.sql` | Blank 互联（P0-7）。发布标记 `20261101T083130Z`；DEPLOY_EXIT=0；已核对健康检查与 `DEPLOYED_COMMIT` |
+| 2026-11-01 | `7bc3fd9` | 无 | IM 回 App 继续（P1）。发布标记 `20261101T102838Z`；DEPLOY_EXIT=0；已核对健康检查与 `DEPLOYED_COMMIT` |
+| 2026-11-01 | `987ce89` | 无 | 提示词注入防护补课（P1）。发布标记 `20261101T104855Z`；DEPLOY_EXIT=0；已核对健康检查与 `DEPLOYED_COMMIT` |
+| 2026-11-01 | `d7f704d` | 无 | 交易风险信号改由服务端提供，聊天转账带上新设备标记，移除 `SUBSCRIPTION_CANCEL` 死路径（已知问题）。发布标记 `20261101T135409Z`；DEPLOY_EXIT=0；`DEPLOYED_COMMIT=d7f704d`；`/api/health` 200；`/api/agent` 与 `/api/v1/transfers/prepare` 无会话返回 401 |
 
 同步模板文件（`.env.example`、`deploy/.env.production.example`）会被部署脚本排除规则放过；私有 `.env`、`.env.local`、`deploy/.env.production` 仍被排除。
 
 ## 检查
 
-模型调试设置需执行 `014_app_agent_model.sql`。切换 New API 时先在服务器私有文件备份原模型配置，更新 `AI_BASE_URL`（含 `/v1`）、`AI_API_KEY`、`AI_MODEL`，重新创建应用后检查模型目录及实际工具调用；不得把密钥写入命令参数、仓库或日志。发布脚本检查任务模型与会话偏好两列存在。模型目录、默认模型和会话选择的边界见 [模型设置](MODEL_SETTINGS.md)。
+模型设置需执行 `014_app_agent_model.sql`。切换 New API 时先在服务器私有文件备份原模型配置，更新 `AI_BASE_URL`（含 `/v1`）、`AI_API_KEY`、`AI_MODEL`，重新创建应用后检查模型目录及实际工具调用；不得把密钥写入命令参数、仓库或日志。发布脚本检查任务模型与会话偏好两列存在。模型目录、默认模型和会话选择的边界见 [模型设置](MODEL_SETTINGS.md)。
 
 新版演示登录和 `/api/v1/preferences` 依赖 `015_visitor_memory.sql`；页面助手与业务助手的访客任务隔离依赖 `016_app_agent_memory_scope.sql`。先应用迁移再启动应用；自动发布脚本会检查访客表及任务归属列存在。银行 APP 模型按调用读取有效偏好，设置页提供管理；悬浮助手可处理完整明确的偏好口令，并仅在数据库提交后回执。部署前仍须对真实数据库执行归属隔离和删除验收。
 

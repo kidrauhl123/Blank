@@ -20,7 +20,7 @@ QQ / 企业微信 ─ 官方 Worker ─ LangGraph ─ interrupt() / 授权链接
 
 ### PWA
 
-Next.js App Router + React。全部产品页面位于 `(phone)` 路由组，由 `PhoneShell` 渲染成一块固定的手机画布（宽视口下浮在桌面上），布局与交互只按手机设计，鼠标等同手指。入口选择五位固定模拟用户，支持账户、流水、入金、转账、卡片、安全中心和 Agent 对话。银行接口只接受 HttpOnly SameSite Cookie 会话；写请求必须匹配正式 APP 完整 Origin，不信任转发 Host 作为来源授权。提供 Authorization 头时拒绝，不回落到 Cookie。
+Next.js App Router + React。全部产品页面位于 `(phone)` 路由组，由 `PhoneShell` 渲染成一块固定的手机画布（宽视口下浮在桌面上），布局与交互只按手机设计，鼠标等同手指。登录页只展示小土豆一个体验入口；其余四位模拟用户仍然存在，是小土豆转账与 AA 的朋友。进入后支持账户、流水、入金、转账、卡片、安全中心和 Agent 对话。银行接口只接受 HttpOnly SameSite Cookie 会话；写请求必须匹配正式 APP 完整 Origin，不信任转发 Host 作为来源授权。提供 Authorization 头时拒绝，不回落到 Cookie。
 
 主页面助手通过 Deep Agents SDK 在 LangGraph 上进行页面工具循环，持久化到 `app_agent_runs`。银行动作按钮区分导航、填写、准备和本人确认；模型动作完成不是银行回执。现有 IM 业务 Runtime 如下，尚未与页面对话线程合并。
 
@@ -36,7 +36,7 @@ Next.js App Router + React。全部产品页面位于 `(phone)` 路由组，由 
 
 两个独立 Node.js Worker 分别使用 QQ 和企业微信官方 SDK 建立 WebSocket 长连接。Worker 不接触数据库，只使用各自的内部适配令牌调用渠道 API；Bot Secret 不会进入 Next.js 或浏览器。首次会话发放 10 分钟一次性绑定链接，渠道 openid/userid 加密保存并以 HMAC 摘要索引。
 
-绿色任务直接回复；黄色任务使用原生按钮确认；红色任务只发送银行 APP 深链，由银行会话和 TOTP 完成。消息按平台事件 ID 去重，异步结果经按渠道隔离的事务 outbox 重试投递。QQ 群聊不进入银行 Agent，只引导用户转到 C2C 私聊，避免账户信息在群内暴露。
+绿色任务直接回复；黄色任务使用原生按钮确认；红色任务只发送银行 APP 深链，由银行会话和 TOTP 完成。需要在 App 里完成的请求（立规矩、免确认、互联、办理页面类）不在 IM 里执行，只回一个“回 App 继续”链接。消息按平台事件 ID 去重，异步结果经按渠道隔离的事务 outbox 重试投递。QQ 群聊不进入银行 Agent，只引导用户转到 C2C 私聊，避免账户信息在群内暴露。
 
 ### 银行内部业务接口
 
@@ -46,7 +46,7 @@ APP 的 `/api/v1/*` 接口服务银行页面；QQ/企微通过各自认证的内
 
 - GREEN：余额、流水、账单分析、卡片/订阅/理财查询，可自动执行。
 - YELLOW：小额转账、虚拟卡申请、锁卡，先展示完整单据并获得明确确认。
-- RED：日累计转账超过 ¥1,000，要求 TOTP 动态码。设备与跨草稿行为画像尚未落实。
+- RED：日累计转账超过 ¥1,000；新设备登录后 24 小时内的转账（不可信设备）；同一客户 30 分钟内强验证失败 3 次以上；反诈守护暂缓的转账。要求 TOTP 动态码。设备只按操作系统和浏览器区分，没有设备绑定。反诈的突发、深夜、新收款人判断见 [反诈守护](FRAUD_GUARD.md)。
 
 模型提供的风险等级不被信任。策略裁决写入 `policy_decisions`；黄色和红色转账草稿统一为 10 分钟期限，提交前比对绑定金额、对象及期限的指纹。TOTP 在客户锁内消费时间步，认证失败使用 `mfa_auth_state` 共享预算。相关控制随 `2a56ca3` 上线，真实数据库与浏览器回归在 CI 中通过，见 [授权补强](AUTHORIZATION_HARDENING.md)。
 
@@ -64,9 +64,17 @@ APP 的 `/api/v1/*` 接口服务银行页面；QQ/企微通过各自认证的内
 - 渠道：`channel_identities`、`channel_binding_tokens`、`channel_events`、`channel_outbox`
 - 已退役历史：`retired_api_clients`、`retired_api_tokens`、`external_access_history`；凭据全部撤销，仅审计台查询历史调用
 - 审计：`audit_events`
+- 动态与记忆：`feed_posts`、`feed_publisher_state`、`feed_recipes`、`feed_reactions`、`visitor_life_memories`
+- 规矩与钱包：`wallet_rules`、`wallet_accounts`（把（访客, 客户）映射到 `accounts` 里的 `AGENT_WALLET` 子账户）、`passkey_credentials`、`passkey_challenges`
+- 反诈与设备：`transfers.fraud_reasons`、`transfers.hold_until`、`customer_devices`、`user_sessions.device_key`、`user_sessions.new_device`
+- 服务与做法：`bank_reservations`（网点取号与换汇预约）、`custom_skills`（用户自建做法）、`interactive_tools`（当场造工具）
+- 互联：`blank_link_invites`、`blank_links`、`blank_messages`
+- 定时任务与巡检：`scheduled_tasks`（含预算字段）、`scheduled_ai_reviews`、`scheduler_heartbeat`
+
+迁移编号与用途见 `db/migrations/`，每个文件只执行一次（`schema_migrations`）。
 
 ## 数据真实性边界
 
 比赛入口使用五个公开共享模拟用户和标记 `DEMO_SEED` 的预置历史；后续余额、卡片和交易依据实际沙箱数据库操作返回，重新进入不重置。共享身份不等于真实客户认证。系统不连接央行清算、银联或商业银行核心，不能承载真实货币。
 
-理财产品没有可靠来源就保持空表。未来可增加经过许可的数据采集任务，并强制保存 `source_url`、发布时间、核验时间和原始事实。
+理财产品目前只有六只明确标注为模拟的产品（迁移 021、022），没有可靠来源的真实理财数据。未来可增加经过许可的数据采集任务，并强制保存 `source_url`、发布时间、核验时间和原始事实。

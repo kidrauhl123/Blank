@@ -8,7 +8,7 @@ Blank 的界面可以由用户和 AI 在对话里一起改：首页怎么排、�
 - **技能**（`bank-ui-design`，`app-agent-skills.ts`）：设计规范、语法说明、三个页面原型（专题追踪页、月度总览页、往来页）和“做不到时怎么办”。
 
 ## 提案与确认
-模型有五个工具：`list_ui`（读现状和编号）、`propose_layout`、`propose_page`（可同时提议放进导航，或用 `replaces` 修改已有页面）、`propose_remove_page`、`note_unmet_need`。提案写进 `ui_proposals`，对话里渲染成预览卡片（布局给出首页顺序和导航，页面直接渲染出真数据）。**只有用户点卡片上的“应用 / 不要”才改变界面**——这是用户本人对 `POST /api/v1/ui/proposals/:id` 的同源点击，模型没有任何工具能代点；这也是和动态卡片、定时任务（模型确认后 `save_*`）的不同之处，因为界面结构变化更值得由本人确认。
+模型有五个界面工具：`list_ui`（读现状和编号）、`propose_layout`、`propose_page`（可同时提议放进导航，或用 `replaces` 修改已有页面）、`propose_remove_page`、`note_unmet_need`。另有 `build_tool`，用同样的积木审核方式当场生成小工具，见 [当场造工具](INTERACTIVE_TOOLS.md)。提案写进 `ui_proposals`，对话里渲染成预览卡片（布局给出首页顺序和导航，页面直接渲染出真数据）。**只有用户点卡片上的“应用 / 不要”才改变界面**——这是用户本人对 `POST /api/v1/ui/proposals/:id` 的同源点击，模型没有任何工具能代点；这也是和动态卡片、定时任务（模型确认后 `save_*`）的不同之处，因为界面结构变化更值得由本人确认。
 
 ## 数据与隔离
 迁移 `032_ui_layout.sql`：`ui_layouts`、`ui_pages`、`ui_proposals`、`ui_unmet_needs`。演示账户由访客共用，所以全部按访客隔离：别的访客看不到你的页面和布局，也不能决定你的提案。

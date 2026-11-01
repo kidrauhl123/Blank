@@ -49,6 +49,7 @@ PWA 用户从 AI 助手中的“在 QQ / 企业微信中使用”或个人中心
 5. 红色操作始终回 Blank 完成 TOTP，QQ 端不能代验。
 6. 按钮点击者的 openid、task ID、operation ID 与原绑定身份必须全部匹配。
 7. 结果通过按渠道隔离的 outbox 投递，重启 Worker 后仍可补发。
+8. 需要在 App 里完成的请求（立规矩、做法、互联、页面设置、理财申购、网点预约、定时任务）只回一个回 App 的链接，不在 QQ 里执行。见 [渠道接入](CHANNEL_ONBOARDING.md)。
 
 Worker 使用每用户限流和按用户串行队列。同一消息 ID 或交互 ID 重放时，银行侧只处理一次。
 

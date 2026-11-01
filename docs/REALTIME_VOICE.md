@@ -18,4 +18,4 @@ AI 助手的电话按钮开启连续双向语音。浏览器通过 AudioWorklet 
 
 音频和语音字幕不存入数据库，字幕仅保留在当前页面会话中。通话最长十分钟，每客户至多两路，全服务至多八路；每次最多三十次工具调用。关闭、切换账户或离开助手会释放麦克风和连接。上游错误直接提示重拨。
 
-协议参考：[xAI Voice Agent API](https://docs.x.ai/developers/model-capabilities/audio/speech-to-speech)。旧 `/voice-trace` 是独立交互原型，不是正式通话入口。
+协议参考：[xAI Voice Agent API](https://docs.x.ai/developers/model-capabilities/audio/speech-to-speech)。`/preview/voice-trace` 是独立交互原型（生产环境返回 404），不是正式通话入口。

@@ -23,6 +23,24 @@ It does not infer success from opening an external link or clicking “next”.
 After binding, send the original request again in IM. The first message is not
 automatically replayed. Users can inspect and revoke identities on the channel page.
 
+## What IM can and cannot do
+
+- Ordinary balance and bill questions work in IM. Yellow and red transfer confirmations
+  keep their existing flows: yellow confirms in the native button, red sends a link to
+  the App for the bank session and TOTP.
+- Requests that must be finished in the App are **not executed in IM**. IM replies with
+  a link back to the right App page instead, for example “立规矩 / 免确认” → `/rules`,
+  “做法” → `/skills`, “家人与朋友互联” → `/links`, page or layout changes → `/`,
+  fund purchases and redemptions → `/`, branch or FX reservations → `/`, and reminders or
+  scheduled tasks → `/schedules`. The reply says the change takes effect only after the
+  customer confirms it in the App.
+- Fraud-guard messages reach every active IM identity for two cases: a cool-off reminder
+  (without the amount) and a small unknown inbound payment that looks like a refund. A scam
+  phrase in an IM message creates a notice in the App's home feed, not in IM. See
+  [反诈守护](FRAUD_GUARD.md).
+- IM has no bank session, so the new-device rule does not apply to IM transfers. They are
+  treated as coming from a trusted device, as before.
+
 ## Operator setup (once per deployment)
 
 Configure bot credentials and start the relevant worker using [QQ.md](QQ.md) or

@@ -13,8 +13,9 @@
 | `bank-branch-services` 本行业务 | “在本行怎么办”，网点与 ATM，取号，卡片检查 | `search_bank_knowledge`、`find_branches`、`card_action`、`preview_reservation`（QUEUE） |
 | `bank-fraud-guard` 反诈守护 | 被骗、安全账户、验证码等话术；守护机制说明 | 转账暂缓由 P0-3 的确定性规则完成 |
 | `bank-skill-creator` 做法的创建 | 用户一句话保存做法，预览后确认 | `preview_custom_skill`、`save_custom_skill`、`list_custom_skills`、`load_custom_skill` |
+| `bank-blank-link` Blank 互联 | 邀请家人或朋友、接受邀请、分账、攒钱沟通、查看收件箱 | `invite_blank_link`、`accept_blank_link`、`send_blank_message`、`list_blank_inbox` |
 
-原有的 `bank-wallet-rules`、`bank-tools`、`bank-ui-design`、`bank-schedules`、`bank-feed-cards`、`bank-daily-review`、`bank-page` 保持不变。
+原有的 `bank-wallet-rules`、`bank-tools`、`bank-ui-design`、`bank-schedules`、`bank-feed-cards`、`bank-daily-review`、`bank-page` 保持不变。内置 Skill 共 15 个，列表由 `builtInSkillSummaries()` 给出。
 
 降级为工具（不再占 Skill 位）：`bank-card` → `card_action`（服务端检查：多张卡先选尾号、已锁定、挂失暂未上线且不等于锁卡）；`bank-clarification` → `ask_user` 的描述（2 到 4 个互斥选项、不预选、不作为授权）。
 
@@ -35,7 +36,7 @@
 
 ## 预约的规则
 
-- 日期是今天起 7 天以内，时段在网点营业时间内（整段都在营业时间里），且不能是已经过去或不到 30 分钟的时段。
+- 日期是今天起 7 天以内；时段按 30 分钟计，整段都在网点营业时间内；不能是已经过去或不到 30 分钟的时段。
 - 先预览（草稿，30 分钟内有效），用户确认后才保存并生成号码（取号 `Q` 开头，换汇 `F` 开头）。保存时在访客锁里再校验一次。
 - 每位访客最多 10 笔未取消的预约；取消只改状态并写审计。
 - 换汇金额是外币整数，最多 50000 个单位；折算金额只按参考中间价计算，并注明不是成交价。

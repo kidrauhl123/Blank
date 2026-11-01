@@ -29,6 +29,25 @@ can use the banking core; neither UI is a dependency of the other.
   connection to a live merchant billing or clearing system.
 - Activity filters operate on the latest 50 transactions, explicitly labelled.
 - Transfers and cards keep their existing native bank flows.
+- Profile pages added later: rules and wallet (`/rules`), skills (`/skills`), family
+  and friends (`/links`), memories (`/memories`), schedules (`/schedules`), channels
+  (`/channels`), security (`/security`), audit (`/audit`) and settings (`/settings`,
+  which now only selects the assistant model).
+
+## Branch services and FX reservations
+
+- Branch lookup and FX reference rates are demonstration data. The branches are fictional,
+  and the rates are a fixed reference set dated 2026-10-31. They are not a live feed, and
+  an FX estimate is never a dealt price.
+- Queue numbers and FX appointments are created only through the assistant. `preview_reservation`
+  returns a draft that expires after 30 minutes; `save_reservation` stores it after the
+  customer confirms. A customer can hold at most 10 unfinished reservations. Appointments
+  fall within the next 7 days, inside branch opening hours, and at least 30 minutes ahead.
+- Cancelling a reservation only changes its status. A reservation does not move money and
+  does not create a ledger entry. There is no HTTP route for reservations.
+- A foreign-currency amount is a whole number of units, at most 50,000.
+- Printed statements, deposit or credit certificates, and overseas-transaction switches are
+  described in the knowledge base only; the app does not issue or change them.
 
 Bank APP endpoints are session-only. External MCP, developer pages and customer
 API tokens are retired. Official IM workers use separate channel adapter
