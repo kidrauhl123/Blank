@@ -17,6 +17,8 @@ import { describeUi, createProposal, recordUnmetNeed } from "./ui-store";
 import { createRuleDraft, walletOverview } from "./wallet-store";
 import { hasRuleIntent, payTrustedSmallInput } from "./wallet-core";
 import { currentUserTurn } from "./turn-context";
+import { createTool } from "./tool-store";
+import { toolSpecSchema } from "./tool-spec";
 import { layoutProposalInput, pageProposalInput, removePageProposalInput } from "./ui-schema";
 import { changeMySchedule, listMySchedules, previewSchedule, saveSchedule, scheduleDraftInput } from "./schedule-chat";
 import { investmentFiltersSchema, listInvestmentProducts } from "./investments";
@@ -112,6 +114,12 @@ export function appPageTools() {
       const draft = await createRuleDraft(customerId, ownerId, input);
       return JSON.stringify("error" in draft ? draft : { ...draft, instruction: "在回复里单独一行原样写出 marker，用户会看到由服务端渲染的规矩卡；再用一句话告诉用户：要在卡片上用面容/指纹（或验证器动态码）本人确认，确认后还有 24 小时冷静期才生效。不要复述规则细节的数字，也不要说规矩已经生效。" });
     }, { name: "propose_rule", description: "用户本人明确想立规矩时提议一条免确认的小额付款规矩（固定模板，参数有硬上限：单笔最多 500 元、每月最多 2000 元、收款人必须是有过多次往来的老联系人）。只是提议：用户要在卡片上本人强验证，再经过 24 小时冷静期才生效；你无权让它生效。", schema: payTrustedSmallInput }),
+    // 当场造工具：只用在需要反复调整数字的问题上。数字全部由工具按账本算，模型不能自己心算或编造。
+    tool(async (input, runtime: ToolRuntime) => {
+      const { customerId, ownerId } = cardOwner(runtime);
+      const toolId = await createTool(customerId, ownerId, input);
+      return JSON.stringify({ toolId, marker: `[[tool:${toolId}]]`, instruction: "在回复里单独一行原样写出 marker，用户会在对话里看到这个小工具；再用一句话说明它能做什么。不要自己算结果，数字都在工具里算。" });
+    }, { name: "build_tool", description: "用户问的是需要反复调整数字的问题（例如“每月少花多少，多久能攒够”“这次旅行和朋友怎么分账”）时，用审核过的交互积木当场做一个小工具；普通问答用文字回答，不要用工具。", schema: toolSpecSchema }),
     tool(async (_, runtime: ToolRuntime) => {
       const { customerId, ownerId } = cardOwner(runtime);
       const overview = await walletOverview(customerId, ownerId);

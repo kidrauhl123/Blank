@@ -168,6 +168,31 @@ export async function decideProposal(customerId: string, ownerId: string, id: st
   });
 }
 
+// 用户在小工具卡片上点“保存到首页”：这是用户本人的点击，不是模型提议，所以直接写入布局，不走提案流程。
+// 传入 client 时和调用方同一个事务：保存标记和首页布局要同时成功或同时失败。
+export async function addToolToHome(customerId: string, ownerId: string, toolId: string, client?: PoolClient) {
+  const run = async (tx: PoolClient) => {
+    const { layout, pages } = await getLayout(customerId, ownerId, tx);
+    if (layout.home.some(section => section.type === "tool" && section.toolId === toolId)) return;
+    if (layout.home.length >= 8) throw new Error("HOME_FULL");
+    const home = [...layout.home];
+    const assets = home.findIndex(section => section.type === "assets");
+    home.splice(assets === -1 ? 0 : assets + 1, 0, { type: "tool", toolId });
+    await saveLayout(tx, customerId, ownerId, clean(layoutSchema.parse({ ...layout, home }), pages));
+  };
+  return client ? run(client) : withTransaction(run);
+}
+// 移出首页只去掉这个区块，小工具本身仍在对话里。首页至少要留一个区块，所以唯一的区块不移除。
+export async function removeToolFromHome(customerId: string, ownerId: string, toolId: string, client?: PoolClient) {
+  const run = async (tx: PoolClient) => {
+    const { layout, pages } = await getLayout(customerId, ownerId, tx);
+    const home = layout.home.filter(section => !(section.type === "tool" && section.toolId === toolId));
+    if (home.length === layout.home.length || home.length === 0) return;
+    await saveLayout(tx, customerId, ownerId, clean(layoutSchema.parse({ ...layout, home }), pages));
+  };
+  return client ? run(client) : withTransaction(run);
+}
+
 // ---- 给模型的现状，以及记录“表达不了”的需求 ----
 export async function describeUi(customerId: string, ownerId: string) {
   const { layout, pages } = await getLayout(customerId, ownerId);
