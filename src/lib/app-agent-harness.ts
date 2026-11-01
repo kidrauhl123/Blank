@@ -23,6 +23,11 @@ import { toolSpecSchema } from "./tool-spec";
 import { layoutProposalInput, pageProposalInput, removePageProposalInput } from "./ui-schema";
 import { changeMySchedule, listMySchedules, previewSchedule, saveSchedule, scheduleDraftInput } from "./schedule-chat";
 import { investmentFiltersSchema, listInvestmentProducts } from "./investments";
+import { KNOWLEDGE_TOPICS, searchBankKnowledge } from "./bank-knowledge";
+import { BRANCH_SERVICES, findBranches } from "./bank-branches";
+import { FX_CURRENCIES, getFxRates } from "./fx-rates";
+import { budgetBaselineFor, explainSpending } from "./spending-analysis";
+import { CARD_ACTIONS, cardAction } from "./card-action";
 
 import { readBankFacts } from "./bank-agent-facts";
 
@@ -49,6 +54,13 @@ function cardOwner(runtime: ToolRuntime) {
   return { customerId, ownerId: scope.ownerId };
 }
 
+function customerIdOf(runtime: ToolRuntime) {
+  const customerId = runtime.config.configurable?.bank_customer_id;
+  if (typeof customerId !== "string") throw new Error("BANK_APP_SESSION_REQUIRED");
+  return customerId;
+}
+const monthInput = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
+
 export function appPageTools() {
   return [
     tool(async (input, runtime: ToolRuntime) => {
@@ -67,6 +79,32 @@ export function appPageTools() {
       return JSON.stringify({ ...result, products: result.products.map(product => ({ ...product, history: undefined })),
         scope: "产品来自本项目目录；历史净值变化不是预期收益。候选筛选不等于风险测评或申购授权。" });
     }, { name: "search_investment_products", description: "查询当前客户理财日期下的产品，可按金额、风险、持有期限和类型筛选。返回产品事实、费用及净值，不进行交易。", schema: investmentFiltersSchema }),
+    // 本行知识、网点与参考汇率是公开数据，只读，不需要客户身份；消费与卡片检查只读当前客户的账本。
+    tool(async (input) => JSON.stringify({ hits: searchBankKnowledge(input.query, input.topic),
+      scope: "本行知识库（演示内容）。回答时注明 source 和 version；没有命中的内容不要编造。" }), {
+      name: "search_bank_knowledge", description: "查询本行知识库，返回条目、来源与版本日期。覆盖账户与卡、对账单与证明、转账汇款、网点渠道、存款、信用卡与贷款、争议投诉、缴费代发、特殊情况、理财、跨境、反诈。没有命中时如实说明。",
+      schema: z.object({ query: z.string().trim().min(1).max(40).describe("用户问题里的关键词，例如“存款证明”“重复扣款”"), topic: z.enum(KNOWLEDGE_TOPICS).optional() }),
+    }),
+    tool(async (input) => JSON.stringify(findBranches(input)), {
+      name: "find_branches", description: "查询演示网点和 ATM 的地址、电话、可办服务和营业状态（按北京时间计算）。可按城市、区域关键词或服务类型筛选。",
+      schema: z.object({ keyword: z.string().trim().max(20).optional().describe("城市、区域或网点名，例如 北京、朝阳、陆家嘴"), service: z.enum(BRANCH_SERVICES).optional().describe("queue 取号办理，fx 换汇，account 开户与账户，wealth 理财咨询，cash 存取现金") }),
+    }),
+    tool(async (input) => JSON.stringify(getFxRates(input.currency)), {
+      name: "get_fx_rates", description: "查询参考中间价（仅供参考，不是成交价）。换汇以网点当时的挂牌价为准。",
+      schema: z.object({ currency: z.enum(FX_CURRENCIES).optional() }),
+    }),
+    tool(async (input, runtime: ToolRuntime) => JSON.stringify(await explainSpending(customerIdOf(runtime), input.month)), {
+      name: "explain_spending", description: "解释某个月的消费比上个月多在哪：分类增减和笔数、重复光顾的商户、新商户、费用类支出、最大的几笔。口径不含转账和理财。金额单位为分。",
+      schema: z.object({ month: monthInput.optional().describe("YYYY-MM，省略为本月") }),
+    }),
+    tool(async (_, runtime: ToolRuntime) => JSON.stringify(await budgetBaselineFor(customerIdOf(runtime))), {
+      name: "budget_baseline", description: "读取近 3 个完整月的分类平均支出、收入平均值和本月已花，并给出分类上限的建议值（向上取整到 50 元）。金额单位为分。",
+      schema: z.object({}),
+    }),
+    tool(async (input, runtime: ToolRuntime) => JSON.stringify(await cardAction(customerIdOf(runtime), input)), {
+      name: "card_action", description: "办理卡片前的服务端检查：申请虚拟卡（需要名称）、锁定普通卡（多张卡要先让用户选尾号）、挂失（暂未上线，只能说明）。返回的步骤在页面上完成，并由用户本人确认。锁卡不是挂失。",
+      schema: z.object({ action: z.enum(CARD_ACTIONS), last4: z.string().regex(/^\d{4}$/).optional().describe("卡片尾号四位，多张卡时用"), cardName: z.string().trim().min(2).max(12).optional().describe("申请虚拟卡时的卡片名称") }),
+    }),
     tool(async (input, runtime: ToolRuntime) => {
       const { customerId, ownerId } = cardOwner(runtime);
       const { id, post, values } = await previewRecipe(customerId, ownerId, input);
@@ -174,7 +212,7 @@ export function appPageTools() {
       name: "scroll_page", description: "滚动用户正在看的银行页面。", schema: z.object({ direction: z.enum(["up", "down"]), pageVersion, description }),
     }),
     tool((input, runtime: ToolRuntime) => bridge({ type: "question", ...input }, runtime), {
-      name: "ask_user", description: "有歧义或缺少信息时展示选择题。用户也可以自由输入；回答不属于银行授权。", schema: z.object({ question: z.string().min(1).max(300), options: z.array(z.string().min(1).max(100)).min(2).max(4) }),
+      name: "ask_user", description: "有歧义或缺少信息时展示选择题：2 到 4 个清楚、互斥的选项，不预选答案；缺字段且没有合理候选时，可给“自行输入”和“暂不办理”。用户的回答不是转账确认、挂失授权或强验证，也不能当作授权。", schema: z.object({ question: z.string().min(1).max(300), options: z.array(z.string().min(1).max(100)).min(2).max(4) }),
     }),
     tool((input, runtime: ToolRuntime) => bridge({ type: "handoff", ...input }, runtime), {
       name: "handoff_to_user", description: "在业务确认、强验证或其他必须由用户操作的步骤暂停。用户操作后可继续并查看真实状态。", schema: z.object({ description: z.string().min(1).max(300) }),

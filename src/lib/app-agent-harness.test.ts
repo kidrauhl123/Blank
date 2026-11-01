@@ -29,7 +29,7 @@ describe("real Deep Agents harness, with a deterministic model transport", () =>
     let calls = 0;
     const model = new ChatOpenAI({ model: "parallel-skill-test", apiKey: "test-only", maxRetries: 0, configuration: {
       baseURL: "https://test.invalid/v1", fetch: async () => {
-        const tools = ++calls === 1 ? ["bank-card", "bank-page"].map((name, index) => ({ id: `skill_${index}`, type: "function", function: { name: "read_file", arguments: JSON.stringify({ file_path: `/skills/${name}/SKILL.md`, offset: 0, limit: 1000 }) } }))
+        const tools = ++calls === 1 ? ["bank-insight", "bank-page"].map((name, index) => ({ id: `skill_${index}`, type: "function", function: { name: "read_file", arguments: JSON.stringify({ file_path: `/skills/${name}/SKILL.md`, offset: 0, limit: 1000 }) } }))
           : [{ id: "open_cards", type: "function", function: { name: "click_control", arguments: JSON.stringify({ target: "nav-cards", pageVersion: "p1", description: "打开卡片" }) } }];
         return new Response(JSON.stringify({ id: "skills-completion", object: "chat.completion", created: 1, model: "parallel-skill-test",
           choices: [{ index: 0, finish_reason: "tool_calls", message: { role: "assistant", content: "", tool_calls: tools } }],
@@ -66,8 +66,8 @@ describe("real Deep Agents harness, with a deterministic model transport", () =>
     expect(pending(first)).toMatchObject({ id: "call_1", action: { type: "click", target: "nav-cards" } });
     expect(requests).toHaveLength(1);
     const initialPrompt = JSON.stringify(requests[0].messages);
-    expect(initialPrompt).toContain("bank-card");
-    expect(initialPrompt).toContain("/skills/bank-card/SKILL.md");
+    expect(initialPrompt).toContain("bank-insight");
+    expect(initialPrompt).toContain("/skills/bank-insight/SKILL.md");
     const toolNames = (requests[0].tools as Array<{ function: { name: string } }>).map((item) => item.function.name);
     expect(toolNames).toContain("read_file");
     for (const forbidden of ["execute", "eval", "task", "write_file", "edit_file"]) expect(toolNames).not.toContain(forbidden);
