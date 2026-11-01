@@ -23,6 +23,7 @@ import type { PageMeta } from "@/lib/ui-store";
 import type { InvestmentReceipt } from "@/lib/investment-types";
 import type { BankStatement } from "@/lib/banking-report";
 import { bankRequest, BankRequestError, jsonPost } from "@/lib/client-request";
+import { FraudHoldPanel, type FraudHold } from "./FraudCard";
 import styles from "./BankingApp.module.css";
 
 type Account = { id: string; name: string; account_no: string; masked_no: string; account_type: string; available_balance_minor: string; currency: string; status: string };
@@ -36,6 +37,8 @@ const money = (minor: number | string) => new Intl.NumberFormat("zh-CN", { style
 const shortDate = (date: string) => new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", timeZone: "Asia/Shanghai" }).format(new Date(date));
 type PreparedTransfer = {
   operationId: string; riskLevel: "YELLOW" | "RED"; requiredAuth: "CONFIRM" | "MFA";
+  // 反诈守护暂缓时才有：拦截卡的原因和问题（服务端写死的文字）。
+  fraudHold?: FraudHold | null;
   taskId?: string;
   status?: string;
   // 规矩内已直接转出，不需要本人核对。
@@ -288,6 +291,8 @@ function TransferModal({ account, mfaConfigured, prepared, setPrepared, busy, se
       setPrepared(result);
     });
   };
+  // 反诈暂缓选择“24 小时后再办”后记下截止时间：弹窗里只剩说明，不能再确认。
+  const [heldUntil, setHeldUntil] = useState<string | null>(null);
   const authorize = async () => {
     if (!prepared) return;
     await run(async () => {
@@ -319,7 +324,9 @@ function TransferModal({ account, mfaConfigured, prepared, setPrepared, busy, se
   };
   return <ModalShell eyebrow={prepared ? `${prepared.riskLevel === "RED" ? "红色风险" : "黄色风险"} · ${prepared.requiredAuth === "MFA" ? "强验证" : "用户确认"}` : "先核对，再执行"} title={prepared ? "核对转账" : "发起转账"} close={close} busy={busy}>{!prepared ? <><p>输入收款人的姓名或完整手机号。</p><form className={styles.actionForm} onSubmit={prepare}>
     <label>收款人<input disabled={busy || uncertain} data-agent-id="field-recipient" data-agent-permission="fill" name="recipient" required minLength={2} placeholder="姓名或完整手机号" defaultValue={prefill?.recipient ?? undefined} autoFocus /></label><label>金额（元）<input disabled={busy || uncertain} data-agent-id="field-amount" data-agent-permission="fill" name="amount" type="number" inputMode="decimal" min="0.01" max="1000000" step="0.01" required defaultValue={prefill ? String(prefill.amountMinor / 100) : undefined} /></label><label>备注（选填）<input disabled={busy || uncertain} data-agent-id="field-note" data-agent-permission="fill" name="note" maxLength={80} /></label>{error && <div role="alert" className={styles.formError}>{error}</div>}<button data-agent-id="prepare-transfer" data-agent-permission="prepare" className={styles.primaryButton} disabled={busy || uncertain}>{busy ? "正在核验…" : "继续核对"}</button>
-  </form></> : <><div className={styles.transferReceipt}><strong>{money(prepared.details.amountMinor)}</strong><dl><div><dt>收款人</dt><dd>{prepared.details.recipient.name}</dd></div><div><dt>手机号</dt><dd>{prepared.details.recipient.phoneMasked}</dd></div><div><dt>付款账户</dt><dd>{prepared.details.sourceAccount.maskedNo}</dd></div><div><dt>操作编号</dt><dd>{prepared.operationId}</dd></div></dl></div>{prepared.requiredAuth === "MFA" && (mfaConfigured ? <label className={styles.reauthField}>验证器动态码<input disabled={busy || uncertain} data-agent-private inputMode="numeric" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} placeholder="6 位动态验证码" autoComplete="one-time-code" autoFocus /></label> : <div className={styles.mfaRequired}><b>需要先启用多因素认证</b><span>为保护账户，请使用身份验证器生成的动态码。</span><a href="/security">前往安全中心设置</a></div>)}{error && <div role="alert" className={styles.formError}>{error}</div>}<button data-agent-id="confirm-transfer" data-agent-permission="human" className={styles.primaryButton} disabled={busy || uncertain || (prepared.requiredAuth === "MFA" && (!mfaConfigured || code.length !== 6))} onClick={authorize}>{busy ? "正在转账…" : "确认转账"}</button><small>核对收款人和金额后再确认，完成后可在明细中查看结果。</small></>}{uncertain && <button type="button" className={styles.textAction} onClick={() => window.location.reload()}>重新读取账户状态</button>}</ModalShell>;
+  </form></> : <>{prepared.fraudHold && (heldUntil
+      ? <p role="status" className={styles.transferReceipt}>这笔转账已暂缓，北京时间 {new Date(heldUntil).toLocaleTimeString("zh-CN", { timeZone: "Asia/Shanghai", hour: "2-digit", minute: "2-digit", hour12: false })} 之后才能在 Blank 里确认。资金没有转出。</p>
+      : <FraudHoldPanel operationId={prepared.operationId} card={prepared.fraudHold} busy={busy} onHeld={setHeldUntil} />)}<div className={styles.transferReceipt}><strong>{money(prepared.details.amountMinor)}</strong><dl><div><dt>收款人</dt><dd>{prepared.details.recipient.name}</dd></div><div><dt>手机号</dt><dd>{prepared.details.recipient.phoneMasked}</dd></div><div><dt>付款账户</dt><dd>{prepared.details.sourceAccount.maskedNo}</dd></div><div><dt>操作编号</dt><dd>{prepared.operationId}</dd></div></dl></div>{!heldUntil && prepared.requiredAuth === "MFA" && (mfaConfigured ? <label className={styles.reauthField}>验证器动态码<input disabled={busy || uncertain} data-agent-private inputMode="numeric" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} placeholder="6 位动态验证码" autoComplete="one-time-code" autoFocus /></label> : <div className={styles.mfaRequired}><b>需要先启用多因素认证</b><span>为保护账户，请使用身份验证器生成的动态码。</span><a href="/security">前往安全中心设置</a></div>)}{error && <div role="alert" className={styles.formError}>{error}</div>}{!heldUntil && <button data-agent-id="confirm-transfer" data-agent-permission="human" className={styles.primaryButton} disabled={busy || uncertain || (prepared.requiredAuth === "MFA" && (!mfaConfigured || code.length !== 6))} onClick={authorize}>{busy ? "正在转账…" : "确认转账"}</button>}<small>核对收款人和金额后再确认，完成后可在明细中查看结果。</small></>}{uncertain && <button type="button" className={styles.textAction} onClick={() => window.location.reload()}>重新读取账户状态</button>}</ModalShell>;
 }
 
 function CardModal({ account, busy, setBusy, close, done }: { account: Account; busy: boolean; setBusy: (value: boolean) => void; close: () => void; done: () => Promise<void> }) {

@@ -1,0 +1,13 @@
+/* 反诈拦截卡：比普通卡片更醒目，但仍然用同一套颜色变量，不引入新的色相。 */
+.card { display: grid; gap: var(--space-3); padding: var(--space-4); border-radius: var(--radius-container); background: var(--surface); box-shadow: inset 0 0 0 1px var(--danger); }
+.card h3 { font-size: var(--text-md); font-weight: 700; letter-spacing: -.01em; }
+.reasons { margin: 0; padding-left: var(--space-4); display: grid; gap: var(--space-1); font-size: var(--text-sm); line-height: 1.6; }
+.hotline { font-size: var(--text-sm); line-height: 1.6; }
+.hotline b { color: var(--danger); font-variant-numeric: tabular-nums; }
+.question { display: grid; gap: var(--space-1); margin: 0; padding: 0; border: 0; font-size: var(--text-sm); }
+.question legend { padding: 0; margin-bottom: var(--space-1); }
+.question label { display: inline-flex; align-items: center; gap: var(--space-1); margin-right: var(--space-3); }
+.note { font-size: var(--text-xs); color: var(--muted); line-height: 1.6; }
+.error { font-size: var(--text-xs); color: var(--danger); }
+.secondary { min-height: var(--target-touch); border: 0; border-radius: var(--radius-control); background: var(--surface-strong); color: var(--ink); font-weight: 600; }
+.secondary:disabled { opacity: .45; }

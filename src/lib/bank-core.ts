@@ -9,6 +9,8 @@ import { writeAudit } from "./audit";
 import { getBankStatement } from "./bank-statements";
 import { getInvestmentOverview } from "./investments";
 import { findCoveringRule, lockRuleOwnerForTransfer } from "./wallet-store";
+import { assessTransfer, FraudHoldError, fraudCardOf, recordFraudHold } from "./fraud-store";
+import type { FraudReason } from "./fraud-core";
 
 export async function getBankingOverview(customerId: string) {
   const [customer, accounts, transactions, cards, subscriptions, statement, investments] = await Promise.all([
@@ -133,6 +135,8 @@ async function resolveRecipient(customerId: string, recipient: string) {
 async function insertPreparedTransfer(client: PoolClient, draft: {
   operationId: string; customerId: string; sourceAccountId: string; recipient: Recipient; amountMinor: number; note: string | null;
   riskLevel: "GREEN" | "YELLOW" | "RED"; requiredAuth: "NONE" | "CONFIRM" | "MFA"; fingerprint: string; expiresAt: string; ruleId: string | null;
+  // 反诈暂缓的原因（只有暂缓时才有）：转账行里记下，之后的“24 小时后再办”靠它判断这笔是不是被暂缓的。
+  fraudReasons: FraudReason[] | null;
   policy: { baseLevel: string; finalLevel: string; matchedRules: string[]; evidence: Record<string, unknown> };
 }) {
   const beneficiary = await client.query<{ id: string }>(
@@ -144,9 +148,9 @@ async function insertPreparedTransfer(client: PoolClient, draft: {
   );
   await client.query(
     `INSERT INTO transfers
-     (operation_id,idempotency_key,customer_id,from_account_id,beneficiary_id,amount_minor,currency,note,risk_level,required_auth,status,authorization_fingerprint,authorization_expires_at,rule_id)
-     VALUES ($1,$2,$3,$4,$5,$6,'CNY',$7,$8,$9,'AWAITING_AUTH',$10,$11,$12)`,
-    [draft.operationId, randomUUID(), draft.customerId, draft.sourceAccountId, beneficiary.rows[0].id, draft.amountMinor, draft.note, draft.riskLevel, draft.requiredAuth, draft.fingerprint, draft.expiresAt, draft.ruleId],
+     (operation_id,idempotency_key,customer_id,from_account_id,beneficiary_id,amount_minor,currency,note,risk_level,required_auth,status,authorization_fingerprint,authorization_expires_at,rule_id,fraud_reasons)
+     VALUES ($1,$2,$3,$4,$5,$6,'CNY',$7,$8,$9,'AWAITING_AUTH',$10,$11,$12,$13::jsonb)`,
+    [draft.operationId, randomUUID(), draft.customerId, draft.sourceAccountId, beneficiary.rows[0].id, draft.amountMinor, draft.note, draft.riskLevel, draft.requiredAuth, draft.fingerprint, draft.expiresAt, draft.ruleId, draft.fraudReasons === null ? null : JSON.stringify(draft.fraudReasons)],
   );
   await client.query(
     `INSERT INTO policy_decisions (operation_id,base_level,final_level,matched_rules,evidence)
@@ -171,14 +175,16 @@ export async function prepareTransfer(customerId: string, input: { fromAccountId
   const clock = await query<{ at: string }>("SELECT clock_timestamp()::text AS at");
   const dailyTotalMinor = await readDailyTransferTotal(customerId, clock.rows[0].at);
   const known = await query("SELECT trusted FROM beneficiaries WHERE customer_id=$1 AND settlement_account_id=$2", [customerId, recipient.account_id]);
-  const risk = evaluateTransferRisk({ amountMinor: input.amountMinor, dailyTotalMinor, trustedBeneficiary: Boolean(known.rows[0]?.trusted) });
-  const operationId = `TRF-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`;
+  const operationId =`TRF-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`;
 
   const result = await withTransaction(async (client) => {
     // 规矩判断用事务内的时刻：覆盖判断、暂停和日期口径都和本次草稿落库在同一个事务里。
     const txClock = await client.query<{ at: string }>("SELECT clock_timestamp()::text AS at");
     const now = new Date(txClock.rows[0].at);
-    const cover = options.ownerId ? await findCoveringRule(client, customerId, options.ownerId, recipient.customer_id, input.amountMinor, dailyTotalMinor, now) : null;
+    // 反诈守护先判断：被暂缓的转账不走规矩（规矩不能替一笔可疑的转账办理），所以暂缓时不做覆盖判断，也就不会因此暂停规矩。
+    const fraud = await assessTransfer(client, { customerId, recipientAccountId: recipient.account_id, amountMinor: input.amountMinor, note: input.note ?? null, now });
+    const cover = options.ownerId && !fraud.hold ? await findCoveringRule(client, customerId, options.ownerId, recipient.customer_id, input.amountMinor, dailyTotalMinor, now) : null;
+    const risk = evaluateTransferRisk({ amountMinor: input.amountMinor, dailyTotalMinor, trustedBeneficiary: Boolean(known.rows[0]?.trusted), fraudHold: fraud.hold });
     if (cover?.covered === true) {
       // 规矩内：源账户换成付款人的钱包子账户，免确认的钱只从钱包出，主账户不动，损失封顶在钱包余额。
       const wallet = (await client.query<{ id: string; name: string; masked_no: string; available_balance_minor: string; customer_id: string; status: string }>(
@@ -191,7 +197,7 @@ export async function prepareTransfer(customerId: string, input: { fromAccountId
         recipientCustomerId: recipient.customer_id, recipientName: recipient.display_name, recipientPhone: recipient.phone,
         recipientMasked: recipient.masked_no, amountMinor: input.amountMinor, currency: "CNY", note: input.note ?? null, expiresAt });
       await insertPreparedTransfer(client, { operationId, customerId, sourceAccountId: wallet.id, recipient, amountMinor: input.amountMinor, note: input.note ?? null,
-        riskLevel: "GREEN", requiredAuth: "NONE", fingerprint, expiresAt, ruleId: cover.ruleId,
+        riskLevel: "GREEN", requiredAuth: "NONE", fingerprint, expiresAt, ruleId: cover.ruleId, fraudReasons: null,
         policy: { baseLevel: "GREEN", finalLevel: "GREEN", matchedRules: ["RULE_COVERED", cover.ruleId], evidence: { amountMinor: input.amountMinor, timeZone: "Asia/Shanghai" } } });
       await writeAudit({ customerId, eventType: "TRANSFER_PREPARED", actorType: "USER", summary: "规矩覆盖的转账草稿已创建", operationId,
         evidence: { fromAccountId: wallet.id, recipientCustomerId: recipient.customer_id, amountMinor: input.amountMinor, riskLevel: "GREEN", fingerprint, ruleId: cover.ruleId } }, client);
@@ -219,7 +225,7 @@ export async function prepareTransfer(customerId: string, input: { fromAccountId
       recipientCustomerId: recipient.customer_id, recipientName: recipient.display_name, recipientPhone: recipient.phone,
       recipientMasked: recipient.masked_no, amountMinor: input.amountMinor, currency: "CNY", note: input.note ?? null, expiresAt });
     await insertPreparedTransfer(client, { operationId, customerId, sourceAccountId: source.id, recipient, amountMinor: input.amountMinor, note: input.note ?? null,
-      riskLevel: risk.finalLevel, requiredAuth: risk.requiredAuth, fingerprint, expiresAt, ruleId: null,
+      riskLevel: risk.finalLevel, requiredAuth: risk.requiredAuth, fingerprint, expiresAt, ruleId: null, fraudReasons: fraud.hold ? fraud.reasons : null,
       policy: { baseLevel: risk.baseLevel, finalLevel: risk.finalLevel, matchedRules: risk.matchedRules, evidence: { amountMinor: input.amountMinor, dailyTotalMinor, knownBeneficiary: Boolean(known.rowCount), timeZone: "Asia/Shanghai" } } });
     if (risk.requiredAuth === "MFA") {
       await client.query(
@@ -228,6 +234,7 @@ export async function prepareTransfer(customerId: string, input: { fromAccountId
         [customerId, operationId, expiresAt],
       );
     }
+    if (fraud.hold) await recordFraudHold(client, { customerId, ownerId: options.ownerId ?? null, operationId, reasons: fraud.reasons });
     await writeAudit({ customerId, eventType: "TRANSFER_PREPARED", actorType: "USER", summary: "客户创建转账草稿，资金尚未转出", operationId, evidence: { fromAccountId: source.id, recipientCustomerId: recipient.customer_id, amountMinor: input.amountMinor, riskLevel: risk.finalLevel, fingerprint } }, client);
     return {
       operationId,
@@ -235,6 +242,8 @@ export async function prepareTransfer(customerId: string, input: { fromAccountId
       riskLevel: risk.finalLevel,
       requiredAuth: risk.requiredAuth,
       authorizationExpiresAt: expiresAt,
+      // 拦截卡的内容：原因、关键问题、96110，都是服务端写死的文字；没有暂缓时为 null。
+      fraudHold: fraud.hold ? fraudCardOf(fraud.reasons) : null,
       details: {
         amountMinor: input.amountMinor,
         currency: "CNY",
@@ -256,6 +265,7 @@ type TransferRow = {
   trusted_beneficiary: boolean; prepared_at: Date;
   beneficiary_phone: string | null; masked_account: string; note: string | null; authorization_expires_at: Date;
   rule_id: string | null;
+  hold_until: Date | null;
 };
 
 export async function commitTransfer(customerId: string, operationId: string, input: { totpCode?: string | null; taskId?: string | null }) {
@@ -283,6 +293,11 @@ export async function commitTransfer(customerId: string, operationId: string, in
       return { alreadyExecuted: true, operationId, status: "SUCCEEDED" as const, receipt: receipt.rows[0] };
     }
     if (row.status !== "AWAITING_AUTH") throw new Error("OPERATION_NOT_EXECUTABLE");
+    // 反诈暂缓期（用户选了“24 小时后再办”）内不能确认：到点之前一律拒绝，资金不动。在任何状态变化之前检查。
+    if (row.hold_until) {
+      const clockNow = (await client.query<{ at: Date }>("SELECT clock_timestamp() AS at")).rows[0].at;
+      if (new Date(row.hold_until).getTime() > clockNow.getTime()) throw new FraudHoldError(new Date(row.hold_until).toISOString());
+    }
     const expectedFingerprint = transferFingerprint({ operationId, customerId, source: row.from_account_id, target: row.target_account_id,
       recipientCustomerId: row.recipient_customer_id, recipientName: row.beneficiary_name, recipientPhone: row.beneficiary_phone,
       recipientMasked: row.masked_account, amountMinor: Number(row.amount_minor), currency: row.currency, note: row.note, expiresAt: row.authorization_expires_at });

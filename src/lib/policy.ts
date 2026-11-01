@@ -6,6 +6,8 @@ export type TransferRiskInput = {
   trustedBeneficiary: boolean;
   trustedDevice?: boolean;
   failedAuthAttempts?: number;
+  // 反诈守护暂缓：发起时已经判定可疑（见 fraud-core.ts），风险升到红色，必须强验证。
+  fraudHold?: boolean;
 };
 
 // 当天转账累计超过这个数就进入红色风险；规矩里“当天转账较多”的判断也用它，两处必须一致。
@@ -29,6 +31,10 @@ export function evaluateTransferRisk(input: TransferRiskInput) {
   }
   if (!input.trustedBeneficiary) {
     matchedRules.push("NEW_BENEFICIARY_MONITORED");
+  }
+  if (input.fraudHold) {
+    levels.push("RED");
+    matchedRules.push("FRAUD_GUARD_HOLD");
   }
   if (input.trustedDevice === false) {
     levels.push("RED");

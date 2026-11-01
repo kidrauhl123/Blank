@@ -2,6 +2,7 @@ import { z } from "zod";
 import { AuthError, authenticateRequest } from "@/lib/auth";
 import { commitPreparedCardLock, commitTransfer } from "@/lib/bank-core";
 import { writeAudit } from "@/lib/audit";
+import { FraudHoldError } from "@/lib/fraud-store";
 import { inspectAgentRun, resumeAgentRuntime } from "@/lib/agent-runtime";
 import { apiError, assertSameOrigin } from "@/lib/http";
 import { withPreferenceScope } from "@/lib/preference-runtime";
@@ -88,6 +89,10 @@ export async function POST(request: Request, context: RouteContext<"/api/operati
     }
     return Response.json({ ...result, agent, agentRuntime });
   } catch (error) {
+    // 反诈暂缓期内：资金未转出，告诉用户什么时候可以再办。
+    if (error instanceof FraudHoldError) {
+      return Response.json({ error: "FRAUD_HOLD_ACTIVE", message: `这笔转账被反诈守护暂缓，北京时间 ${new Date(new Date(error.holdUntil).getTime() + 8 * 3_600_000).toISOString().slice(11, 16)} 之后才能确认。资金未转出。`, holdUntil: error.holdUntil }, { status: 409 });
+    }
     return apiError(error, "EXECUTION_FAILED");
   }
 }
