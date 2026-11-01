@@ -30,7 +30,7 @@
 
 - `GET /api/v1/memories` 列出有效记忆；`PATCH /api/v1/memories/:memoryId` 修改文字或日期；`DELETE /api/v1/memories/:memoryId` 删除。
 - 修改要带上看到的版本号，旧版本不能覆盖新修改。
-- 在“我记住的事”页面（`/memories`）里也可以查看、修改和删除。
+- 在 Blank 页面右上角的「记忆」图标（`/memories`）里查看、修改和删除。它不再出现在个人中心的列表里。
 
 ## 5. 相关代码与测试
 
@@ -38,4 +38,4 @@
 - `src/lib/life-memory.integration.test.ts`：真实数据库的保存、访客隔离、到期提醒
 - `src/lib/feed-store.ts`：到期提醒动态（`memoryDraft`）
 - 迁移 `037_life_memories.sql`：`visitor_life_memories`
-- 页面：`src/app/(phone)/memories/page.tsx`（标题“我记住的事”）
+- 页面：`src/app/(phone)/memories/page.tsx`（标题“记忆”）；入口图标在 `src/components/AppAssistant.tsx`

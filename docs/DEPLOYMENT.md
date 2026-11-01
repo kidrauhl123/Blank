@@ -26,7 +26,7 @@ openssl rand -hex 32   # 写入 POSTGRES_PASSWORD
 openssl rand -hex 32   # 写入 PASSWORD_PEPPER；部署后不得随意更换
 ```
 
-AI 变量为空时，银行基础功能正常工作，内置助手明确显示未配置且不会输出替代回复。模型名单可用 `AI_ALLOWED_MODELS` 限定，模板里默认填入示例名单；设置页只显示这份名单与上游目录的交集。见 [模型设置](MODEL_SETTINGS.md)。
+AI 变量为空时，银行基础功能正常工作，内置助手明确显示未配置且不会输出替代回复。访客可以在设置页填写自己的模型接口，密钥用 `PASSWORD_PEPPER` 派生的密钥加密保存（迁移 `045_visitor_model_keys.sql`），因此运营方的 `AI_API_KEY` 不是必需的；代价是后台任务（动态的文字撰写、每日巡检的主模型、IM 渠道）没有访客上下文，只能使用运营方配置。模型名单可用 `AI_ALLOWED_MODELS` 限定，模板里默认填入示例名单；设置页只显示这份名单与上游目录的交集。见 [模型设置](MODEL_SETTINGS.md)。
 
 必须设置 `BANKPILOT_PUBLIC_URL` 为用户实际访问的 HTTPS 域名。机器人变量在取得平台凭据前可留空，此时不要启用对应 profile。
 

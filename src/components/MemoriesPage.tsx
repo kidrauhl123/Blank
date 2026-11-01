@@ -9,7 +9,7 @@ type Memory = { id: string; kind: "event" | "preference"; text: string; dueOn: s
 const KIND_LABEL = { event: "生活事件", preference: "偏好" } as const;
 const json = (method: "PATCH" | "DELETE", body: unknown): RequestInit => ({ method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 
-// “我记住的事”：用户看到 Blank 从对话里记下的生活事件和偏好，可以改、可以删。改和删都带着看到的版本号，旧版本不会覆盖新的修改。
+// “记忆”：用户看到 Blank 从对话里记下的生活事件和偏好，可以改、可以删。改和删都带着看到的版本号，旧版本不会覆盖新的修改。
 export function MemoriesPage() {
   const [memories, setMemories] = useState<Memory[] | null>(null);
   const [error, setError] = useState("");
@@ -48,7 +48,7 @@ export function MemoriesPage() {
 
   return <main className={styles.page}>
     <header><Link href="/">← 返回</Link></header>
-    <h1>我记住的事</h1>
+    <h1>记忆</h1>
     <p className={styles.muted}>这些是你在对话里亲口说过的事。到期前 Blank 会在动态里提醒你，并注明“你说过”。你可以改，也可以删。</p>
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {memories === null ? <p className={styles.muted}>正在读取…</p>

@@ -3,6 +3,7 @@ import { PLANNER_SYSTEM_PROMPT } from "./bank-agent-prompts";
 import { renderBankReply, type BankReplyInput } from "./bank-facts";
 import { currentPreferenceData } from "./preference-runtime";
 import { DAILY_REVIEW_SKILL, dailyReviewSelectionSchema, type DailyReviewSnapshot } from "./daily-review-policy";
+import { effectiveModelConfig } from "./model-config";
 
 export type ConversationMessage = { role: "user" | "assistant"; content: string };
 
@@ -64,17 +65,19 @@ export class AIUpstreamError extends Error {
   }
 }
 
+// 当前请求能用的模型：访客自己填写的优先，否则是运营方配置的（见 model-config.ts）。
 export function getAIStatus() {
-  const configured = Boolean(process.env.AI_BASE_URL && process.env.AI_API_KEY && process.env.AI_MODEL);
-  return { configured, model: configured ? process.env.AI_MODEL : null };
+  const config = effectiveModelConfig();
+  return { configured: Boolean(config), model: config?.model ?? null };
 }
 
 function getConfig() {
-  if (!getAIStatus().configured) throw new AIConfigurationError();
+  const config = effectiveModelConfig();
+  if (!config) throw new AIConfigurationError();
   return {
-    baseUrl: process.env.AI_BASE_URL!.replace(/\/$/, ""),
-    apiKey: process.env.AI_API_KEY!,
-    model: process.env.AI_MODEL!,
+    baseUrl: config.baseUrl,
+    apiKey: config.apiKey,
+    model: config.model,
     timeoutMs: Number(process.env.AI_TIMEOUT_MS ?? 30_000),
   };
 }

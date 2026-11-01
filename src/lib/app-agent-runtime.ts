@@ -8,6 +8,7 @@ import { createAppAgentHarness } from "./app-agent-harness";
 import { appAgentSkillFiles } from "./app-agent-skills";
 import { getAIStatus } from "./ai";
 import { assertAIModelEnabled, resolveAIModel } from "./ai-models";
+import { effectiveModelConfig } from "./model-config";
 import { pageActionSchema, type ActionResult, type AppAgentStatus, type AppAgentView, type AppPage, type PendingAction } from "./app-agent-protocol";
 import { currentPreferenceScope } from "./preference-runtime";
 import { withUserTurn, type UserTurn } from "./turn-context";
@@ -27,7 +28,8 @@ const harnesses = new Map<string, Promise<ReturnType<typeof createAppAgentHarnes
 async function getHarness(model: string) {
   assertAIModelEnabled(model);
   const streaming = Boolean(currentAppAgentStream());
-  const cacheKey = `${model}:${streaming ? "stream" : "json"}`;
+  // 缓存键包含配置指纹：不同访客的密钥不能共用同一个 harness（否则会用别人的密钥）。
+  const cacheKey = `${effectiveModelConfig()?.fingerprint ?? "none"}:${model}:${streaming ? "stream" : "json"}`;
   const cached = harnesses.get(cacheKey);
   if (cached) {
     harnesses.delete(cacheKey); harnesses.set(cacheKey, cached);

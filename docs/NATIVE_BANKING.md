@@ -30,9 +30,11 @@ can use the banking core; neither UI is a dependency of the other.
 - Activity filters operate on the latest 50 transactions, explicitly labelled.
 - Transfers and cards keep their existing native bank flows.
 - Profile pages added later: rules and wallet (`/rules`), skills (`/skills`), family
-  and friends (`/links`), memories (`/memories`), schedules (`/schedules`), channels
-  (`/channels`), security (`/security`), audit (`/audit`) and settings (`/settings`,
-  which now only selects the assistant model).
+  and friends (`/links`), channels (`/channels`), security (`/security`), audit
+  (`/audit`) and settings (`/settings`: the assistant model and the custom model API).
+  Memories (`/memories`, titled 记忆) and schedules (`/schedules`) are opened from the
+  icons at the top right of the Blank page, not from the profile sheet. The security
+  centre is reached from the profile sheet; the header no longer shows a shield.
 
 ## Branch services and FX reservations
 

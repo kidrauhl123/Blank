@@ -7,6 +7,7 @@ import { controlAppAgent, getAppAgentRun, startAppAgent } from "@/lib/app-agent-
 import { appAgentFailure } from "@/lib/app-agent-errors";
 import { withPreferenceScope } from "@/lib/preference-runtime";
 import { resolveVisitorMemoryScope } from "@/lib/visitor-memory";
+import { withVisitorModel } from "@/lib/visitor-model-key";
 
 import { withAppAgentStream } from "@/lib/app-agent-stream";
 import type { AppAgentStreamEvent } from "@/lib/app-agent-stream-protocol";
@@ -46,14 +47,14 @@ export async function POST(request: Request) {
     const who = await requireAppSession(request);
     const scope = await resolveVisitorMemoryScope(request, who.customerId);
     const input = schema.parse(await request.json());
-    const execute = () => withPreferenceScope(scope, async () => {
+    const execute = () => withPreferenceScope(scope, () => withVisitorModel(scope, async () => {
       if (input.command === "start") {
         const forModel = input.quote ? `【引用动态】${input.quote}\n\n${input.message}`.slice(0, 1000) : input.message;
         return startAppAgent(who, forModel, input.page, input.model ?? await getSessionModel(who) ?? undefined, { text: input.message, source: input.source });
       }
       if (input.command === "advance" || input.command === "refresh") return controlAppAgent(who, input.id, input.command, input.actionId, input.result);
       return controlAppAgent(who, input.id, input.command);
-    });
+    }));
     if (!request.headers.get("accept")?.includes("text/event-stream")) return Response.json(await execute());
     const abort = new AbortController();
     const signal = AbortSignal.any([request.signal, abort.signal]);

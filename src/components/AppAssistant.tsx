@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type RefObject } from "react";
-import { Check, ChevronDown, Pause, Phone, Play, Send, Square, X } from "lucide-react";
+import { BookMarked, CalendarClock, Check, ChevronDown, Pause, Phone, Play, Send, Square, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { applyPageAction, captureAppPage, type PageMotion } from "@/lib/app-page";
 import type { AppAgentView } from "@/lib/app-agent-protocol";
@@ -320,7 +320,7 @@ export function AppAssistant({ rootRef, configured, voiceEnabled = false, openSi
 
   const conversation = open || (controlledPage && pageHost) ? (
     <section className={`${styles.panel} ${presentation === "page" ? styles.pagePanel : ""}`} role={presentation === "page" ? "region" : "dialog"} aria-modal={presentation === "page" ? undefined : "false"} data-agent-overlay aria-label={presentation === "page" ? "Blank 会话" : "Blank 悬浮窗"}>
-      <header><span><AssistantMark size={19} /><b>Blank</b></span>{presentation === "floating" && <><button onClick={closeConversation} aria-label="收起 Blank"><ChevronDown size={21} /></button><button onClick={closeConversation} aria-label="关闭 Blank 面板"><X size={19} /></button></>}</header>
+      <header><span><AssistantMark size={19} /><b>Blank</b></span>{presentation === "page" && <nav className={styles.pageActions} aria-label="常用入口"><a href="/schedules" aria-label="定时任务" title="定时任务"><CalendarClock size={19} strokeWidth={1.8} /></a><a href="/memories" aria-label="记忆" title="记忆"><BookMarked size={19} strokeWidth={1.8} /></a></nav>}{presentation === "floating" && <><button onClick={closeConversation} aria-label="收起 Blank"><ChevronDown size={21} /></button><button onClick={closeConversation} aria-label="关闭 Blank 面板"><X size={19} /></button></>}</header>
       {voiceOpen ? <VoiceCall voice={voice} close={() => { voice.stop(); setVoiceOpen(false); }} continueTask={message => { voice.stop(); setVoiceOpen(false); void send(message, "voice"); }} /> : <>
       {presentation !== "page" && <p className={styles.context}>已共享：{pageName} · 密码和验证码不共享</p>}
       <div className={styles.messages} onScroll={event => { const node = event.currentTarget; followOutput.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80; }}>

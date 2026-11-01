@@ -6,6 +6,7 @@ import { ArrowLeft, ChevronDown, RefreshCw } from "lucide-react";
 import { bankRequest, BankRequestError } from "@/lib/client-request";
 import type { AIModelCatalog } from "@/lib/ai-models";
 import styles from "./AppSettings.module.css";
+import { ModelKeyForm } from "./ModelKeyForm";
 
 export function AppSettings() {
   const [catalog, setCatalog] = useState<AIModelCatalog | null>(null);
@@ -51,6 +52,9 @@ export function AppSettings() {
         <div className={styles.actions}><button className={styles.primary} disabled={loading || saving || !catalog || model === saved}>{saving ? "正在保存…" : "保存设置"}</button>
           <button className={styles.secondary} type="button" disabled={loading || saving} onClick={() => { setLoading(true); setNotice(""); setAttempt(attempt + 1); }}><RefreshCw size={16} />重新读取</button></div>
       </form>
+    </section>
+    <section className={styles.section} aria-labelledby="custom-model-settings"><h2 id="custom-model-settings">自定义模型 API</h2>
+      <ModelKeyForm onChanged={() => { setLoading(true); setAttempt(attempt + 1); }} />
     </section>
   </main>;
 }

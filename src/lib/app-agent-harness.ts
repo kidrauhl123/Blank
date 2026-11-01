@@ -6,7 +6,8 @@ import { interrupt, type BaseCheckpointSaver } from "@langchain/langgraph";
 import { createDeepAgent, registerHarnessProfile } from "deepagents";
 import { createMiddleware, modelCallLimitMiddleware } from "langchain";
 import { z } from "zod";
-import { AIConfigurationError, getAIStatus } from "./ai";
+import { AIConfigurationError } from "./ai";
+import { effectiveModelConfig } from "./model-config";
 import { actionResultSchema, type PageAction } from "./app-agent-protocol";
 import { appAgentSkillFiles } from "./app-agent-skills";
 import { APP_AGENT_PROMPT } from "./bank-agent-prompts";
@@ -293,9 +294,11 @@ export function appPageTools() {
 }
 
 export function createAppAgentHarness(checkpointer: BaseCheckpointSaver, modelOverride?: ChatOpenAI | ChatDeepSeek, selectedModel?: string, streaming = false) {
-  if (!modelOverride && !getAIStatus().configured) throw new AIConfigurationError();
-  const modelName = modelOverride?.model ?? selectedModel ?? process.env.AI_MODEL!;
-  const deepseek = modelOverride ? modelOverride instanceof ChatDeepSeek : new URL(process.env.AI_BASE_URL!).hostname === "api.deepseek.com";
+  // 接口和密钥来自当前请求的模型配置（访客自己的，或运营方的），不直接读环境变量。
+  const config = effectiveModelConfig();
+  if (!modelOverride && !config) throw new AIConfigurationError();
+  const modelName = modelOverride?.model ?? selectedModel ?? config?.model ?? "";
+  const deepseek = modelOverride ? modelOverride instanceof ChatDeepSeek : new URL(config!.baseUrl).hostname === "api.deepseek.com";
   const deepseekModel = deepseek || /^deepseek[-/]/i.test(modelName);
   // No operating-system backend, sandbox, Shell, network or delegated agents.
   registerHarnessProfile(`${deepseek ? "deepseek" : "openai"}:${modelName}`, {
@@ -303,8 +306,8 @@ export function createAppAgentHarness(checkpointer: BaseCheckpointSaver, modelOv
     generalPurposeSubagent: { enabled: false },
   });
   const modelOptions = {
-    model: modelName, apiKey: process.env.AI_API_KEY!,
-    configuration: { baseURL: process.env.AI_BASE_URL?.replace(/\/$/, "") },
+    model: modelName, apiKey: config?.apiKey ?? "",
+    configuration: { baseURL: config?.baseUrl },
     streaming,
     temperature: 0, maxTokens: 4096, maxRetries: 0, timeout: Number(process.env.AI_TIMEOUT_MS ?? 30000),
     // DeepSeek defaults to thinking mode, whose tool turns require replaying

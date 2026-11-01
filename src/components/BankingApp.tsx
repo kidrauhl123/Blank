@@ -2,8 +2,8 @@
 
 import {
   ChartNoAxesColumnIncreasing,
-  ChevronRight, Clock3, CreditCard, House, Link2,
-  Bookmark, ListChecks, LogOut, Plus, RefreshCw, Settings, ShieldCheck, TrendingUp, Users, Wallet,
+  ChevronRight, CreditCard, House, Link2,
+  ListChecks, LogOut, Plus, RefreshCw, Settings, ShieldCheck, TrendingUp, Users, Wallet,
 } from "lucide-react";
 import { FormEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
 import { ServiceWorkerRegister } from "./ServiceWorkerRegister";
@@ -176,7 +176,6 @@ export function BankingApp() {
       <header className={styles.topbar}>
         <button className={styles.avatar} aria-label="个人中心" onClick={() => { showBankPage(); setDialog("profile"); }}>{data.customer.display_name.slice(0, 2).toUpperCase()}</button>
         <div className={styles.wordmark}><span>B</span> Blank</div>
-        <a className={styles.iconButton} href="/security" aria-label="安全中心"><ShieldCheck size={21} strokeWidth={1.8} /></a>
       </header>
       {error && <div className={styles.connectionError} role="alert"><span>{error}</span><button disabled={loading} onClick={() => void load()}><RefreshCw size={15} />重新读取</button></div>}
       {notice && <div className={styles.confirmedNotice} role="status">{notice}<button onClick={() => setNotice("")} aria-label="关闭操作提示">关闭</button></div>}
@@ -336,7 +335,7 @@ function CardModal({ account, busy, setBusy, close, done }: { account: Account; 
 }
 
 function ProfileModal({ data, busy, close, logout }: { data: Bootstrap; busy: boolean; close: () => void; logout: () => Promise<void> }) {
-  return <ModalShell eyebrow="账户" title={data.customer.display_name} close={close} busy={busy}><div className={styles.profileRows} data-agent-private><div><span>手机号</span><b>{data.customer.phone}</b></div><div><span>收款方式</span><b>姓名或手机号</b></div><div><span>账户号</span><b>{data.accounts[0]?.account_no ?? "—"}</b></div></div><a className={styles.developerLink} href="/security"><ShieldCheck size={17} /><span><b>安全中心</b><small>{data.customer.mfa_configured ? "强验证已开启" : "设置高风险操作验证"}</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/schedules"><Clock3 size={17} /><span><b>定时任务</b><small>提醒、账单报告与订阅检查</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/memories"><Bookmark size={17} /><span><b>我记住的事</b><small>你亲口说过的生活事件和偏好，可以改、可以删</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/links"><Users size={17} /><span><b>家人与朋友</b><small>互联的家人或朋友，收件箱、分账和攒钱沟通</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/skills"><ListChecks size={17} /><span><b>我的做法</b><small>你教给 Blank 的办事步骤，可以查看、修改、停用</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/rules"><Wallet size={17} /><span><b>规矩与钱包</b><small>免确认的小额付款与钱包</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/channels"><Link2 size={17} /><span><b>消息渠道</b><small>QQ 与企业微信</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/settings"><Settings size={17} /><span><b>设置</b><small>Blank模型</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/audit"><ShieldCheck size={17} /><span><b>操作记录</b><small>风险等级、执行链路与系统状态</small></span><ChevronRight size={17} /></a><button className={styles.logoutButton} disabled={busy} onClick={logout}><LogOut size={17} />{busy ? "正在退出…" : "退出体验"}</button></ModalShell>;
+  return <ModalShell eyebrow="账户" title={data.customer.display_name} close={close} busy={busy}><div className={styles.profileRows} data-agent-private><div><span>手机号</span><b>{data.customer.phone}</b></div><div><span>收款方式</span><b>姓名或手机号</b></div><div><span>账户号</span><b>{data.accounts[0]?.account_no ?? "—"}</b></div></div><a className={styles.developerLink} href="/security"><ShieldCheck size={17} /><span><b>安全中心</b><small>{data.customer.mfa_configured ? "强验证已开启" : "设置高风险操作验证"}</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/links"><Users size={17} /><span><b>家人与朋友</b><small>互联的家人或朋友，收件箱、分账和攒钱沟通</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/skills"><ListChecks size={17} /><span><b>我的做法</b><small>你教给 Blank 的办事步骤，可以查看、修改、停用</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/rules"><Wallet size={17} /><span><b>规矩与钱包</b><small>免确认的小额付款与钱包</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/channels"><Link2 size={17} /><span><b>消息渠道</b><small>QQ 与企业微信</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/settings"><Settings size={17} /><span><b>设置</b><small>Blank模型</small></span><ChevronRight size={17} /></a><a className={styles.developerLink} href="/audit"><ShieldCheck size={17} /><span><b>操作记录</b><small>风险等级、执行链路与系统状态</small></span><ChevronRight size={17} /></a><button className={styles.logoutButton} disabled={busy} onClick={logout}><LogOut size={17} />{busy ? "正在退出…" : "退出体验"}</button></ModalShell>;
 }
 
 function CardDetailsModal({ card, close, done }: { card?: Card; close: () => void; done: () => Promise<void> }) {

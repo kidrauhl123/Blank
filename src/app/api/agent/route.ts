@@ -7,6 +7,7 @@ import { authenticateRequest } from "@/lib/auth";
 import { apiError, assertSameOrigin } from "@/lib/http";
 import { withPreferenceScope } from "@/lib/preference-runtime";
 import { resolveVisitorMemoryScope } from "@/lib/visitor-memory";
+import { withVisitorModel } from "@/lib/visitor-model-key";
 
 const schema = z.object({
   message: z.string().trim().min(1).max(500),
@@ -24,14 +25,14 @@ export async function POST(request: Request) {
     if (principal.kind !== "SESSION") return NextResponse.json({ error: "BANK_APP_SESSION_REQUIRED" }, { status: 403 });
     const input = schema.parse(await request.json());
     const scope = await resolveVisitorMemoryScope(request, principal.customerId);
-    return NextResponse.json(await withPreferenceScope(scope, () => runAgentRuntime({
+    return NextResponse.json(await withPreferenceScope(scope, () => withVisitorModel(scope, () => runAgentRuntime({
       customerId: principal.customerId,
       message: input.message,
       history: input.history,
       channelType: "PWA",
       externalConversationId: input.conversationId ?? randomUUID(),
       newDevice: principal.newDevice === true,
-    })));
+    }))));
   } catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ error: "INVALID_REQUEST" }, { status: 400 });
     if (error instanceof AIConfigurationError) {

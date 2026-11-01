@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { AIConfigurationError, getAIStatus } from "./ai";
+import { AIConfigurationError } from "./ai";
+import { effectiveModelConfig } from "./model-config";
 
 export type AIModelCatalog = { models: string[]; defaultModel: string };
 let cache: { provider: string; expiresAt: number; catalog: AIModelCatalog } | undefined;
@@ -19,14 +20,19 @@ export function isAIModelEnabled(model: string) {
 }
 
 export function assertAIModelEnabled(model: string) {
+  // 访客自己的接口不受运营方的屏蔽和允许名单限制：那是运营方自己网关的策略。
+  if (effectiveModelConfig()?.source === "VISITOR") return;
   if (!isAIModelEnabled(model)) throw new Error("AI_MODEL_NOT_AVAILABLE");
 }
 
 export async function getAIModels(): Promise<AIModelCatalog> {
-  if (!getAIStatus().configured) throw new AIConfigurationError();
-  const baseURL = process.env.AI_BASE_URL!.replace(/\/$/, "");
-  const key = process.env.AI_API_KEY!;
-  const defaultModel = process.env.AI_MODEL!;
+  const config = effectiveModelConfig();
+  if (!config) throw new AIConfigurationError();
+  // 访客自己的接口只列出他填写的那一个模型，不去拉取目录。
+  if (config.source === "VISITOR") return { models: [config.model], defaultModel: config.model };
+  const baseURL = config.baseUrl;
+  const key = config.apiKey;
+  const defaultModel = config.model;
   const blocked = blockedModels();
   const allowed = allowedModels();
   const provider = createHash("sha256").update(JSON.stringify([baseURL, key, defaultModel, [...blocked].sort(), allowed])).digest("hex");
@@ -58,9 +64,12 @@ export async function getAIModels(): Promise<AIModelCatalog> {
 }
 
 export async function resolveAIModel(requested?: string) {
-  if (!getAIStatus().configured) throw new AIConfigurationError();
-  assertAIModelEnabled(requested || process.env.AI_MODEL!);
-  if (!requested || requested === process.env.AI_MODEL) return process.env.AI_MODEL!;
+  const config = effectiveModelConfig();
+  if (!config) throw new AIConfigurationError();
+  // 访客自己的接口只用他填写的模型；之前保存过的其他模型名不再生效。
+  if (config.source === "VISITOR") return config.model;
+  assertAIModelEnabled(requested || config.model);
+  if (!requested || requested === config.model) return config.model;
   const { models } = await getAIModels();
   if (!models.includes(requested)) throw new Error("AI_MODEL_NOT_AVAILABLE");
   return requested;

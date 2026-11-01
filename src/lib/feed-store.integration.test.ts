@@ -39,7 +39,9 @@ describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("feed publishing", () =>
     const judge = vi.fn(approve);
     await runFeedHeartbeat({ judge, customerIds: [customerIds[0]] });
     const first = await listFeed(customerIds[0]);
-    expect(first.map(post => post.kind)).toEqual(["anomaly", "money-flow"]);
+    // 资金去向是周三起才发的周报（feed.ts 的 WEEKLY_DAY），周一、周二不会出现；期望值跟着北京时间的星期走，测试不依赖运行的日子。
+    const beijingWeekday = ((new Date(Date.now() + 8 * 3_600_000).getUTCDay() + 6) % 7) + 1;
+    expect(first.map(post => post.kind)).toEqual(beijingWeekday >= 3 ? ["anomaly", "money-flow"] : ["anomaly"]);
     expect(first[0]).toMatchObject({ title: "这笔 ¥3,999 和你平时不太一样", attention: true });
     expect(first.every(post => !Number.isNaN(Date.parse(post.publishedAt)))).toBe(true);
     expect(JSON.stringify(first)).not.toContain("Other customer");

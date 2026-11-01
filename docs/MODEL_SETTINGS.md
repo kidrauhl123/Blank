@@ -8,6 +8,19 @@
 
 模型选择位于设置页的「Blank 模型」一栏（`/settings`，`src/components/AppSettings.tsx`）。正常助手界面不展示模型选择。保存后只影响当前银行登录会话的新页面助手任务，不影响其他访客；官方 IM 继续使用服务端默认模型。
 
+## 访客自己的模型接口（自定义 API key）
+
+设置页的「自定义模型 API」一栏让访客填写自己的 OpenAI 兼容接口：接口地址、API 密钥和模型名称。保存时服务器先检查地址，再用这把密钥请求一次 `/models`，通过后才加密保存。
+
+- **优先级**：访客自己的配置优先；没有时才用运营方的 `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL`；都没有时界面显示未配置。
+- **范围**：按访客（记忆归属 cookie）保存，不按共享的模拟账户保存。别的访客用同一个模拟账户时既看不到，也用不到。
+- **用途**：页面助手和银行业务对话里的所有模型调用都用访客自己的配置。后台任务（动态的文字撰写、每日巡检的主模型、IM 渠道）没有访客上下文，只用运营方的配置。
+- **存放**：密钥用 AES-256-GCM 加密，密钥由 `PASSWORD_PEPPER` 经 HKDF 派生。接口从不返回密钥，只返回地址、模型名和密钥尾号。更换 `PASSWORD_PEPPER` 后已保存的密钥需要重新填写。
+- **地址限制**：必须是公开的 `https` 地址，不能带账号密码、查询参数或非标准端口；解析出的每个 IP 都必须是公开地址（本机、内网、链路本地、100.64/10 等都拒绝）；请求不跟随重定向，超时 8 秒。每次使用前都会重新检查解析结果。
+- **模型**：访客的接口只用他填写的那一个模型，不去拉取目录，也不受 `AI_ALLOWED_MODELS` / `AI_BLOCKED_MODELS` 限制（那是运营方网关的策略）。
+- **接口**：`GET` 读取状态，`PUT` 验证并保存，`DELETE` 删除。写请求必须同源。
+- 代码：`src/lib/model-config.ts`（当前请求的配置）、`src/lib/model-key-vault.ts`（加密）、`src/lib/model-endpoint.ts`（地址与公开性检查）、`src/lib/visitor-model-key.ts`（存放与使用）、`src/app/api/v1/settings/model-key/route.ts`、`src/components/ModelKeyForm.tsx`。迁移 `045_visitor_model_keys.sql`。
+
 ## 目录与任务
 
 - `/api/agent/models` 仅接受银行会话，服务端读取上游 `/models`，仅返回去重、过滤后的模型 ID 与默认值；不转发供应商元数据或凭据。目录按上游配置缓存 60 秒，并合并同时请求。
