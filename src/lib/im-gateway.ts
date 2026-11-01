@@ -7,6 +7,7 @@ import {
   type ChannelType,
 } from "./channels";
 import { query } from "./db";
+import { appFallbackMessage, appOnlyRequest } from "./im-app-fallback";
 import { scamPhraseIn, scamPhraseWarning } from "./fraud-core";
 import { recordScamPhraseAlert } from "./fraud-store";
 
@@ -79,6 +80,21 @@ export async function handleChannelMessage(config: GatewayConfig, input: Channel
   );
   if (["绑定", "/bind"].includes(input.message.trim())) {
     return { status: "COMPLETED" as const, reply: { message: "当前聊天身份已经连接 Blank。发送“查余额”即可开始使用；如需解绑，请打开 Blank 的消息渠道页面。" } };
+  }
+  // 只能在 App 里完成的请求：不尝试执行，直接说明并给出“回 App 继续”的链接。
+  const appOnly = appOnlyRequest(input.message);
+  if (appOnly) {
+    await recordChannelEvent({
+      identityId: identity.id,
+      customerId: identity.customer_id,
+      channelType: config.channelType,
+      direction: "OUTBOUND",
+      externalEventId: input.eventId,
+      eventType: "AGENT_REPLY",
+      payloadSummary: { appOnly: appOnly.path },
+      outcome: "READY",
+    });
+    return { status: "COMPLETED" as const, reply: { message: appFallbackMessage(appOnly, configuredPublicUrl()) } };
   }
   const reply = await runAgentRuntime({
     customerId: identity.customer_id,
