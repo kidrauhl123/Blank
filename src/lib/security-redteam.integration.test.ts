@@ -30,9 +30,20 @@ describe.skipIf(process.env.BANKPILOT_SECURITY_TESTS !== "1")("security red-team
     const account = (await query<{ id: string }>("SELECT id FROM accounts WHERE customer_id=$1", [identity.customer.id])).rows[0].id;
     return { id: identity.customer.id, name, account };
   };
+  // 老朋友：三天前成功转过一笔钱（没有分录，不计入今天的累计和成功次数）。
+  // 第一次转给某人在北京时间深夜会被反诈守护暂缓，测试结果就会随运行时间变化；这里固定关系，只测试闸门本身。
+  const establishPayee = async (payer: { id: string; account: string }, payee: { id: string; name: string; account: string }) => {
+    const beneficiary = (await query<{ id: string }>(`INSERT INTO beneficiaries(customer_id,name,bank_name,masked_account,settlement_account_id,recipient_customer_id)
+      VALUES($1,$2,'Blank','•• 0000',$3,$4) ON CONFLICT (customer_id,settlement_account_id) DO UPDATE SET name=excluded.name RETURNING id`,
+    [payer.id, payee.name, payee.account, payee.id])).rows[0];
+    await query(`INSERT INTO transfers(operation_id,idempotency_key,customer_id,from_account_id,beneficiary_id,amount_minor,risk_level,required_auth,status,authorization_fingerprint,executed_at)
+      VALUES($1,$2,$3,$4,$5,1000,'GREEN','NONE','SUCCEEDED','test-fixture',now() - interval '3 days')`,
+    [`PAID-${randomUUID()}`, randomUUID(), payer.id, payer.account, beneficiary.id]);
+  };
   const fixture = async () => {
     const payer = await customer(), recipient = await customer();
     await recordDeposit(payer.id, { accountId: payer.account, amountMinor: 500000, source: "CASH" });
+    await establishPayee(payer, recipient);
     const prepare = (amountMinor = 10000) => prepareTransfer(payer.id, { fromAccountId: payer.account, recipient: recipient.name, amountMinor });
     return { payer, recipient, prepare };
   };
