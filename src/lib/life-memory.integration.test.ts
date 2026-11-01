@@ -96,7 +96,7 @@ describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("生活事件和偏好�
     await rememberLifeMemory(customer, owner, { kind: "event", text: "后天是朋友的生日", dueOn: addDays(today, 2) }, { fromModel: true, userText: "后天是朋友的生日" });
     const judge = vi.fn(async () => ({ show: true }));
     await runFeedHeartbeat({ judge, customerIds: [customer] });
-    expect(judge).toHaveBeenCalledWith(expect.objectContaining({ kind: "memory", title: "后天是朋友的生日" }));
+    expect(judge).toHaveBeenCalledWith(expect.objectContaining({ kind: "memory", title: "后天是朋友的生日" }), expect.any(Object));
     const mine = await listFeed(customer, owner);
     expect(mine.find(post => post.kind === "memory")).toMatchObject({ title: "后天是朋友的生日", body: expect.stringContaining("你说过 · ") });
     expect((await listFeed(customer, other)).some(post => post.kind === "memory")).toBe(false);
