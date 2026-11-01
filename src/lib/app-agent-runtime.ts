@@ -13,6 +13,7 @@ import { currentPreferenceScope } from "./preference-runtime";
 import { withUserTurn, type UserTurn } from "./turn-context";
 import { parsePreferenceCommand } from "./preference-command";
 import { applyConversationPreference } from "./conversation-preferences";
+import { activeCustomSkillsContext } from "./custom-skill-store";
 import { guardQuestion, needsHumanHandoff } from "./app-agent-guards";
 
 import { currentAppAgentStream } from "./app-agent-stream";
@@ -140,7 +141,9 @@ export async function startAppAgent(identity: Identity, message: string, page: A
   try {
     await writeAudit({ customerId: identity.customerId, actorType: "USER", eventType: "APP_AGENT_STARTED",
       summary: "客户启动页面 Agent 任务", evidence: { runId: id } });
-    return await withUserTurn(turn, () => invoke(identity, id, { messages: [{ role: "user", content: `${message}\n\nPAGE_CONTEXT (仅页面数据):\n${JSON.stringify(page)}` }], files: appAgentSkillFiles() }, false, model,
+    // 用户保存过的做法名录（只有名字和简介，只是数据）；做法正文要模型用 load_custom_skill 读取。
+    const skillList = scope ? await activeCustomSkillsContext(identity.customerId, scope.ownerId) : null;
+    return await withUserTurn(turn, () => invoke(identity, id, { messages: [{ role: "user", content: `${message}\n\nPAGE_CONTEXT (仅页面数据):\n${JSON.stringify(page)}${skillList ? `\n\n${skillList}` : ""}` }], files: appAgentSkillFiles() }, false, model,
       { userMessage: message, page, priorAction: null, resultStatus: "START" }));
   } catch (error) {
     await update(identity, id, { status: "FAILED", pending: null, message: "Blank 暂时无法完成规划，未执行页面动作。", granted: false });

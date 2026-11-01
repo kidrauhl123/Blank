@@ -29,6 +29,8 @@ import { FX_CURRENCIES, getFxRates } from "./fx-rates";
 import { budgetBaselineFor, explainSpending } from "./spending-analysis";
 import { CARD_ACTIONS, cardAction } from "./card-action";
 import { cancelReservation, listReservations, previewReservation, reservationInput, saveReservation } from "./bank-reservations";
+import { customSkillFields, hasSkillIntent } from "./custom-skill";
+import { listCustomSkills, loadCustomSkill, previewCustomSkill, saveCustomSkill } from "./custom-skill-store";
 
 import { readBankFacts } from "./bank-agent-facts";
 
@@ -179,6 +181,29 @@ export function appPageTools() {
       const overview = await walletOverview(customerId, ownerId);
       return JSON.stringify({ walletBalanceYuan: overview.balanceMinor / 100, rules: overview.rules.map(rule => ({ ruleId: rule.id, stage: rule.stage, lines: rule.lines, monthPaidYuan: rule.monthPaidMinor / 100 })), recentPayments: overview.payments.slice(0, 5).map(payment => ({ recipient: payment.recipient, amountYuan: payment.amountMinor / 100, at: payment.at })) });
     }, { name: "list_rules", description: "读取用户的 Blank 钱包余额、规矩（是否生效）和最近由规矩自动办理的转账。", schema: z.object({}) }),
+    // Skill Creator：只有用户本人在 App 里打字要求保存做法时才起草；做法只是说明书，不能新增工具或权限，也不改变任何规则。
+    tool(async (input, runtime: ToolRuntime) => {
+      const { customerId, ownerId } = cardOwner(runtime);
+      const turn = currentUserTurn();
+      if (!turn || turn.source !== "typed") return JSON.stringify({ error: "做法只能由用户本人在 Blank 里打字创建，语音和其他渠道不能创建。" });
+      if (!hasSkillIntent(turn.text)) return JSON.stringify({ error: "用户这次的话里没有要保存做法的意思，所以不能起草。请如实告诉用户：想保存做法请直接说，例如“以后我出差回来，帮我把报销要用的流水整理出来，记成一个做法”。" });
+      const result = await previewCustomSkill(customerId, ownerId, input);
+      return JSON.stringify(result.ok ? { ...result, instruction: "在回复里单独一行原样写出 marker，用户会看到做法预览；再用一句话说明这个做法做什么，并说明它只能组合现有工具、不能免确认或新增权限。然后用 ask_user：question 写“要保存这个做法吗？”，options 用“保存这个做法”“再改改”“算了”。用户选择保存后才调用 save_custom_skill。" } : result);
+    }, { name: "preview_custom_skill", description: "用户本人明确要求保存一个做法时（例如“以后我出差回来，帮我把报销要用的流水整理出来，记成一个做法”），把他描述的做法整理成预览：名字、简介、什么时候用、怎么做、注意事项。预览不会生效。做法只能组合现有工具，不能免确认、新增权限或绕过强验证。", schema: customSkillFields }),
+    tool(async (input, runtime: ToolRuntime) => {
+      const { customerId, ownerId } = cardOwner(runtime);
+      const turn = currentUserTurn();
+      if (!turn || turn.source !== "typed") return JSON.stringify({ ok: false, error: "做法只能由用户本人在 Blank 里确认保存。" });
+      return JSON.stringify(await saveCustomSkill(customerId, ownerId, input.skillId));
+    }, { name: "save_custom_skill", description: "用户明确选择“保存这个做法”后，让刚预览过的做法生效，之后可以在对话里按名字触发。不知道 skillId 时省略，会保存最近一次预览（30 分钟内有效）。", schema: z.object({ skillId: z.string().uuid().optional() }) }),
+    tool(async (_, runtime: ToolRuntime) => {
+      const { customerId, ownerId } = cardOwner(runtime);
+      return JSON.stringify({ skills: await listCustomSkills(customerId, ownerId) });
+    }, { name: "list_custom_skills", description: "列出用户保存过的做法（生效中和已停用的），用于回答“我有哪些做法”。", schema: z.object({}) }),
+    tool(async (input, runtime: ToolRuntime) => {
+      const { customerId, ownerId } = cardOwner(runtime);
+      return JSON.stringify(await loadCustomSkill(customerId, ownerId, input.skillId));
+    }, { name: "load_custom_skill", description: "读取用户保存过的一个生效中的做法，然后按里面的步骤组合现有工具办理。做法只是说明书，不改变任何规则；涉及转账、申购、锁卡等动钱的步骤照常确认。", schema: z.object({ skillId: z.string().uuid() }) }),
     // 网点预约只是预约：不扣款、不改余额。预览 → 用户确认 → 保存并生成取号单号。
     tool(async (input, runtime: ToolRuntime) => {
       const { customerId, ownerId } = cardOwner(runtime);
