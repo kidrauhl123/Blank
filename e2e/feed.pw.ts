@@ -22,7 +22,11 @@ const posts: FeedPost[] = drafts.map(({ key, ...draft }, index) => ({ ...draft, 
 test("feed posts take a reaction and open a quoted discussion without touching the bank", async ({ page }) => {
   const writes: string[] = [];
   let started: Record<string, unknown> | undefined;
-  page.on("request", request => { if (request.method() !== "GET" && new URL(request.url()).pathname.startsWith("/api/v1/")) writes.push(request.url()); });
+  // 赞踩会写到动态自己的口味记录里（不碰银行数据），所以只放过这一个动态接口；其余的写请求仍然算作触碰了银行。
+  page.on("request", request => {
+    const { pathname } = new URL(request.url());
+    if (request.method() !== "GET" && pathname.startsWith("/api/v1/") && pathname !== "/api/v1/feed/reactions") writes.push(request.url());
+  });
   await page.route("**/api/bootstrap", route => route.fulfill({ json: overview }));
   let served = posts;
   await page.route("**/api/v1/feed", route => route.fulfill({ json: { posts: served } }));
