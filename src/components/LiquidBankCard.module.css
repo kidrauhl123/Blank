@@ -3,7 +3,6 @@
   color: var(--card-ink); background: var(--card-face); border-radius: var(--radius-container);
 }
 .surface { position: absolute; inset: 0; pointer-events: none; z-index: -1; background: var(--card-face); }
-.surface i { display: none; }
 .content { height: 100%; position: relative; }
 .card[data-light], .card[data-light] .surface { background: var(--card-face-alt); }
 .card[data-locked], .card[data-locked] .surface { background: var(--card-face-locked); }

@@ -30,6 +30,7 @@ export async function POST(request: Request) {
       history: input.history,
       channelType: "PWA",
       externalConversationId: input.conversationId ?? randomUUID(),
+      newDevice: principal.newDevice === true,
     })));
   } catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ error: "INVALID_REQUEST" }, { status: 400 });

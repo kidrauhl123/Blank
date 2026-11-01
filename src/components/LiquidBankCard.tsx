@@ -7,7 +7,7 @@ export function LiquidBankCard({ children, className, light = false, locked = fa
   children: ReactNode; className?: string; light?: boolean; locked?: boolean;
 }) {
   return <section className={`${styles.card} ${className ?? ""}`} data-light={light || undefined} data-locked={locked || undefined}>
-    <div className={styles.surface} aria-hidden="true"><i /><i /><i className={styles.glow} /></div>
+    <div className={styles.surface} aria-hidden="true" />
     <div className={styles.content}>{children}</div>
   </section>;
 }

@@ -41,6 +41,7 @@ type AuthorizationInterrupt = {
 const RuntimeState = Annotation.Root({
   runId: Annotation<string>,
   customerId: Annotation<string>,
+  newDevice: Annotation<boolean>,
   message: Annotation<string>,
   history: Annotation<ConversationMessage[]>,
   understanding: Annotation<AgentUnderstanding | null>,
@@ -66,7 +67,7 @@ function routeIntent(state: RuntimeStateType) {
 
 const executeIntentNode: typeof RuntimeState.Node = async (state) => {
   if (!state.understanding || !state.modelMeta) throw new Error("AGENT_PLAN_MISSING");
-  const reply = await executePlannedAgent(state.customerId, state.message, state.understanding, state.modelMeta);
+  const reply = await executePlannedAgent(state.customerId, state.message, state.understanding, state.modelMeta, { newDevice: state.newDevice === true });
   return { reply };
 };
 
@@ -261,6 +262,7 @@ export async function runAgentRuntime(input: {
   channelType: AgentChannel;
   externalConversationId: string;
   channelIdentityId?: string | null;
+  newDevice?: boolean;
 }) {
   const agentThreadId = await getOrCreateAgentThread(input);
   const runId = randomUUID();
@@ -277,6 +279,7 @@ export async function runAgentRuntime(input: {
     const result = await graph.invoke({
       runId,
       customerId: input.customerId,
+      newDevice: input.newDevice === true,
       message: input.message,
       history: input.history ?? [],
       understanding: null,

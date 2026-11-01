@@ -9,7 +9,7 @@ import { writeAudit } from "./audit";
 import { getBankStatement } from "./bank-statements";
 import { getInvestmentOverview } from "./investments";
 import { findCoveringRule, lockRuleOwnerForTransfer } from "./wallet-store";
-import { assessTransfer, FraudHoldError, fraudCardOf, recordFraudHold } from "./fraud-store";
+import { assessTransfer, FraudHoldError, fraudCardOf, recordFraudHold, transferRiskSignals } from "./fraud-store";
 import type { FraudReason } from "./fraud-core";
 
 export async function getBankingOverview(customerId: string) {
@@ -183,8 +183,10 @@ export async function prepareTransfer(customerId: string, input: { fromAccountId
     const now = new Date(txClock.rows[0].at);
     // 反诈守护先判断：被暂缓的转账不走规矩（规矩不能替一笔可疑的转账办理），所以暂缓时不做覆盖判断，也就不会因此暂停规矩。
     const fraud = await assessTransfer(client, { customerId, recipientAccountId: recipient.account_id, amountMinor: input.amountMinor, note: input.note ?? null, now, newDevice: options.newDevice === true });
-    const cover = options.ownerId && !fraud.hold ? await findCoveringRule(client, customerId, options.ownerId, recipient.customer_id, input.amountMinor, dailyTotalMinor, now) : null;
-    const risk = evaluateTransferRisk({ amountMinor: input.amountMinor, dailyTotalMinor, trustedBeneficiary: Boolean(known.rows[0]?.trusted), fraudHold: fraud.hold });
+    // 新设备登录后的 24 小时内，规矩先暂停：这一笔按普通转账确认，不因为规矩免确认。
+    const cover = options.ownerId && !fraud.hold && options.newDevice !== true ? await findCoveringRule(client, customerId, options.ownerId, recipient.customer_id, input.amountMinor, dailyTotalMinor, now) : null;
+    const signals = await transferRiskSignals(client, customerId, { newDevice: options.newDevice, now });
+    const risk = evaluateTransferRisk({ amountMinor: input.amountMinor, dailyTotalMinor, trustedBeneficiary: Boolean(known.rows[0]?.trusted), fraudHold: fraud.hold, ...signals });
     if (cover?.covered === true) {
       // 规矩内：源账户换成付款人的钱包子账户，免确认的钱只从钱包出，主账户不动，损失封顶在钱包余额。
       const wallet = (await client.query<{ id: string; name: string; masked_no: string; available_balance_minor: string; customer_id: string; status: string }>(

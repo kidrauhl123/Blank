@@ -13,7 +13,7 @@ import { prepareTransfer } from "./bank-core";
 import { listInvestmentProducts } from "./investments";
 
 export type AgentOperation = {
-  type: "TRANSFER" | "CARD_LOCK" | "SUBSCRIPTION_CANCEL";
+  type: "TRANSFER" | "CARD_LOCK";
   operationId: string;
   title: string;
   riskLevel: RiskLevel;
@@ -298,7 +298,7 @@ async function handleCardLock(customerId: string, message: string, understanding
   };
 }
 
-async function handleTransfer(customerId: string, message: string, understanding: AgentUnderstanding, meta: ModelMeta): Promise<AgentReply> {
+async function handleTransfer(customerId: string, message: string, understanding: AgentUnderstanding, meta: ModelMeta, options: AgentExecutionOptions): Promise<AgentReply> {
   const taskId = await createTask(customerId, message, understanding, "YELLOW", meta);
   const amountMinor = understanding.entities.amountMinor;
   const recipient = understanding.entities.beneficiaryName;
@@ -319,7 +319,7 @@ async function handleTransfer(customerId: string, message: string, understanding
     await completeTask(taskId, "NEEDS_INPUT");
     return { taskId, intent: understanding.intent, message: response.message, suggestions: response.suggestions, ai: { model: meta.model, confidence: understanding.confidence } };
   }
-  const prepared = await prepareTransfer(customerId, { fromAccountId: source.rows[0].id, recipient, amountMinor });
+  const prepared = await prepareTransfer(customerId, { fromAccountId: source.rows[0].id, recipient, amountMinor }, { newDevice: options.newDevice === true });
   await query("UPDATE policy_decisions SET task_id=$1 WHERE operation_id=$2", [taskId, prepared.operationId]);
   await addNode(taskId, "parse_transfer", "ai.entities.validated", ["understand_intent"], { extractedEntities: understanding.entities }, { amountMinor, recipient });
   await addNode(taskId, "resolve_beneficiary", "core.beneficiary.resolve", ["parse_transfer"], { recipient }, { resolved: true });
@@ -381,18 +381,22 @@ export async function planAgentRequest(message: string, history: ConversationMes
   return { normalized, understanding, meta: planned.meta };
 }
 
+// 会话信息由有 App 会话的调用方提供；没有会话的渠道（IM）不传，按可信设备处理。
+export type AgentExecutionOptions = { newDevice?: boolean };
+
 export async function executePlannedAgent(
   customerId: string,
   message: string,
   understanding: AgentUnderstanding,
   meta: ModelMeta,
+  options: AgentExecutionOptions = {},
 ): Promise<AgentReply> {
   switch (understanding.intent) {
     case "BALANCE": return handleBalance(customerId, message, understanding, meta);
     case "BILL_ANALYSIS": return handleBillAnalysis(customerId, message, understanding, meta);
     case "SUBSCRIPTIONS": return handleSubscriptions(customerId, message, understanding, meta);
     case "CARD_LOCK": return handleCardLock(customerId, message, understanding, meta);
-    case "TRANSFER": return handleTransfer(customerId, message, understanding, meta);
+    case "TRANSFER": return handleTransfer(customerId, message, understanding, meta, options);
     case "INVESTMENTS": return handleInvestments(customerId, message, understanding, meta);
     case "UNKNOWN": return handleUnknown(customerId, message, understanding, meta);
   }

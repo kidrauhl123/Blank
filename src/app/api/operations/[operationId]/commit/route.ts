@@ -15,7 +15,7 @@ const schema = z.object({
   code: z.string().max(128).optional(),
   taskId: z.string().uuid().optional(),
   resourceId: z.string().uuid().optional(),
-  type: z.enum(["TRANSFER", "CARD_LOCK", "SUBSCRIPTION_CANCEL"]),
+  type: z.enum(["TRANSFER", "CARD_LOCK"]),
 });
 
 export async function POST(request: Request, context: RouteContext<"/api/operations/[operationId]/commit">) {
@@ -48,7 +48,6 @@ export async function POST(request: Request, context: RouteContext<"/api/operati
         });
       }
     }
-    if (input.type === "SUBSCRIPTION_CANCEL") throw new Error("NOT_IMPLEMENTED");
     let result;
     if (input.type === "TRANSFER") {
       result = await commitTransfer(principal.customerId, operationId, { totpCode: input.totpCode ?? input.code, taskId: input.taskId });

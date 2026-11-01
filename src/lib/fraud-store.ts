@@ -58,6 +58,15 @@ export async function recordFraudHold(client: PoolClient, input: { customerId: s
   await notifyFraudHoldToLinks(client, { customerId: input.customerId, operationId: input.operationId, amountMinor: input.amountMinor, reasons: input.reasons.map(reason => reason.text) });
 }
 
+// 风险策略的两个输入（P1 遗留，原来没有调用方传值）：会话是不是新设备登录后的 24 小时内（来自服务端的会话记录），
+// 以及最近 30 分钟里被拒绝的强验证次数（来自审计记录）。没有会话的渠道（IM、页面助手）不知道设备，按可信处理，这和原来一样。
+export async function transferRiskSignals(client: PoolClient, customerId: string, input: { newDevice?: boolean; now: Date }) {
+  const rejected = await client.query<{ n: number }>(
+    "SELECT count(*)::int AS n FROM audit_events WHERE customer_id=$1 AND event_type='MFA_REJECTED' AND created_at > $2",
+    [customerId, new Date(input.now.getTime() - 30 * 60_000)]);
+  return { trustedDevice: input.newDevice !== true, failedAuthAttempts: rejected.rows[0].n };
+}
+
 // 提交时仍在暂缓期内：返回给调用方的错误，带上可以再办的时间。
 export class FraudHoldError extends Error {
   constructor(readonly holdUntil: string) {
