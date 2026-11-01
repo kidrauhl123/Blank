@@ -24,14 +24,26 @@ describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("transfer daily quota ex
     const account = (await query<{ id: string }>("SELECT id FROM accounts WHERE customer_id=$1", [identity.customer.id])).rows[0].id;
     return { id: identity.customer.id, account, name };
   };
+  // 老朋友：三天前成功转过一笔钱。没有这笔记录时，收款人是“第一次转账”，深夜（北京时间 23:00 至次日 7:00）
+  // 会被反诈守护暂缓，测试结果就会随着运行时间变化。这里固定成老朋友，让配额测试只关心配额本身。
+  const establishPayee = async (payer: { id: string; account: string }, payee: { id: string; name: string; account: string }) => {
+    const beneficiary = (await query<{ id: string }>(`INSERT INTO beneficiaries(customer_id,name,bank_name,masked_account,settlement_account_id,recipient_customer_id)
+      VALUES($1,$2,'Blank','•• 0000',$3,$4) ON CONFLICT (customer_id,settlement_account_id) DO UPDATE SET name=excluded.name RETURNING id`,
+    [payer.id, payee.name, payee.account, payee.id])).rows[0];
+    await query(`INSERT INTO transfers(operation_id,idempotency_key,customer_id,from_account_id,beneficiary_id,amount_minor,risk_level,required_auth,status,authorization_fingerprint,executed_at)
+      VALUES($1,$2,$3,$4,$5,1000,'GREEN','NONE','SUCCEEDED','test-fixture',now() - interval '3 days')`,
+    [`PAID-${randomUUID()}`, randomUUID(), payer.id, payer.account, beneficiary.id]);
+  };
   const pair = async (balance = 200000) => {
     const payer = await makeCustomer(), recipient = await makeCustomer();
     await recordDeposit(payer.id, { accountId: payer.account, amountMinor: balance, source: "CASH" });
+    await establishPayee(payer, recipient);
     const prepare = (amountMinor: number, account = payer.account) => prepareTransfer(payer.id, { fromAccountId: account, recipient: recipient.name, amountMinor });
     return { payer, recipient, prepare };
   };
+  // 不统计上面的老朋友记录（operation_id 以 PAID- 开头），其余断言口径不变。
   const succeeded = async (id: string) => (await query<{ count: number; total: string }>(
-    "SELECT count(*)::int AS count,coalesce(sum(amount_minor),0)::text AS total FROM transfers WHERE customer_id=$1 AND status='SUCCEEDED'", [id],
+    "SELECT count(*)::int AS count,coalesce(sum(amount_minor),0)::text AS total FROM transfers WHERE customer_id=$1 AND status='SUCCEEDED' AND operation_id NOT LIKE 'PAID-%'", [id],
   )).rows[0];
 
   beforeAll(() => {
@@ -116,6 +128,7 @@ describe.skipIf(process.env.BANKPILOT_DB_TESTS !== "1")("transfer daily quota ex
   it("does not deadlock opposite-direction transfers", async () => {
     const { payer, recipient, prepare } = await pair();
     await recordDeposit(recipient.id, { accountId: recipient.account, amountMinor: 200000, source: "CASH" });
+    await establishPayee(recipient, payer);
     const outgoing = await prepare(50000);
     const incoming = await prepareTransfer(recipient.id, { fromAccountId: recipient.account, recipient: payer.name, amountMinor: 50000 });
     const results = await Promise.all([commitTransfer(payer.id, outgoing.operationId, {}), commitTransfer(recipient.id, incoming.operationId, {})]);
