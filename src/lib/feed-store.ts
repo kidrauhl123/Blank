@@ -5,6 +5,7 @@ import { getInvestmentOverview } from "./investments";
 import { investmentValue } from "./investment-model";
 import { publishRecipes } from "./feed-recipe-store";
 import { judgeFeedCandidate, type FeedCandidateForJev } from "./jev";
+import { collectMemoryReminders, dayLabel } from "./life-memory";
 
 // 主动发帖的节奏：没有事件时每位客户一小时检查一次（只查数据库，不调模型）；发生了事件（例如一笔转账成功）时由 requestFeedCheck 打标记，下一次调度 tick 就检查。
 const HEARTBEAT_INTERVAL = "1 hour";
@@ -50,11 +51,18 @@ async function loadFacts(customerId: string, asOf: Date) {
   };
 }
 
-async function insertDraft(customerId: string, draft: FeedDraft, asOf: Date, index: number) {
-  const inserted = await query(`INSERT INTO feed_posts(customer_id,dedupe_key,kind,title,body,source,attention,chart,fact_ids,published_at)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10) ON CONFLICT(customer_id,dedupe_key) DO NOTHING`,
-  [customerId, draft.key, draft.kind, draft.title, draft.body, draft.source, draft.attention, JSON.stringify(draft.chart), draft.factIds, publishTime(draft, asOf, index)]);
+// ownerId 为空是系统帖子（所有访客可见）；有值是只属于这位访客的帖子（例如用户自己说过的事的提醒）。
+async function insertDraft(customerId: string, draft: FeedDraft, asOf: Date, index: number, ownerId: string | null = null) {
+  const inserted = await query(`INSERT INTO feed_posts(customer_id,dedupe_key,kind,title,body,source,attention,chart,fact_ids,published_at,visitor_owner_id)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11) ON CONFLICT(customer_id,dedupe_key) DO NOTHING`,
+  [customerId, draft.key, draft.kind, draft.title, draft.body, draft.source, draft.attention, JSON.stringify(draft.chart), draft.factIds, publishTime(draft, asOf, index), ownerId]);
   return inserted.rowCount ?? 0;
+}
+
+// 你说过的事到期前的提醒：标题是用户自己的话，动态里注明“你说过 · 日期”。
+function memoryDraft(reminder: { id: string; text: string; dueOn: string }): FeedDraft {
+  return { key: `memory:${reminder.id}:${reminder.dueOn}`, kind: "memory", title: reminder.text, body: `你说过 · ${dayLabel(reminder.dueOn)}`,
+    source: "你说过", attention: true, chart: { type: "recipe", blocks: [] }, factIds: [reminder.id] };
 }
 
 // 历史回放专用：演示账户补齐过去的日子时，把模拟的历史动态按回放时间直接写入。这是历史数据，不是主动发帖，所以不过 Jev。
@@ -124,15 +132,19 @@ async function checkCustomerFeed(customerId: string, judge: (candidate: FeedCand
   // 先清掉请求标记再检查：检查期间新来的事件会重新打标记，不会被吞掉。
   await query(`INSERT INTO feed_publisher_state(customer_id,checked_at,check_requested_at) VALUES($1,now(),NULL)
     ON CONFLICT(customer_id) DO UPDATE SET checked_at=excluded.checked_at, check_requested_at=NULL`, [customerId]);
-  const candidates = await collectFeedCandidates(customerId, asOf);
-  const approved: FeedDraft[] = [];
-  for (const draft of candidates.slice(0, JUDGED_PER_CHECK)) {
-    const verdict = await judge({ id: draft.key, kind: draft.kind, title: draft.title, body: draft.body, attention: draft.attention });
-    if (verdict.show) approved.push(draft);
+  // 到期前的“你说过”提醒有时间限制，排在前面；其余是系统候选。两类都要过 Jev。
+  const queue: Array<{ draft: FeedDraft; ownerId: string | null }> = [
+    ...(await collectMemoryReminders(customerId, asOf)).map(reminder => ({ draft: memoryDraft(reminder), ownerId: reminder.ownerId })),
+    ...(await collectFeedCandidates(customerId, asOf)).map(draft => ({ draft, ownerId: null })),
+  ];
+  const approved: Array<{ draft: FeedDraft; ownerId: string | null }> = [];
+  for (const item of queue.slice(0, JUDGED_PER_CHECK)) {
+    const verdict = await judge({ id: item.draft.key, kind: item.draft.kind, title: item.draft.title, body: item.draft.body, attention: item.draft.attention });
+    if (verdict.show) approved.push(item);
   }
   let published = 0;
   // 和 publishFeed 一样：越重要的帖子发布时间越晚、排得越靠上。
-  for (const [index, draft] of [...approved].reverse().entries()) published += await insertDraft(customerId, draft, asOf, index);
+  for (const [index, item] of [...approved].reverse().entries()) published += await insertDraft(customerId, item.draft, asOf, index, item.ownerId);
   return published;
 }
 

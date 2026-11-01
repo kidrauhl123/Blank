@@ -15,7 +15,7 @@ export type PageIcon = (typeof PAGE_ICONS)[number];
 
 export const KIND_NAMES: Record<(typeof FEED_KINDS)[number], string> = {
   anomaly: "交易核查", "spending-calendar": "消费日历", "money-flow": "资金去向", friends: "朋友往来", "subscription-due": "订阅扣费",
-  subscriptions: "订阅总账", position: "理财走势", unlock: "理财解封", custom: "我的卡片", schedule: "定时任务结果", rule: "规矩提醒",
+  subscriptions: "订阅总账", position: "理财走势", unlock: "理财解封", custom: "我的卡片", schedule: "定时任务结果", rule: "规矩提醒", memory: "你说过的事",
 };
 
 export const navItemSchema = z.discriminatedUnion("type", [

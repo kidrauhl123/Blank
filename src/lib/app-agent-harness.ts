@@ -18,6 +18,7 @@ import { createRuleDraft, walletOverview } from "./wallet-store";
 import { hasRuleIntent, payTrustedSmallInput } from "./wallet-core";
 import { currentUserTurn } from "./turn-context";
 import { createTool } from "./tool-store";
+import { rememberLifeMemory } from "./life-memory";
 import { toolSpecSchema } from "./tool-spec";
 import { layoutProposalInput, pageProposalInput, removePageProposalInput } from "./ui-schema";
 import { changeMySchedule, listMySchedules, previewSchedule, saveSchedule, scheduleDraftInput } from "./schedule-chat";
@@ -114,6 +115,20 @@ export function appPageTools() {
       const draft = await createRuleDraft(customerId, ownerId, input);
       return JSON.stringify("error" in draft ? draft : { ...draft, instruction: "在回复里单独一行原样写出 marker，用户会看到由服务端渲染的规矩卡；再用一句话告诉用户：要在卡片上用面容/指纹（或验证器动态码）本人确认，确认后还有 24 小时冷静期才生效。不要复述规则细节的数字，也不要说规矩已经生效。" });
     }, { name: "propose_rule", description: "用户本人明确想立规矩时提议一条免确认的小额付款规矩（固定模板，参数有硬上限：单笔最多 500 元、每月最多 2000 元、收款人必须是有过多次往来的老联系人）。只是提议：用户要在卡片上本人强验证，再经过 24 小时冷静期才生效；你无权让它生效。", schema: payTrustedSmallInput }),
+    // 记住用户自己说过的生活事件或偏好。只记用户原话里有依据的事实：数字要在原话里出现过，文字的开头也要能在原话里找到（life-memory.ts 里校验）。
+    tool(async (input, runtime: ToolRuntime) => {
+      const { customerId, ownerId } = cardOwner(runtime);
+      const turn = currentUserTurn();
+      if (!turn) return JSON.stringify({ error: "没有可以对照的用户原话，不能记。" });
+      const result = await rememberLifeMemory(customerId, ownerId, input, { fromModel: true, userText: turn.text });
+      return JSON.stringify(result.ok
+        ? { ok: true, memoryId: result.id, updated: result.updated, instruction: "用一句话告诉用户你记住了什么；如果是有日期的事，说明到期前 Blank 会在动态里提醒，并注明“你说过”。不要编造任何数字。" }
+        : { error: result.error });
+    }, { name: "remember_fact", description: "记住用户本人说过的生活事件（例如“下周五是我妈生日”，kind=event，dueOn 填具体日期 YYYY-MM-DD，北京时间；“下周五”之类要换算成具体日期，换算不出就先问用户）或偏好（例如“我在戒奶茶”，kind=preference，没有日期）。只记用户原话里有的事实，原话里没有的数字不要写；银行信息、密码、验证码不记。", schema: z.object({
+      kind: z.enum(["event", "preference"]),
+      text: z.string().max(60).describe("用一句话写下这件事，用用户自己的话"),
+      dueOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("生活事件的日期（北京时间），偏好不填"),
+    }).strict() }),
     // 当场造工具：只用在需要反复调整数字的问题上。数字全部由工具按账本算，模型不能自己心算或编造。
     tool(async (input, runtime: ToolRuntime) => {
       const { customerId, ownerId } = cardOwner(runtime);
