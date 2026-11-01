@@ -7,6 +7,8 @@ import {
   type ChannelType,
 } from "./channels";
 import { query } from "./db";
+import { scamPhraseIn, scamPhraseWarning } from "./fraud-core";
+import { recordScamPhraseAlert } from "./fraud-store";
 
 type GatewayConfig = { channelType: ChannelType; bindingPath: `/connect/${string}` };
 
@@ -85,6 +87,10 @@ export async function handleChannelMessage(config: GatewayConfig, input: Channel
     externalConversationId: input.conversationExternalId,
     channelIdentityId: identity.id,
   });
+  // IM 里出现诈骗话术：留一条反诈守护的记录，并在回复前面加一句提醒。不阻止回答；转账仍由暂缓规则和确认流程决定。
+  const phrase = scamPhraseIn(input.message);
+  if (phrase) await recordScamPhraseAlert({ customerId: identity.customer_id, ownerId: null, source: "IM", phrase, dedupeKey: `im:${input.eventId}` }).catch(() => undefined);
+  const shown = phrase ? { ...reply, message: `${scamPhraseWarning(phrase)}\n\n${reply.message}` } : reply;
   await recordChannelEvent({
     identityId: identity.id,
     customerId: identity.customer_id,
@@ -100,10 +106,10 @@ export async function handleChannelMessage(config: GatewayConfig, input: Channel
     },
     outcome: "READY",
   });
-  if (!reply.operation) return { status: "COMPLETED" as const, reply };
+  if (!reply.operation) return { status: "COMPLETED" as const, reply: shown };
   return {
     status: "AUTHORIZATION_REQUIRED" as const,
-    reply,
+    reply: shown,
     authorizeUrl: reply.operation.requiredAuth === "MFA"
       ? operationLink(reply.operation.operationId, reply.taskId)
       : null,

@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 import type { PoolClient } from "pg";
 import { query, withTransaction } from "./db";
 import { matchingTotpStep } from "./totp";
+import { deviceKeyOf } from "./device-key";
 
 const scrypt = promisify(scryptCallback);
 export const SESSION_COOKIE = "bankpilot_session";
@@ -11,6 +12,8 @@ const SESSION_DAYS = 7;
 export type AuthPrincipal = {
   customerId: string;
   kind: "SESSION";
+  // 这个会话是新设备登录，并且还在登录后的 24 小时内（反诈守护用）。
+  newDevice?: boolean;
 };
 
 export class AuthError extends Error {
@@ -137,10 +140,22 @@ export async function registerCustomer(input: { displayName: string; phone: stri
 export async function createSession(customerId: string, userAgent?: string | null, client?: PoolClient) {
   const token = randomBytes(32).toString("base64url");
   const expires = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
-  const sql = `INSERT INTO user_sessions (customer_id,token_hash,user_agent,expires_at) VALUES ($1,$2,$3,$4)`;
-  const values = [customerId, sha256(token), userAgent?.slice(0, 300) ?? null, expires];
-  if (client) await client.query(sql, values);
-  else await query(sql, values);
+  const run = client ? client.query.bind(client) : query;
+  // 设备记录和“是否新设备”在同一条语句里判断：客户之前已经有别的设备，这次是第一次从这台设备登录，就是新设备。
+  // 演示账户由访客共用、会在不同浏览器里反复登录，不适用这个规则。
+  const deviceKey = deviceKeyOf(userAgent);
+  const device = await run<{ created: boolean; known: number; demo: boolean }>(
+    `WITH before AS (SELECT count(*)::int AS n FROM customer_devices WHERE customer_id=$1),
+     upsert AS (INSERT INTO customer_devices (customer_id,device_key) VALUES ($1,$2)
+       ON CONFLICT (customer_id,device_key) DO UPDATE SET last_seen_at=now()
+       RETURNING (xmax = 0) AS created)
+     SELECT (SELECT created FROM upsert) AS created, (SELECT n FROM before) AS known,
+            EXISTS (SELECT 1 FROM demo_profiles WHERE customer_id=$1) AS demo`,
+    [customerId, deviceKey]);
+  const { created, known, demo } = device.rows[0];
+  const newDevice = Boolean(created && known >= 1 && !demo);
+  await run(`INSERT INTO user_sessions (customer_id,token_hash,user_agent,expires_at,device_key,new_device) VALUES ($1,$2,$3,$4,$5,$6)`,
+    [customerId, sha256(token), userAgent?.slice(0, 300) ?? null, expires, deviceKey, newDevice]);
   return { token, expires };
 }
 
@@ -189,16 +204,16 @@ export async function authenticateRequest(request: Request): Promise<AuthPrincip
 
   const raw = getSessionToken(request);
   if (!raw) throw new AuthError("AUTHENTICATION_REQUIRED");
-  const result = await query<{ customer_id: string }>(
+  const result = await query<{ customer_id: string; new_device: boolean }>(
     `UPDATE user_sessions s SET last_seen_at=now()
      FROM customers c
      WHERE s.token_hash=$1 AND s.customer_id=c.id AND s.revoked_at IS NULL
        AND s.expires_at>now() AND c.status='ACTIVE'
-     RETURNING s.customer_id`,
+     RETURNING s.customer_id, (s.new_device AND s.created_at > now() - interval '24 hours') AS new_device`,
     [sha256(raw)],
   );
   if (!result.rows[0]) throw new AuthError("SESSION_EXPIRED");
-  return { customerId: result.rows[0].customer_id, kind: "SESSION" };
+  return { customerId: result.rows[0].customer_id, kind: "SESSION", newDevice: result.rows[0].new_device };
 }
 
 export async function verifyCustomerPassword(customerId: string, password: string) {

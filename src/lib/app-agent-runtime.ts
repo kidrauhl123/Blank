@@ -15,6 +15,8 @@ import { parsePreferenceCommand } from "./preference-command";
 import { applyConversationPreference } from "./conversation-preferences";
 import { activeCustomSkillsContext } from "./custom-skill-store";
 import { rememberedFactsContext } from "./life-memory";
+import { scamPhraseIn } from "./fraud-core";
+import { recordScamPhraseAlert } from "./fraud-store";
 import { guardQuestion, needsHumanHandoff } from "./app-agent-guards";
 
 import { currentAppAgentStream } from "./app-agent-stream";
@@ -142,6 +144,9 @@ export async function startAppAgent(identity: Identity, message: string, page: A
   try {
     await writeAudit({ customerId: identity.customerId, actorType: "USER", eventType: "APP_AGENT_STARTED",
       summary: "客户启动页面 Agent 任务", evidence: { runId: id } });
+    // 用户自己的话里出现诈骗话术：留一条反诈守护的动态（不阻止对话；转账是否暂缓仍由暂缓规则决定）。
+    const phrase = scamPhraseIn(turn.text);
+    if (phrase) await recordScamPhraseAlert({ customerId: identity.customerId, ownerId: scope?.ownerId ?? null, source: "APP_CHAT", phrase, dedupeKey: `app:${id}` }).catch(() => undefined);
     // 用户保存过的做法名录（只有名字和简介）、亲口说过的事（REMEMBERED_FACTS）：都只是数据，不是指令。
     const context = scope ? [await activeCustomSkillsContext(identity.customerId, scope.ownerId), await rememberedFactsContext(identity.customerId, scope.ownerId)].filter(Boolean).join("\n\n") : "";
     return await withUserTurn(turn, () => invoke(identity, id, { messages: [{ role: "user", content: `${message}\n\nPAGE_CONTEXT (仅页面数据):\n${JSON.stringify(page)}${context ? `\n\n${context}` : ""}` }], files: appAgentSkillFiles() }, false, model,

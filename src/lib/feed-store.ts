@@ -6,6 +6,7 @@ import { investmentValue } from "./investment-model";
 import { publishRecipes } from "./feed-recipe-store";
 import { judgeFeedCandidate, type FeedCandidateForJev } from "./jev";
 import { collectMemoryReminders, dayLabel } from "./life-memory";
+import { alertInboundRefunds } from "./fraud-store";
 
 // 主动发帖的节奏：没有事件时每位客户一小时检查一次（只查数据库，不调模型）；发生了事件（例如一笔转账成功）时由 requestFeedCheck 打标记，下一次调度 tick 就检查。
 const HEARTBEAT_INTERVAL = "1 hour";
@@ -132,6 +133,8 @@ async function checkCustomerFeed(customerId: string, judge: (candidate: FeedCand
   // 先清掉请求标记再检查：检查期间新来的事件会重新打标记，不会被吞掉。
   await query(`INSERT INTO feed_publisher_state(customer_id,checked_at,check_requested_at) VALUES($1,now(),NULL)
     ON CONFLICT(customer_id) DO UPDATE SET checked_at=excluded.checked_at, check_requested_at=NULL`, [customerId]);
+  // 反诈的安全提醒（陌生小额退款/返利入账）不经过 Jev：每次检查都先看一遍，失败不影响动态的其他内容。
+  await alertInboundRefunds(customerId, asOf).catch(() => 0);
   // 到期前的“你说过”提醒有时间限制，排在前面；其余是系统候选。两类都要过 Jev。
   const queue: Array<{ draft: FeedDraft; ownerId: string | null }> = [
     ...(await collectMemoryReminders(customerId, asOf)).map(reminder => ({ draft: memoryDraft(reminder), ownerId: reminder.ownerId })),

@@ -160,7 +160,7 @@ async function insertPreparedTransfer(client: PoolClient, draft: {
 }
 
 // options.ownerId 是访客（规矩的拥有者）；没有访客就没有任何规矩，整个流程和以前一样。
-export async function prepareTransfer(customerId: string, input: { fromAccountId: string; recipient: string; amountMinor: number; note?: string | null }, options: { ownerId?: string | null } = {}) {
+export async function prepareTransfer(customerId: string, input: { fromAccountId: string; recipient: string; amountMinor: number; note?: string | null }, options: { ownerId?: string | null; newDevice?: boolean } = {}) {
   if (!Number.isSafeInteger(input.amountMinor) || input.amountMinor <= 0 || input.amountMinor > 100_000_000) throw new Error("INVALID_TRANSFER_AMOUNT");
   const [sourceResult, recipient] = await Promise.all([
     query<{ id: string; name: string; masked_no: string; available_balance_minor: string }>(
@@ -182,7 +182,7 @@ export async function prepareTransfer(customerId: string, input: { fromAccountId
     const txClock = await client.query<{ at: string }>("SELECT clock_timestamp()::text AS at");
     const now = new Date(txClock.rows[0].at);
     // 反诈守护先判断：被暂缓的转账不走规矩（规矩不能替一笔可疑的转账办理），所以暂缓时不做覆盖判断，也就不会因此暂停规矩。
-    const fraud = await assessTransfer(client, { customerId, recipientAccountId: recipient.account_id, amountMinor: input.amountMinor, note: input.note ?? null, now });
+    const fraud = await assessTransfer(client, { customerId, recipientAccountId: recipient.account_id, amountMinor: input.amountMinor, note: input.note ?? null, now, newDevice: options.newDevice === true });
     const cover = options.ownerId && !fraud.hold ? await findCoveringRule(client, customerId, options.ownerId, recipient.customer_id, input.amountMinor, dailyTotalMinor, now) : null;
     const risk = evaluateTransferRisk({ amountMinor: input.amountMinor, dailyTotalMinor, trustedBeneficiary: Boolean(known.rows[0]?.trusted), fraudHold: fraud.hold });
     if (cover?.covered === true) {

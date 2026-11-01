@@ -19,7 +19,8 @@ export async function POST(request: Request) {
     const input = schema.parse(await request.json());
     // 没有访客 cookie 时没有任何规矩，走原来的确认流程。
     const scope = await resolveVisitorMemoryScope(request, principal.customerId);
-    const prepared = await prepareTransfer(principal.customerId, input, { ownerId: scope?.ownerId ?? null });
+    // 新设备登录后 24 小时内的大额转账进入反诈暂缓（新设备标记只来自服务端的会话记录）。
+    const prepared = await prepareTransfer(principal.customerId, input, { ownerId: scope?.ownerId ?? null, newDevice: principal.newDevice === true });
     if ("ruleId" in prepared) {
       // 规矩内的转账直接过账；过账前会再判一次规矩，已经不覆盖就取消，资金不动。
       const done = await commitTransfer(principal.customerId, prepared.operationId, { totpCode: null, taskId: null });

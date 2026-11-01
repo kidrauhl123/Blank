@@ -19,7 +19,7 @@ export function scamPhraseIn(text: string | null | undefined): string | null {
   return SCAM_PHRASES.find(phrase => text.includes(phrase)) ?? null;
 }
 
-export type FraudCode = "SCAM_PHRASE" | "NEW_RECIPIENT" | "UNUSUAL_AMOUNT" | "NIGHT" | "BURST_NEW_RECIPIENTS";
+export type FraudCode = "SCAM_PHRASE" | "NEW_RECIPIENT" | "UNUSUAL_AMOUNT" | "NIGHT" | "BURST_NEW_RECIPIENTS" | "NEW_DEVICE";
 export type FraudInput = {
   newRecipient: boolean; // 这位收款人以前没有成功收过这个客户的钱
   amountMinor: number;
@@ -27,6 +27,7 @@ export type FraudInput = {
   beijingHour: number; // 0–23
   recentOtherRecipients: number; // 最近 10 分钟内转给过的其他收款人数量（不含这一位）
   scamPhrase: string | null; // 备注或最近对话里命中的话术
+  newDevice?: boolean; // 这个会话是新设备登录，并且还在登录后的 24 小时内
 };
 export type FraudReason = { code: FraudCode; text: string };
 export type FraudDecision = { hold: boolean; reasons: FraudReason[] };
@@ -42,7 +43,9 @@ export function decideFraud(input: FraudInput): FraudDecision {
   const night = input.beijingHour >= FRAUD_CAPS.nightFromHour || input.beijingHour < FRAUD_CAPS.nightToHour;
   const scam = input.scamPhrase !== null;
   const burst = input.newRecipient && input.recentOtherRecipients >= 1;
-  const hold = scam || burst || (input.newRecipient && (unusual || night));
+  // 新设备登录后马上转出大额（不论收款人是谁）：和其他暂缓一样，只要求更强的确认，不锁死资金。
+  const newDeviceLarge = input.newDevice === true && input.amountMinor >= FRAUD_CAPS.unusualMinMinor;
+  const hold = scam || burst || newDeviceLarge || (input.newRecipient && (unusual || night));
   if (!hold) return { hold: false, reasons: [] };
 
   const reasons: FraudReason[] = [];
@@ -51,7 +54,17 @@ export function decideFraud(input: FraudInput): FraudDecision {
   if (input.newRecipient && unusual) reasons.push({ code: "UNUSUAL_AMOUNT", text: "这笔金额明显高于你平时的转账" });
   if (input.newRecipient && night) reasons.push({ code: "NIGHT", text: "现在是深夜，又是第一次转给这个人" });
   if (burst) reasons.push({ code: "BURST_NEW_RECIPIENTS", text: "最近十分钟里你还转给过别的人，这一位又是第一次" });
+  if (newDeviceLarge) reasons.push({ code: "NEW_DEVICE", text: "你刚从一台新设备登录，就要转出大额" });
   return { hold, reasons };
+}
+
+// 陌生小额“退款/返利”入账的提醒：金额不超过 300 元、名字或分类里有退款等字眼、这个商户之前没有和这位客户有过往来。
+export const INBOUND_ALERT_CAPS = { maxAmountMinor: 30_000, lookbackMs: 3 * 86_400_000 } as const;
+export const REFUND_PATTERN = "退款|返利|返现|退回|赔付|补偿";
+
+// 对话或 IM 里出现诈骗话术时的提醒文字：只引用我们自己的话术词，不复述用户说的其他内容。
+export function scamPhraseWarning(phrase: string) {
+  return `提醒：你刚才的话里有“${phrase}”，这类话常见于诈骗。请不要转账，也不要告诉任何人验证码。有疑问请拨打 ${FRAUD_HOTLINE}。`;
 }
 
 // 拦截卡上的三个关键问题：固定文字，选项由用户自己选，不作为判断依据（判断已经在上面完成了）。
