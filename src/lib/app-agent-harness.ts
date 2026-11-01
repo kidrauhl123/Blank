@@ -28,6 +28,7 @@ import { BRANCH_SERVICES, findBranches } from "./bank-branches";
 import { FX_CURRENCIES, getFxRates } from "./fx-rates";
 import { budgetBaselineFor, explainSpending } from "./spending-analysis";
 import { CARD_ACTIONS, cardAction } from "./card-action";
+import { cancelReservation, listReservations, previewReservation, reservationInput, saveReservation } from "./bank-reservations";
 
 import { readBankFacts } from "./bank-agent-facts";
 
@@ -178,6 +179,24 @@ export function appPageTools() {
       const overview = await walletOverview(customerId, ownerId);
       return JSON.stringify({ walletBalanceYuan: overview.balanceMinor / 100, rules: overview.rules.map(rule => ({ ruleId: rule.id, stage: rule.stage, lines: rule.lines, monthPaidYuan: rule.monthPaidMinor / 100 })), recentPayments: overview.payments.slice(0, 5).map(payment => ({ recipient: payment.recipient, amountYuan: payment.amountMinor / 100, at: payment.at })) });
     }, { name: "list_rules", description: "读取用户的 Blank 钱包余额、规矩（是否生效）和最近由规矩自动办理的转账。", schema: z.object({}) }),
+    // 网点预约只是预约：不扣款、不改余额。预览 → 用户确认 → 保存并生成取号单号。
+    tool(async (input, runtime: ToolRuntime) => {
+      const { customerId, ownerId } = cardOwner(runtime);
+      const result = await previewReservation(customerId, ownerId, input);
+      return JSON.stringify("error" in result ? result : { ...result, instruction: "接着调用 ask_user：question 写清网点、业务和时段（换汇要写参考折算，并说明不是成交价），options 用“确认预约”“再改改”“算了”。用户确认后才调用 save_reservation。" });
+    }, { name: "preview_reservation", description: "预览一笔网点预约：取号办理（kind=QUEUE）或换汇预约（kind=FX）。只是预览，不保存、不扣款；用户确认后才 save_reservation。换汇的参考折算只是参考。", schema: reservationInput }),
+    tool(async (input, runtime: ToolRuntime) => {
+      const { customerId, ownerId } = cardOwner(runtime);
+      return JSON.stringify(await saveReservation(customerId, ownerId, input.reservationId));
+    }, { name: "save_reservation", description: "用户明确确认预约后，保存刚预览过的预约并生成取号单号。不知道 reservationId 时省略，会保存用户最近一次预览（30 分钟内有效）。", schema: z.object({ reservationId: z.string().uuid().optional() }) }),
+    tool(async (_, runtime: ToolRuntime) => {
+      const { customerId, ownerId } = cardOwner(runtime);
+      return JSON.stringify({ reservations: await listReservations(customerId, ownerId) });
+    }, { name: "list_reservations", description: "列出用户未取消、还没过期的网点预约和取号单号。", schema: z.object({}) }),
+    tool(async (input, runtime: ToolRuntime) => {
+      const { customerId, ownerId } = cardOwner(runtime);
+      return JSON.stringify(await cancelReservation(customerId, ownerId, input.reservationId));
+    }, { name: "cancel_reservation", description: "取消用户自己的一笔网点预约。取消前先用 ask_user 确认。", schema: z.object({ reservationId: z.string().uuid() }) }),
     tool(async (_, runtime: ToolRuntime) => {
       const { customerId, ownerId } = cardOwner(runtime);
       return JSON.stringify(await describeUi(customerId, ownerId));
