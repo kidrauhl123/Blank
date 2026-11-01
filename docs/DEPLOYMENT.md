@@ -1,5 +1,7 @@
 # CONTABO-jp 部署
 
+本文记录的是 CONTABO-jp 线上部署。想在自己的电脑上运行一份，请看 [本地部署](LOCAL_DEPLOYMENT.md)。
+
 ## 拓扑
 
 - 代码目录：`/opt/bankpilot`

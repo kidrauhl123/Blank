@@ -61,14 +61,13 @@ Blank 是为“银行 AI 智能体”赛题构建的可运行 PWA 沙箱银行�
 
 ## 本地运行
 
-要求 Node.js 22、PostgreSQL 17 和 `docker-compose`。
+要求 Node.js 22 和 Docker（用来运行 PostgreSQL 17）。完整步骤，包括不用 Docker 的做法，见 [本地部署](docs/LOCAL_DEPLOYMENT.md)。
 
 ```bash
-cp .env.example .env.local
-# 为 PASSWORD_PEPPER 生成独立随机值，例如：openssl rand -hex 32
+cp .env.example .env.local      # 然后把 PASSWORD_PEPPER 改成 openssl rand -hex 32 的结果
 npm install
-npm run db:setup
-npm run dev
+npm run db:setup                # 用 Docker 启动 PostgreSQL 17 并建表
+npm run dev                     # 打开 http://localhost:3000，选择小土豆
 ```
 
 打开 `http://localhost:3000`，直接进入小土豆。首次进入会初始化五位模拟用户和历史数据；已有数据库需按顺序应用所有尚未执行的迁移（`db/migrations/` 共 001–044）。
@@ -145,6 +144,7 @@ GitHub Actions 中有三条工作流：`ci.yml`（数据库集成、单元测试
 - [安全设计与自评](docs/SECURITY.md)、[授权与银行事实回执补强（迁移 019）](docs/AUTHORIZATION_HARDENING.md)、[2026-10-17 转账授权加固](docs/SECURITY_HARDENING.md)、[外部接入退役](docs/EXTERNAL_ACCESS_RETIREMENT.md)
 - [提示词注入回归（2026-11-01）](docs/security-reports/2026-11-01/prompt-injection-regression.md)
 - [完整安全报告与 Word 下载（2026-10-17，历史快照）](docs/security-reports/2026-10-17/README.md)
-- [部署说明与发布记录](docs/DEPLOYMENT.md)
+- [本地部署：在自己的电脑上运行一份](docs/LOCAL_DEPLOYMENT.md)
+- [部署说明与发布记录（CONTABO-jp 线上）](docs/DEPLOYMENT.md)
 
 项目仓库：[kidrauhl123/Blank](https://github.com/kidrauhl123/Blank)
