@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 import { beginTotpSetup, confirmTotpSetup } from "../src/lib/auth";
 import { db, query } from "../src/lib/db";
 import { createRuleDraft } from "../src/lib/wallet-store";
+import { WALLET_CAPS } from "../src/lib/wallet-core";
 
 const ORIGIN = "http://localhost:3109";
 
@@ -33,6 +34,9 @@ async function codeAfter(secret: string, usedStep: number) {
 
 test("a real Passkey registration and assertion starts the cooling period; a covered transfer waits until then; another visitor cannot confirm it", async ({ page, context, browser }) => {
   test.setTimeout(120_000);
+  // 北京时间深夜，规矩会拒绝覆盖转账（见 WALLET_RULES 第 5 节）。这个用例用真实时间，夜里跑没有意义；夜间行为由 wallet-core 的固定时间用例覆盖。
+  const beijingHour = new Date(Date.now() + 8 * 3_600_000).getUTCHours();
+  test.skip(beijingHour >= WALLET_CAPS.nightFromHour || beijingHour < WALLET_CAPS.nightToHour, "北京时间深夜规矩不覆盖转账，夜间规则由 wallet-core 单元测试覆盖");
   const cdp = await context.newCDPSession(page);
   await cdp.send("WebAuthn.enable");
   await cdp.send("WebAuthn.addVirtualAuthenticator", { options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true } });
