@@ -1,6 +1,6 @@
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatDeepSeek } from "@langchain/deepseek";
-import { HumanMessage } from "@langchain/core/messages";
+import { HumanMessage, ToolMessage } from "@langchain/core/messages";
 import { tool, type ToolRuntime } from "@langchain/core/tools";
 import { interrupt, type BaseCheckpointSaver } from "@langchain/langgraph";
 import { createDeepAgent, registerHarnessProfile } from "deepagents";
@@ -31,6 +31,7 @@ import { CARD_ACTIONS, cardAction } from "./card-action";
 import { cancelReservation, listReservations, previewReservation, reservationInput, saveReservation } from "./bank-reservations";
 import { customSkillFields, hasSkillIntent } from "./custom-skill";
 import { acceptInput, hasLinkIntent, inviteInput, messageInput } from "./blank-link";
+import { EXTERNAL_RESULT_TOOLS, intentMismatch, untrustedData } from "./injection-guards";
 import { acceptLinkInvite, createLinkInvite, listBlankInbox, listBlankLinks, sendBlankMessage } from "./blank-link-store";
 import { listCustomSkills, loadCustomSkill, previewCustomSkill, saveCustomSkill } from "./custom-skill-store";
 
@@ -328,10 +329,22 @@ export function createAppAgentHarness(checkpointer: BaseCheckpointSaver, modelOv
         tools: request.tools.filter((entry) => "name" in entry && typeof entry.name === "string" && allowed.has(entry.name)),
       });
     },
-    wrapToolCall: (request, handler) => {
-      if (!allowed.has(request.toolCall.name)) throw new Error("APP_AGENT_TOOL_NOT_ALLOWED");
-      if (request.toolCall.name === "read_file" && !Object.hasOwn(appAgentSkillFiles(), String(request.toolCall.args.file_path))) throw new Error("APP_AGENT_SKILL_NOT_ALLOWED");
-      return handler(request);
+    wrapToolCall: async (request, handler) => {
+      const name = request.toolCall.name;
+      const id = request.toolCall.id ?? "";
+      if (!allowed.has(name)) throw new Error("APP_AGENT_TOOL_NOT_ALLOWED");
+      if (name === "read_file" && !Object.hasOwn(appAgentSkillFiles(), String(request.toolCall.args.file_path))) throw new Error("APP_AGENT_SKILL_NOT_ALLOWED");
+      // 意图一致性：用户本人只是在查询时，模型不能去改界面、写入数据或发起办理，即使页面或备注里有指令。
+      const turn = currentUserTurn();
+      if (turn && intentMismatch(turn.text, name)) {
+        return new ToolMessage({ content: JSON.stringify({ error: "这次请求只是查询，不能执行这个操作。请直接回答用户的问题；需要办理时，请用户明确说出要办什么。" }), tool_call_id: id, name });
+      }
+      const result = await handler(request);
+      // 外部数据（账户数据、交易备注、商户名、页面、对方的消息）进入模型前，先标明只是数据。
+      if (EXTERNAL_RESULT_TOOLS.has(name) && result instanceof ToolMessage) {
+        return new ToolMessage({ content: untrustedData(String(result.content)), tool_call_id: result.tool_call_id, name: result.name });
+      }
+      return result;
     },
   });
   return createDeepAgent({

@@ -17,7 +17,7 @@ import { activeCustomSkillsContext } from "./custom-skill-store";
 import { rememberedFactsContext } from "./life-memory";
 import { scamPhraseIn } from "./fraud-core";
 import { recordScamPhraseAlert } from "./fraud-store";
-import { guardQuestion, needsHumanHandoff } from "./app-agent-guards";
+import { guardQuestion, guardSecretQuestion, needsHumanHandoff } from "./app-agent-guards";
 
 import { currentAppAgentStream } from "./app-agent-stream";
 
@@ -104,7 +104,7 @@ async function invoke(identity: Identity, id: string, input: Parameters<ReturnTy
   if (requests.length !== (interrupts?.length ?? 0)) throw new Error("APP_AGENT_UNSUPPORTED_INTERRUPT");
   // Parallel page actions cannot be applied safely to a shared live page.
   if (requests.length > 1) throw new Error("APP_AGENT_PARALLEL_ACTIONS");
-  const pending = requests.length ? { id: requests[0].value.id, action: guardQuestion(pageActionSchema.parse(requests[0].value.action), context?.userMessage ?? "") } : null;
+  const pending = requests.length ? { id: requests[0].value.id, action: guardSecretQuestion(guardQuestion(pageActionSchema.parse(requests[0].value.action), context?.userMessage ?? "")) } : null;
   const status: AppAgentStatus = !pending ? "COMPLETED" : pending.action.type === "question" ? "QUESTION"
     : pending.action.type === "handoff" ? "HANDOFF" : granted ? "ACTION" : "CONSENT";
   const last = result.messages.filter((message) => message.getType() === "ai").at(-1);

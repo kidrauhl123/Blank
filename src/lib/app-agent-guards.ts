@@ -17,6 +17,16 @@ export function guardQuestion(action: PageAction, userMessage: string): PageActi
   return invented ? { type: "question", question: "请自行输入具体金额，或暂不办理。", options: ["自行输入", "暂不办理"] } : action;
 }
 
+// 不向用户索要验证码、动态码、密码。这些只能由用户在银行页面里本人完成（否则就是“社工”式的索取）。
+const SECRET_ASK = /验证码|动态码|校验码|口令|密码|安全码/u;
+export function guardSecretQuestion(action: PageAction): PageAction {
+  if (action.type !== "question") return action;
+  const asks = SECRET_ASK.test(action.question) || action.options.some((option) => SECRET_ASK.test(option));
+  return asks
+    ? { type: "question", question: "需要的验证码请在 Blank 的强验证页面里自己输入。我不会索要，也不会替你填写。", options: ["我去页面完成", "暂不办理"] }
+    : action;
+}
+
 export function needsHumanHandoff(page: AppPage, action: PageAction | null, resultStatus: string): boolean {
   return resultStatus === "APPLIED" && action !== null && ["click", "fill"].includes(action.type) &&
     page.controls.some((control) => control.permission === "human" && /^(?:本人)?确认|授权并执行/u.test(control.label));
