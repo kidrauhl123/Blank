@@ -234,7 +234,7 @@ export async function prepareTransfer(customerId: string, input: { fromAccountId
         [customerId, operationId, expiresAt],
       );
     }
-    if (fraud.hold) await recordFraudHold(client, { customerId, ownerId: options.ownerId ?? null, operationId, reasons: fraud.reasons });
+    if (fraud.hold) await recordFraudHold(client, { customerId, ownerId: options.ownerId ?? null, operationId, amountMinor: input.amountMinor, reasons: fraud.reasons });
     await writeAudit({ customerId, eventType: "TRANSFER_PREPARED", actorType: "USER", summary: "客户创建转账草稿，资金尚未转出", operationId, evidence: { fromAccountId: source.id, recipientCustomerId: recipient.customer_id, amountMinor: input.amountMinor, riskLevel: risk.finalLevel, fingerprint } }, client);
     return {
       operationId,

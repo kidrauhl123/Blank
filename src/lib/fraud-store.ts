@@ -2,6 +2,7 @@ import type { PoolClient } from "pg";
 import { writeAudit } from "./audit";
 import { query, withTransaction } from "./db";
 import { FRAUD_CAPS, FRAUD_HOTLINE, FRAUD_QUESTIONS, INBOUND_ALERT_CAPS, REFUND_PATTERN, decideFraud, scamPhraseIn, type FraudDecision, type FraudReason } from "./fraud-core";
+import { notifyFraudHoldToLinks } from "./blank-link-store";
 
 // 反诈守护的数据部分：发起转账那一刻读信号（在 prepareTransfer 的事务里，和草稿同一个快照），
 // 暂缓后写动态和审计，选择“24 小时后再办”时设置暂缓截止时间。纯判断在 fraud-core.ts，这里只负责取数和落库。
@@ -43,7 +44,7 @@ export function fraudCardOf(reasons: FraudReason[]) {
 }
 
 // 暂缓发生时：动态里留一条（“事后在动态里留记录”），审计里留原因码。
-export async function recordFraudHold(client: PoolClient, input: { customerId: string; ownerId: string | null; operationId: string; reasons: FraudReason[] }) {
+export async function recordFraudHold(client: PoolClient, input: { customerId: string; ownerId: string | null; operationId: string; amountMinor: number; reasons: FraudReason[] }) {
   if (input.ownerId) {
     await client.query(`INSERT INTO feed_posts(customer_id,dedupe_key,kind,title,body,source,attention,chart,fact_ids,visitor_owner_id)
       VALUES($1,$2,'anomaly',$3,$4,'反诈守护',true,'{"type":"recipe","blocks":[]}'::jsonb,'{}',$5) ON CONFLICT(customer_id,dedupe_key) DO NOTHING`,
@@ -53,6 +54,8 @@ export async function recordFraudHold(client: PoolClient, input: { customerId: s
   }
   await writeAudit({ customerId: input.customerId, actorType: "POLICY_ENGINE", eventType: "FRAUD_GUARD_TRIGGERED", summary: "反诈守护暂缓了一笔转账，资金未转出",
     operationId: input.operationId, evidence: { codes: input.reasons.map(reason => reason.code) } }, client);
+  // 有“反诈提醒”授权的互联对象（家人）也会收到一条固定内容的提醒，和这次暂缓记录在同一个事务里。
+  await notifyFraudHoldToLinks(client, { customerId: input.customerId, operationId: input.operationId, amountMinor: input.amountMinor, reasons: input.reasons.map(reason => reason.text) });
 }
 
 // 提交时仍在暂缓期内：返回给调用方的错误，带上可以再办的时间。
