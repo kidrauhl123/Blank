@@ -1,4 +1,4 @@
-# AIbanking / Blank
+# Blank
 
 Blank 是为“银行 AI 智能体”赛题构建的可运行 PWA 沙箱银行。银行 APP 的可见页面助手复用 Deep Agents SDK；现有业务工作流与 QQ、企业微信使用 LangGraph。两种助手共用银行核心，身份、策略、授权和账本操作由银行核心控制。
 
@@ -147,4 +147,4 @@ GitHub Actions 中有三条工作流：`ci.yml`（数据库集成、单元测试
 - [完整安全报告与 Word 下载（2026-10-17，历史快照）](docs/security-reports/2026-10-17/README.md)
 - [部署说明与发布记录](docs/DEPLOYMENT.md)
 
-项目仓库：[kidrauhl123/AIbanking](https://github.com/kidrauhl123/AIbanking)
+项目仓库：[kidrauhl123/Blank](https://github.com/kidrauhl123/Blank)
