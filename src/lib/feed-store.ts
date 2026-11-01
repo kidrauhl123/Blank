@@ -7,6 +7,7 @@ import { publishRecipes } from "./feed-recipe-store";
 import { judgeFeedCandidate, type FeedCandidateForJev } from "./jev";
 import { collectMemoryReminders, dayLabel } from "./life-memory";
 import { alertInboundRefunds } from "./fraud-store";
+import { writeFeedText } from "./feed-writer";
 
 // 主动发帖的节奏：没有事件时每位客户一小时检查一次（只查数据库，不调模型）；发生了事件（例如一笔转账成功）时由 requestFeedCheck 打标记，下一次调度 tick 就检查。
 const HEARTBEAT_INTERVAL = "1 hour";
@@ -112,9 +113,31 @@ export async function requestFeedCheck(customerId: string, client?: PoolClient) 
     ON CONFLICT(customer_id) DO UPDATE SET check_requested_at=now()`, [customerId]);
 }
 
+// 赞或踩（null 表示取消）。owner_key 是访客，没有访客身份时用 customer。只能对自己客户的动态表态，别人的动态找不到。
+export async function setFeedReaction(customerId: string, ownerKey: string, postId: string, reaction: "up" | "down" | null) {
+  if (reaction === null) {
+    await query("DELETE FROM feed_reactions WHERE customer_id=$1 AND owner_key=$2 AND post_id=$3", [customerId, ownerKey, postId]);
+    return true;
+  }
+  const result = await query(`INSERT INTO feed_reactions (customer_id,owner_key,post_id,reaction)
+    SELECT p.customer_id,$2,p.id,$4 FROM feed_posts p WHERE p.id=$3 AND p.customer_id=$1
+    ON CONFLICT (customer_id,owner_key,post_id) DO UPDATE SET reaction=excluded.reaction, updated_at=now()`,
+  [customerId, ownerKey, postId, reaction]);
+  return (result.rowCount ?? 0) > 0;
+}
+
+// 口味分：每一类动态的赞减去踩，和 FeedPanel 本地记的口味分是同一个算法。ownerKey 为 null 时汇总这位客户所有访客的态度。
+export async function tasteFor(customerId: string, ownerKey: string | null): Promise<Record<string, number>> {
+  const rows = await query<{ kind: string; score: number }>(`SELECT p.kind, sum(CASE WHEN r.reaction='up' THEN 1 ELSE -1 END)::int AS score
+    FROM feed_reactions r JOIN feed_posts p ON p.id=r.post_id
+    WHERE r.customer_id=$1 AND ($2::text IS NULL OR r.owner_key=$2)
+    GROUP BY p.kind`, [customerId, ownerKey]);
+  return Object.fromEntries(rows.rows.map(row => [row.kind, row.score]));
+}
+
 // 调度 tick 调用：处理“有事件请求”的客户，以及超过一小时没检查过的客户。只查数据库；候选帖子才过 Jev，通过的才发布。
 // 失败的候选不会丢：这位客户的检查时间已经更新，所以下一小时的心跳会再判断一次。
-export async function runFeedHeartbeat(options: { limit?: number; judge?: (candidate: FeedCandidateForJev) => Promise<{ show: boolean }>; customerIds?: string[] } = {}) {
+export async function runFeedHeartbeat(options: { limit?: number; judge?: JudgeFn; customerIds?: string[] } = {}) {
   const { limit = 5, judge = judgeFeedCandidate, customerIds = null } = options;
   const due = await query<{ id: string }>(`SELECT c.id FROM customers c LEFT JOIN feed_publisher_state s ON s.customer_id=c.id
     WHERE c.status='ACTIVE' AND NOT ${CATCHING_UP}
@@ -128,7 +151,10 @@ export async function runFeedHeartbeat(options: { limit?: number; judge?: (candi
   return published;
 }
 
-async function checkCustomerFeed(customerId: string, judge: (candidate: FeedCandidateForJev) => Promise<{ show: boolean }>) {
+// Jev 判断时带上这位访客的口味（赞踩汇总成每类的分数）；候选没有访客时汇总这位客户所有访客的口味。
+type JudgeFn = (candidate: FeedCandidateForJev, taste: Record<string, number>) => Promise<{ show: boolean }>;
+
+async function checkCustomerFeed(customerId: string, judge: JudgeFn) {
   const asOf = new Date();
   // 先清掉请求标记再检查：检查期间新来的事件会重新打标记，不会被吞掉。
   await query(`INSERT INTO feed_publisher_state(customer_id,checked_at,check_requested_at) VALUES($1,now(),NULL)
@@ -142,12 +168,17 @@ async function checkCustomerFeed(customerId: string, judge: (candidate: FeedCand
   ];
   const approved: Array<{ draft: FeedDraft; ownerId: string | null }> = [];
   for (const item of queue.slice(0, JUDGED_PER_CHECK)) {
-    const verdict = await judge({ id: item.draft.key, kind: item.draft.kind, title: item.draft.title, body: item.draft.body, attention: item.draft.attention });
+    const taste = await tasteFor(customerId, item.ownerId);
+    const verdict = await judge({ id: item.draft.key, kind: item.draft.kind, title: item.draft.title, body: item.draft.body, attention: item.draft.attention }, taste);
     if (verdict.show) approved.push(item);
   }
   let published = 0;
   // 和 publishFeed 一样：越重要的帖子发布时间越晚、排得越靠上。
-  for (const [index, item] of [...approved].reverse().entries()) published += await insertDraft(customerId, item.draft, asOf, index, item.ownerId);
+  for (const [index, item] of [...approved].reverse().entries()) {
+    // 通过 Jev 的系统候选由主模型撰写（数字必须来自服务端草稿）；记忆提醒保留用户自己的原话，不改写。
+    const draft = item.ownerId ? item.draft : { ...item.draft, ...(await writeFeedText(item.draft)) };
+    published += await insertDraft(customerId, draft, asOf, index, item.ownerId);
+  }
   return published;
 }
 

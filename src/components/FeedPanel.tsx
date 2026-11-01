@@ -69,6 +69,9 @@ export function FeedPanel({ owner, onDiscuss, assets, sections = DEFAULT_LAYOUT.
   }, [owner, refresh]);
 
   const react = (post: FeedPost, reaction: Reaction) => {
+    // 同时记到服务端：判断以后的候选动态时，Jev 会带上这份口味（本地记录只负责界面）。
+    const next = taste.reactions[post.id] === reaction ? "clear" : reaction;
+    void fetch("/api/v1/feed/reactions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ postId: post.id, reaction: next }) }).catch(() => undefined);
     setTaste(current => {
       const previous = current.reactions[post.id];
       const next = previous === reaction ? undefined : reaction;
