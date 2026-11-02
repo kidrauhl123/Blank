@@ -342,7 +342,16 @@ export function createAppAgentHarness(checkpointer: BaseCheckpointSaver, modelOv
       if (turn && intentMismatch(turn.text, name)) {
         return new ToolMessage({ content: JSON.stringify({ error: "这次请求只是查询，不能执行这个操作。请直接回答用户的问题；需要办理时，请用户明确说出要办什么。" }), tool_call_id: id, name });
       }
-      const result = await handler(request);
+      let result: Awaited<ReturnType<typeof handler>>;
+      try {
+        result = await handler(request);
+      } catch (error) {
+        // 没有银行会话时（例如评测夹具），把错误交回模型让它如实回答，而不是让整轮任务失败。
+        if (error instanceof Error && error.message === "BANK_APP_SESSION_REQUIRED") {
+          return new ToolMessage({ content: JSON.stringify({ error: "BANK_APP_SESSION_REQUIRED", instruction: "当前没有可用的银行会话，无法读取或办理这部分内容。请如实告诉用户，不要编造数据。" }), tool_call_id: id, name });
+        }
+        throw error;
+      }
       // 外部数据（账户数据、交易备注、商户名、页面、对方的消息）进入模型前，先标明只是数据。
       if (EXTERNAL_RESULT_TOOLS.has(name) && result instanceof ToolMessage) {
         return new ToolMessage({ content: untrustedData(String(result.content)), tool_call_id: result.tool_call_id, name: result.name });

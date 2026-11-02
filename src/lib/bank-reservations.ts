@@ -18,11 +18,12 @@ const branchId = z.string().trim().min(1).max(40).describe("网点编号，来�
 const date = z.string().regex(DATE).describe("预约日期 YYYY-MM-DD（北京时间），今天起 7 天以内");
 const time = z.string().regex(SLOT).describe("时段 HH:mm，整点或半点，按网点营业时间选");
 
+// 根节点带 type: "object"，原因见 tool-spec.ts 的 toolSpecSchema。
 export const reservationInput = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("QUEUE"), branchId, service: z.enum(["personal", "fx", "card", "wealth"]).describe("personal 个人业务，fx 换汇，card 开卡，wealth 理财咨询"), date, time }).strict(),
   z.object({ kind: z.literal("FX"), branchId, direction: z.enum(["BUY", "SELL"]).describe("BUY 买入外币，SELL 卖出外币换人民币"),
     currency: z.enum(FX_CURRENCIES), amount: z.number().int().min(1).max(50000).describe("外币金额，整数，单位是该币种的整数单位（例如 1000 美元）"), date, time }).strict(),
-]);
+]).meta({ type: "object" });
 export type ReservationInput = z.infer<typeof reservationInput>;
 
 const toMinutes = (clock: string) => { const [hour, minute] = clock.split(":").map(Number); return hour * 60 + minute; };

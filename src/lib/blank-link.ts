@@ -47,11 +47,12 @@ export const splitItemInput = z.object({
   amountMinor: z.number().int().min(1).max(100_000_000),
   shareMinor: z.number().int().min(1).max(100_000_000),
 }).strict();
+// 根节点带 type: "object"，原因见 tool-spec.ts 的 toolSpecSchema。
 export const messageInput = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("SPLIT_REQUEST"), linkId: uuid, items: z.array(splitItemInput).min(1).max(BLANK_LINK_CAPS.maxSplitItems) }).strict(),
   z.object({ kind: z.literal("SAVINGS_REQUEST"), linkId: uuid, goal: z.enum(SAVINGS_GOALS), priceMinor: z.number().int().min(100).max(BLANK_LINK_CAPS.maxPriceMinor) }).strict(),
   z.object({ kind: z.literal("REWARD"), linkId: uuid, amountMinor: z.number().int().min(100).max(BLANK_LINK_CAPS.maxRewardMinor), reason: z.enum(REWARD_REASONS) }).strict(),
-]);
+]).meta({ type: "object" });
 export type MessageInput = z.infer<typeof messageInput>;
 
 // 给收件人看的固定文字。只使用种类、金额、日期、商户名（来自发送方流水，按数据展示）和发送方的名字；没有其他自由文本。

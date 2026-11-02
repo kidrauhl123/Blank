@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ChatOpenAI } from "@langchain/openai";
 import { Command, INTERRUPT, MemorySaver } from "@langchain/langgraph";
-import { createAppAgentHarness } from "./app-agent-harness";
+import { toJsonSchema } from "@langchain/core/utils/json_schema";
+import { appPageTools, createAppAgentHarness } from "./app-agent-harness";
 import { appAgentSkillFiles } from "./app-agent-skills";
 import type { AppPage } from "./app-agent-protocol";
 import { appAgentFailure } from "./app-agent-errors";
@@ -77,5 +78,32 @@ describe("real Deep Agents harness, with a deterministic model transport", () =>
     const third = await agent.invoke(new Command({ resume: { status: "USER_ANSWERED", message: "日常卡 1234", page } }), config);
     expect((third as unknown as Record<string, unknown>)[INTERRUPT]).toBeUndefined();
     expect(JSON.stringify(requests[2].messages)).toContain("USER_ANSWERED");
+  });
+
+  it("sends every page tool with an object root schema, which OpenAI-compatible gateways such as DeepSeek require", () => {
+    const tools = appPageTools();
+    expect(tools.length).toBeGreaterThan(0);
+    for (const entry of tools) expect(toJsonSchema(entry.schema), entry.name).toMatchObject({ type: "object" });
+  });
+
+  it("returns a missing bank session to the model as a tool result instead of failing the turn", async () => {
+    const requests: Array<{ messages: unknown[] }> = [];
+    const model = new ChatOpenAI({ model: "session-missing-test", apiKey: "test-only", maxRetries: 0, configuration: {
+      baseURL: "https://test.invalid/v1", fetch: async (_url: unknown, init?: RequestInit) => {
+        requests.push(JSON.parse(String(init?.body)));
+        const first = requests.length === 1;
+        const message = first ? { role: "assistant", content: "", tool_calls: [{ id: "facts_1", type: "function", function: { name: "read_bank_facts", arguments: JSON.stringify({ area: "overview" }) } }] }
+          : { role: "assistant", content: "当前没有可用的银行会话，暂时无法读取余额。" };
+        return new Response(JSON.stringify({ id: `session-${requests.length}`, object: "chat.completion", created: 1, model: "session-missing-test",
+          choices: [{ index: 0, finish_reason: first ? "tool_calls" : "stop", message }],
+          usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 },
+        }), { headers: { "Content-Type": "application/json" } });
+      },
+    } });
+    const graph = createAppAgentHarness(new MemorySaver(), model);
+    const result = await graph.invoke({ messages: [{ role: "user", content: JSON.stringify(page) }], files: appAgentSkillFiles() }, { configurable: { thread_id: "session-missing" }, maxConcurrency: 4 });
+    expect((result as unknown as Record<string, unknown>)[INTERRUPT]).toBeUndefined();
+    expect(requests).toHaveLength(2);
+    expect(JSON.stringify(requests[1].messages)).toContain("BANK_APP_SESSION_REQUIRED");
   });
 });

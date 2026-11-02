@@ -29,7 +29,8 @@ export const splitSpec = z.object({
   else if (Date.parse(`${spec.to}T00:00:00Z`) - Date.parse(`${spec.from}T00:00:00Z`) > 30 * 86_400_000) ctx.addIssue({ code: "custom", message: "分账的时间跨度最多 31 天" });
 });
 
-export const toolSpecSchema = z.discriminatedUnion("kind", [sliderSpec, splitSpec]);
+// 根节点带 type: "object"：DeepSeek 等兼容网关遇到没有 type 的根 oneOf 会整包返回 400。.meta() 只并入 JSON Schema，校验结果不变。
+export const toolSpecSchema = z.discriminatedUnion("kind", [sliderSpec, splitSpec]).meta({ type: "object" });
 export type ToolSpec = z.infer<typeof toolSpecSchema>;
 export type SliderSpec = z.infer<typeof sliderSpec>;
 export type SplitSpec = z.infer<typeof splitSpec>;

@@ -152,6 +152,9 @@ BEGIN
      OR to_regclass('public.ui_proposals') IS NULL OR to_regclass('public.ui_unmet_needs') IS NULL THEN
     RAISE EXCEPTION 'UI layout migration is missing';
   END IF;
+  IF (SELECT count(*) FROM generate_series(33, 45) AS n WHERE NOT EXISTS (SELECT 1 FROM schema_migrations s WHERE s.version LIKE lpad(n::text, 3, '0') || '_%')) > 0 THEN
+    RAISE EXCEPTION 'Migrations 033 through 045 are not all recorded';
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version='019_authorization_hardening.sql') THEN
     RAISE EXCEPTION 'Authorization hardening migration is missing';
   END IF;
